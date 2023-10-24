@@ -1,0 +1,46 @@
+# TODO
+ - Better concept for the orchestration of the opening and closing of windows
+
+# Verbs for the player
+
+ - Move (w/a/s/d)
+ - Look/Examine (look at something)
+ - Take/Drop (inventory)
+ - Use/Interact (with something)
+ - Talk/Conversations (to someone)
+ - Mount/Dismount (a vehicle)
+ - Spellcasting (cast a spell)
+ - Enter (a town)
+ - Rest (to heal)
+
+ - Re-Order (Party)
+ - Open/Close (a door/chest)
+ - Status/Attributes (view your stats)
+
+# Approach
+
+ - As Contextual Actions on objects
+   - Ignite (a torch)
+   - Jimmy (a lock)
+   - Climbing (climb a tree)
+
+# Online Tools
+
+Word Wrap for books (34 chars): https://www.browserling.com/tools/word-wrap
+
+
+# NPCs
+The dead girl on the stairs
+The rich douchebag
+The self-sacrificing mother
+Mother Nature herself
+Vater Staat
+
+# Plots
+The non-sense corporation
+The system of exploitation
+The circle of violence
+The cycle of life
+The dystopian future
+The joy of children
+Your legacy - Allow the players to create a time capsule with items for other players to find
