@@ -16,27 +16,31 @@ import (
 type Response struct {
     Text         []string
     AddsKeywords []string
-    WalkAway     bool
+    Effect       string
 }
 type Dialogue struct {
     triggers        map[string]Response
     previouslyAsked map[string]bool
+    keyWordsGiven   map[string]bool
 }
 
 func NewDialogueFromFile(dialogueFile io.Reader) *Dialogue {
     return &Dialogue{
         triggers:        triggersFromFile(dialogueFile),
         previouslyAsked: make(map[string]bool),
+        keyWordsGiven:   make(map[string]bool),
     }
 }
 
 func (d *Dialogue) GetOptions(pk *PlayerKnowledge) []string {
     var options []string
+
     for k, _ := range pk.knowsAbout {
         if _, ok := d.triggers[k]; ok {
             options = append(options, k)
         }
     }
+
     sort.SliceStable(options, func(i, j int) bool {
         return options[i] < options[j]
     })
@@ -45,11 +49,18 @@ func (d *Dialogue) GetOptions(pk *PlayerKnowledge) []string {
     return options
 }
 
-func (d *Dialogue) GetResponseAndAddKnowledge(pk *PlayerKnowledge, keyword string) ([]string, bool) {
+func (d *Dialogue) GetResponseAndAddKnowledge(pk *PlayerKnowledge, keyword string) ([]string, string) {
     d.previouslyAsked[keyword] = true
     response := d.triggers[keyword]
     pk.AddKnowledge(response.AddsKeywords)
-    return response.Text, response.WalkAway
+    d.RememberKeywords(response.AddsKeywords)
+    return response.Text, response.Effect
+}
+
+func (d *Dialogue) RememberKeywords(keywords []string) {
+    for _, k := range keywords {
+        d.keyWordsGiven[k] = true
+    }
 }
 
 type PlayerKnowledge struct {
@@ -73,7 +84,7 @@ func triggersFromFile(file io.Reader) map[string]Response {
     scanner := bufio.NewScanner(file)
     triggers := make(map[string]Response)
     currentTrigger := ""
-    currentWalkAway := false
+    currentOption := ""
     currentText := make([]string, 0)
     for scanner.Scan() {
         line := scanner.Text()
@@ -87,16 +98,14 @@ func triggersFromFile(file io.Reader) map[string]Response {
                 currentText = make([]string, 0)
                 triggers[currentTrigger] = Response{
                     Text:         strippedText,
-                    WalkAway:     currentWalkAway,
+                    Effect:       currentOption,
                     AddsKeywords: addedKeyWords,
                 }
+                currentOption = ""
             }
             currentTrigger = line[2:]
         } else if line[0] == '#' && line[1] == '#' {
-            currentOption := line[3:]
-            if currentOption == "quits" {
-                currentWalkAway = true
-            }
+            currentOption = line[3:]
         } else {
             currentText = append(currentText, line)
         }
@@ -105,7 +114,7 @@ func triggersFromFile(file io.Reader) map[string]Response {
         addedKeyWords, strippedText := parseKeywords(currentText)
         triggers[currentTrigger] = Response{
             Text:         strippedText,
-            WalkAway:     currentWalkAway,
+            Effect:       currentOption,
             AddsKeywords: addedKeyWords,
         }
     }

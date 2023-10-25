@@ -16,10 +16,16 @@ type ScrollableTextWindow struct {
 
     scrollOffset int
     gridRenderer *DualGridRenderer
+
+    shouldClose bool
 }
 
-func (r *ScrollableTextWindow) ActionConfirm() bool {
-    return true
+func (r *ScrollableTextWindow) ShouldClose() bool {
+    return r.shouldClose
+}
+
+func (r *ScrollableTextWindow) ActionConfirm() {
+    r.shouldClose = true
 }
 
 func maxLen(text []string) int {

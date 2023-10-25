@@ -38,6 +38,9 @@ func (g *DualGridRenderer) GetScaledBigGridSize() int {
 func (g *DualGridRenderer) GetScaledSmallGridSize() int {
     return int(float64(g.smallGridSize) * g.scale)
 }
+func (g *DualGridRenderer) ScreenToSmallCell(x, y int) (int, int) {
+    return x / g.GetScaledSmallGridSize(), y / g.GetScaledSmallGridSize()
+}
 func (g *DualGridRenderer) SetBorderDefinition(borderDef GridBorderDefinition) {
     g.borderDef = borderDef
 }
@@ -134,8 +137,9 @@ func (g *DualGridRenderer) DrawBigOnScreen(screen *ebiten.Image, xPos, yPos floa
     screen.DrawImage(ExtractSubImageFromAtlas(textureIndex, g.bigGridSize, g.bigGridSize, g.bigAtlas), g.op)
 }
 
-func (g *DualGridRenderer) DrawBigOnScreenWithAtlas(screen *ebiten.Image, xPos, yPos float64, atlas *ebiten.Image, textureIndex int) {
+func (g *DualGridRenderer) DrawBigOnScreenWithAtlasAndTint(screen *ebiten.Image, xPos, yPos float64, atlas *ebiten.Image, textureIndex int, tintColor color.Color) {
     g.op.ColorScale.Reset()
+    g.op.ColorScale.ScaleWithColor(tintColor)
     g.op.GeoM.Reset()
     g.op.GeoM.Scale(g.scale, g.scale)
     g.op.GeoM.Translate(xPos, yPos)

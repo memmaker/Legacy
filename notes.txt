@@ -1,21 +1,38 @@
-# TODO
- - Better concept for the orchestration of the opening and closing of windows
+# Annoyances
+ - The dialogue dilemma
+   - Adding the "join" keyword to the player knowledge base means every NPC can be asked this now
+   - Otoh, learning about the "murder in town" should allow asking all NPCs about this
 
-# Verbs for the player
+# Non-Contextual actions
+ - Inventory - BASIC
+ - Cast spells
+ - Rest (to heal) - BASIC
+ - Attack
+ - Split up - GOOD ENOUGH
 
+# Contextual actions
  - Move (w/a/s/d)
  - Look/Examine (look at something)
  - Take/Drop (inventory)
  - Use/Interact (with something)
  - Talk/Conversations (to someone)
  - Mount/Dismount (a vehicle)
- - Spellcasting (cast a spell)
  - Enter (a town)
- - Rest (to heal)
-
- - Re-Order (Party)
  - Open/Close (a door/chest)
- - Status/Attributes (view your stats)
+
+# TODO
+ - Inventory management - BASIC
+ - Party movement - GOOD ENOUGH
+ - Doors & Keys - GOOD ENOUGH
+ - Containers
+ - Equipping items
+ - Combat
+ - Magic
+ - Vendors
+ - Journal
+ - Save/Load
+ - Main Menu
+ - Line of Sight - GOOD ENOUGH
 
 # Approach
 

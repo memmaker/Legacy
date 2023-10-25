@@ -3,12 +3,15 @@ package main
 import (
     "Legacy/bmpfonts"
     "Legacy/dialogue"
+    "Legacy/ega"
     "Legacy/game"
     "Legacy/geometry"
     "Legacy/gridmap"
     "Legacy/ldtk_go"
     "Legacy/renderer"
+    "fmt"
     "github.com/hajimehoshi/ebiten/v2"
+    "image/color"
     "path"
 )
 
@@ -28,13 +31,12 @@ func (g *GridEngine) Init() {
 
     g.loadUIOverlay()
 
-    startPos := geometry.Point{X: 14, Y: 14}
-
-    g.player = game.NewActor("Avatar", startPos, 7)
-    g.playerParty = game.NewParty(g.player)
+    g.avatar = game.NewActor("Avatar", 7)
+    g.playerParty = game.NewParty(g.avatar)
     g.playerKnowledge = dialogue.NewPlayerKnowledge()
 
-    g.loadMap("WorldMap", startPos)
+    g.loadMap("WorldMap")
+    g.PlaceParty(g.spawnPosition)
 
     //pk := dialogue.NewPlayerKnowledge()
 
@@ -47,6 +49,7 @@ func (g *GridEngine) Init() {
        println(response)
 
     */
+
 }
 
 func (g *GridEngine) loadUIOverlay() {
@@ -107,6 +110,7 @@ func (g *GridEngine) getFontIndex() map[rune]uint16 {
             {StartIndex: 8, Characters: []rune{'ө'}},  // grey gem
             {StartIndex: 3, Characters: []rune{'█'}},  // grey block
             {StartIndex: 45, Characters: []rune{'—'}},
+            {StartIndex: 39, Characters: []rune{'\''}},
         },
     })
 }
@@ -116,13 +120,14 @@ type Transition struct {
     TargetPos geometry.Point
 }
 
-func (g *GridEngine) loadMap(identifier string, startPos geometry.Point) {
+func (g *GridEngine) loadMap(identifier string) {
     worldTileset := g.ldtkMapProject.TilesetByIdentifier("World")
 
     currentMap := g.ldtkMapProject.LevelByIdentifier(identifier)
     environmentLayer := currentMap.LayerByIdentifier("Environment")
     transitionLayer := currentMap.LayerByIdentifier("Transitions")
     itemLayer := currentMap.LayerByIdentifier("Items")
+    objectLayer := currentMap.LayerByIdentifier("Objects")
     npcLayer := currentMap.LayerByIdentifier("NPCs")
 
     g.transitionMap = make(map[geometry.Point]Transition)
@@ -131,22 +136,29 @@ func (g *GridEngine) loadMap(identifier string, startPos geometry.Point) {
         posX, posY := transitionLayer.ToGridPosition(transitionEntity.Position[0], transitionEntity.Position[1])
         gridPos := geometry.Point{X: posX, Y: posY}
         destPosArray := transitionEntity.PropertyByIdentifier("DestinationPosition").AsArray()
-        g.transitionMap[gridPos] = Transition{
-            TargetMap: transitionEntity.PropertyByIdentifier("MapName").AsString(),
-            TargetPos: geometry.Point{
-                X: int(destPosArray[0].(float64)),
-                Y: int(destPosArray[1].(float64)),
-            },
+        mapName := transitionEntity.PropertyByIdentifier("MapName").AsString()
+        transitionPos := geometry.Point{
+            X: int(destPosArray[0].(float64)),
+            Y: int(destPosArray[1].(float64)),
+        }
+
+        if mapName == "_player_spawn_" {
+            g.spawnPosition = gridPos
+        } else {
+            g.transitionMap[gridPos] = Transition{
+                TargetMap: mapName,
+                TargetPos: transitionPos,
+            }
         }
     }
 
-    g.gridmap = gridmap.NewEmptyMap[*game.Actor, game.Item, *game.Object](environmentLayer.CellWidth, environmentLayer.CellHeight, 9)
+    g.gridmap = gridmap.NewEmptyMap[*game.Actor, game.Item, game.Object](environmentLayer.CellWidth, environmentLayer.CellHeight, 9)
 
     for _, tile := range environmentLayer.Tiles {
         posX, posY := environmentLayer.ToGridPosition(tile.Position[0], tile.Position[1])
         pos := geometry.Point{X: posX, Y: posY}
         enums := worldTileset.EnumsForTile(tile.ID)
-        g.gridmap.SetCell(pos, gridmap.MapCell[*game.Actor, game.Item, *game.Object]{
+        g.gridmap.SetCell(pos, gridmap.MapCell[*game.Actor, game.Item, game.Object]{
             TileType: gridmap.Tile{
                 DefinedIcon:   tile.ID,
                 IsWalkable:    !enums.Contains("Wall") && !enums.Contains("Water"),
@@ -155,11 +167,20 @@ func (g *GridEngine) loadMap(identifier string, startPos geometry.Point) {
         })
     }
 
+    for _, entity := range objectLayer.Entities {
+        posX, posY := objectLayer.ToGridPosition(entity.Position[0], entity.Position[1])
+        pos := geometry.Point{X: posX, Y: posY}
+        mapObject := g.getObjectFromEntity(entity)
+        g.gridmap.AddObject(mapObject, pos)
+    }
+
     for _, entity := range itemLayer.Entities {
         posX, posY := itemLayer.ToGridPosition(entity.Position[0], entity.Position[1])
         pos := geometry.Point{X: posX, Y: posY}
         item := g.getItemFromEntity(entity)
-        g.gridmap.AddItem(item, pos)
+        if item != nil {
+            g.gridmap.AddItem(item, pos)
+        }
     }
 
     for _, entity := range npcLayer.Entities {
@@ -172,11 +193,9 @@ func (g *GridEngine) loadMap(identifier string, startPos geometry.Point) {
         atlasX := int(npcTile["x"].(float64) / float64(tileset.GridSize))
         atlasY := int(npcTile["y"].(float64) / float64(tileset.GridSize))
         textureIndex := atlasY*tilesetWidth + atlasX
-        npc := game.NewActor(name, pos, textureIndex)
+        npc := game.NewActor(name, textureIndex)
         g.gridmap.AddActor(npc, pos)
     }
-
-    g.gridmap.AddActor(g.player, startPos)
 
     g.mapWindow = renderer.NewMapWindow(
         geometry.Point{X: 8, Y: 8},
@@ -185,25 +204,83 @@ func (g *GridEngine) loadMap(identifier string, startPos geometry.Point) {
         g.mapLookup,
     )
     g.mapRenderer = renderer.NewRenderer(g.gridRenderer, g.mapWindow)
-    g.mapWindow.CenterOn(startPos)
+}
+
+func (g *GridEngine) PlaceParty(startPos geometry.Point) {
+    g.playerParty.SetGridMap(g.gridmap)
+    g.gridmap.AddActor(g.avatar, startPos)
+
+    if g.playerParty.HasFollowers() {
+        followerCount := len(g.playerParty.GetMembers()) - 1
+        freeCells := g.gridmap.GetFreeCellsForDistribution(startPos, followerCount, func(p geometry.Point) bool {
+            return g.gridmap.Contains(p) && g.gridmap.IsCurrentlyPassable(p)
+        })
+        if len(freeCells) < followerCount {
+            println(fmt.Sprintf("ERROR: not enough free cells for followers at %v", startPos))
+        } else {
+            for i, follower := range g.playerParty.GetMembers()[1:] {
+                followerPos := freeCells[i]
+                g.gridmap.AddActor(follower, followerPos)
+            }
+        }
+    }
+
+    g.onPartyMoved()
 }
 
 func (g *GridEngine) getItemFromEntity(entity *ldtk_go.Entity) game.Item {
     switch entity.Identifier {
     case "Book":
         return g.getBookFromEntity(entity)
+    case "Key":
+        return g.getKeyFromEntity(entity)
     }
     return nil
 }
 
+func (g *GridEngine) getObjectFromEntity(entity *ldtk_go.Entity) game.Object {
+    switch entity.Identifier {
+    case "Door":
+        return game.NewDoor()
+    case "Locked_Door":
+        return g.getLockedDoorFromEntity(entity)
+    }
+    return nil
+}
+
+func (g *GridEngine) getLockedDoorFromEntity(entity *ldtk_go.Entity) game.Object {
+    key := entity.PropertyByIdentifier("Key").AsString()
+    strength := entity.PropertyByIdentifier("Strength").AsFloat64()
+    door := game.NewLockedDoor(key, strength)
+    return door
+}
 func (g *GridEngine) getBookFromEntity(entity *ldtk_go.Entity) game.Item {
     title := entity.PropertyByIdentifier("Title").AsString()
     filename := entity.PropertyByIdentifier("Filename").AsString()
-    onBookUse := func() {
-        bookPath := path.Join("assets", "books", filename)
-        linesOfFile := readLines(bookPath)
-        g.showModal(linesOfFile)
-    }
-    book := game.NewBook(title, onBookUse)
+    bookPath := path.Join("assets", "books", filename)
+    book := game.NewBook(title, bookPath)
     return book
+}
+
+func (g *GridEngine) getKeyFromEntity(entity *ldtk_go.Entity) game.Item {
+    name := entity.PropertyByIdentifier("Name").AsString()
+    key := entity.PropertyByIdentifier("Key").AsString()
+    importance := entity.PropertyByIdentifier("Importance").AsInt()
+    return game.NewKey(name, key, keyColor(importance))
+}
+
+func keyColor(importance int) color.Color {
+    switch importance {
+    case 1:
+        return ega.BrightBlack
+    case 2:
+        return ega.White
+    case 3:
+        return ega.BrightWhite
+    case 4:
+        return ega.Yellow
+    case 5:
+        return ega.BrightYellow
+    }
+    return ega.White
 }

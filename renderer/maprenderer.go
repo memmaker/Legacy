@@ -3,11 +3,12 @@ package renderer
 import (
     "Legacy/geometry"
     "github.com/hajimehoshi/ebiten/v2"
+    "image/color"
 )
 
 type MapView interface {
     GetScreenOffset() geometry.Point
-    GetTextureIndexAt(x, y int) (*ebiten.Image, int)
+    GetTextureIndexAt(x, y int) (*ebiten.Image, int, color.Color)
     GetScrollOffset() geometry.Point
     GetWindowSizeInCells() (int, int)
 }
@@ -24,7 +25,7 @@ func NewRenderer(gridRenderer *DualGridRenderer, input MapView) *MapRenderer {
     }
 }
 
-func (r *MapRenderer) Draw(screen *ebiten.Image) {
+func (r *MapRenderer) Draw(fov *geometry.FOV, screen *ebiten.Image) {
     screenOffset := r.input.GetScreenOffset()
     tileCountX, tileCountY := r.input.GetWindowSizeInCells()
 
@@ -36,11 +37,14 @@ func (r *MapRenderer) Draw(screen *ebiten.Image) {
             mapY := yOff + scrollOffset.Y
             x := (xOff)*r.gridRenderer.GetScaledBigGridSize() + int(float64(screenOffset.X)*r.gridRenderer.GetScale())
             y := (yOff)*r.gridRenderer.GetScaledBigGridSize() + int(float64(screenOffset.Y)*r.gridRenderer.GetScale())
-            textureAtlas, textureIndex := r.input.GetTextureIndexAt(mapX, mapY)
+            textureAtlas, textureIndex, tintColor := r.input.GetTextureIndexAt(mapX, mapY)
             if textureIndex == -1 {
                 continue
             }
-            r.gridRenderer.DrawBigOnScreenWithAtlas(screen, float64(x), float64(y), textureAtlas, textureIndex)
+            if !fov.Visible(geometry.Point{X: mapX, Y: mapY}) {
+                tintColor = color.Black
+            }
+            r.gridRenderer.DrawBigOnScreenWithAtlasAndTint(screen, float64(x), float64(y), textureAtlas, textureIndex, tintColor)
         }
     }
 }

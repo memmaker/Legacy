@@ -1,40 +1,44 @@
 package game
 
 import (
-    "Legacy/geometry"
+    "Legacy/renderer"
     "fmt"
+    "image/color"
 )
 
 type Book struct {
-    pos     geometry.Point
-    icon    int
-    title   string
-    useFunc func()
+    BaseItem
+    icon     int
+    filename string
 }
 
-func (b *Book) Use() {
-    b.useFunc()
+func (b *Book) TintColor() color.Color {
+    return color.White
 }
 
-func (b *Book) ShortDescription() string {
-    return fmt.Sprintf("Book: %s", b.title)
+func (b *Book) GetContextActions(engine Engine) []renderer.MenuItem {
+    actions := inventoryItemActions(b, engine)
+    actions = append(actions, renderer.MenuItem{
+        Text:   fmt.Sprintf("Read \"%s\"", b.name),
+        Action: func() { b.read(engine) },
+    })
+    return actions
 }
-func (b *Book) Pos() geometry.Point {
-    return b.pos
+
+func (b *Book) read(engine Engine) {
+    text := engine.GetTextFile(b.filename)
+    engine.ShowScrollableText(text, color.White)
 }
 
 func (b *Book) Icon() int {
     return b.icon
 }
-
-func (b *Book) SetPos(point geometry.Point) {
-    b.pos = point
-}
-
-func NewBook(title string, onUse func()) *Book {
+func NewBook(title, filename string) *Book {
     return &Book{
-        icon:    181,
-        title:   title,
-        useFunc: onUse,
+        BaseItem: BaseItem{
+            name: title,
+        },
+        icon:     181,
+        filename: filename,
     }
 }

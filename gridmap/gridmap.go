@@ -495,7 +495,7 @@ func (m *GridMap[ActorType, ItemType, ObjectType]) MoveActor(actor ActorType, ne
     if !m.Contains(newPos) {
         return
     }
-    if !m.IsCurrentlyPassable(newPos) {
+    if !m.IsWalkableFor(newPos, actor) {
         return
     }
     m.Cells[actor.Pos().X+actor.Pos().Y*m.MapWidth] = m.Cells[actor.Pos().X+actor.Pos().Y*m.MapWidth].WithActorHereRemoved(actor)
@@ -659,6 +659,10 @@ func (m *GridMap[ActorType, ItemType, ObjectType]) IsObviousHazardAt(p geometry.
 }
 func (m *GridMap[ActorType, ItemType, ObjectType]) IsWalkableFor(p geometry.Point, person ActorType) bool {
     if !m.Contains(p) {
+        return false
+    }
+
+    if m.IsActorAt(p) && m.ActorAt(p) != person {
         return false
     }
 
@@ -1072,4 +1076,22 @@ func (m *GridMap[ActorType, ItemType, ObjectType]) AddObject(object ObjectType, 
 func (m *GridMap[ActorType, ItemType, ObjectType]) AddItem(item ItemType, spawnPos geometry.Point) {
     m.AllItems = append(m.AllItems, item)
     m.MoveItem(item, spawnPos)
+}
+
+func (m *GridMap[ActorType, ItemType, ObjectType]) UpdateFieldOfView(fov *geometry.FOV, fovPosition geometry.Point) {
+    visionRange := 19 // 10
+    visionRangeSquared := visionRange * visionRange
+
+    var fovRange = geometry.NewRect(-visionRange, -visionRange, visionRange+1, visionRange+1)
+    fov.SetRange(fovRange.Add(fovPosition).Intersect(geometry.NewRect(0, 0, m.MapWidth, m.MapHeight)))
+
+    visionMap := fov.SSCVisionMap(fovPosition, visionRange, func(p geometry.Point) bool {
+        return m.IsTransparent(p) && geometry.DistanceSquared(p, fovPosition) <= visionRangeSquared
+    }, false)
+
+    for _, p := range visionMap {
+        if !m.IsExplored(p) {
+            m.SetExplored(p)
+        }
+    }
 }

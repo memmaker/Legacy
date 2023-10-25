@@ -12,6 +12,12 @@ type MultiPageWindow struct {
     lastPageCalled bool
     pages          [][]string
     currentPage    int
+
+    shouldClose bool
+}
+
+func (m *MultiPageWindow) ShouldClose() bool {
+    return m.shouldClose
 }
 
 func (m *MultiPageWindow) ActionUp() {
@@ -39,17 +45,18 @@ func NewMultiPageWindow(dualGrid *DualGridRenderer, yOffset int, icon int, text 
         lastPageCalled: lastPageCalled,
     }
 }
-func (m *MultiPageWindow) ActionConfirm() bool {
+func (m *MultiPageWindow) ActionConfirm() {
     m.currentPage++
     if m.currentPage >= len(m.pages)-1 {
         m.currentPage = len(m.pages) - 1
         if !m.lastPageCalled {
             m.onLastPage()
             m.lastPageCalled = true
+        } else {
+            m.shouldClose = true
         }
     }
     m.window.text = m.pages[m.currentPage]
-    return false
 }
 func (m *MultiPageWindow) Draw(screen *ebiten.Image) {
     m.window.Draw(screen)

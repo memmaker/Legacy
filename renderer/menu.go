@@ -18,6 +18,13 @@ type GridMenu struct {
     gridRenderer     *DualGridRenderer
     bottomRight      geometry.Point
     currentSelection int
+
+    shouldClose        bool
+    autoCloseOnConfirm bool
+}
+
+func (g *GridMenu) ShouldClose() bool {
+    return g.shouldClose
 }
 
 func (g *GridMenu) OnMouseMoved(x int, y int) {
@@ -31,22 +38,23 @@ func (g *GridMenu) OnMouseMoved(x int, y int) {
     g.currentSelection = relativeLine
 }
 
-func (g *GridMenu) OnMouseClicked(x int, y int) bool {
+func (g *GridMenu) OnMouseClicked(x int, y int) {
     relativeLine := y - g.topLeft.Y - 1
     if relativeLine < 0 || relativeLine >= len(g.menuItems) {
-        return false
+        return
     }
     if x < g.topLeft.X+1 || x >= g.bottomRight.X-1 {
-        return false
+        return
     }
     g.currentSelection = relativeLine
     g.ActionConfirm()
-    return true
 }
 
-func (g *GridMenu) ActionConfirm() bool {
+func (g *GridMenu) ActionConfirm() {
     g.menuItems[g.currentSelection].Action()
-    return true
+    if g.autoCloseOnConfirm {
+        g.shouldClose = true
+    }
 }
 
 func (g *GridMenu) ActionUp() {
@@ -63,17 +71,26 @@ func (g *GridMenu) ActionDown() {
     }
 }
 
-func NewGridMenu(gridRenderer *DualGridRenderer, topLeft geometry.Point, menuItems []MenuItem) *GridMenu {
+func NewGridMenu(gridRenderer *DualGridRenderer, menuItems []MenuItem) *GridMenu {
     height := min(len(menuItems)+2, 15)
     width := min(maxLenOfItems(menuItems)+2, 36)
+    screenGridSize := gridRenderer.GetSmallGridScreenSize()
+    // center
+    topLeft := geometry.Point{
+        X: (screenGridSize.X - width) / 2,
+        Y: (screenGridSize.Y - height) / 4,
+    }
+    bottomRight := geometry.Point{X: topLeft.X + width, Y: topLeft.Y + height}
     return &GridMenu{
         gridRenderer: gridRenderer,
         topLeft:      topLeft,
-        bottomRight:  geometry.Point{X: topLeft.X + width, Y: topLeft.Y + height},
+        bottomRight:  bottomRight,
         menuItems:    menuItems,
     }
 }
-
+func (g *GridMenu) SetAutoClose() {
+    g.autoCloseOnConfirm = true
+}
 func (g *GridMenu) Draw(screen *ebiten.Image) {
     var textColor color.Color
     g.gridRenderer.DrawFilledBorder(screen, g.topLeft, g.bottomRight)

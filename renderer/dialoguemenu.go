@@ -15,6 +15,12 @@ type GridDialogueMenu struct {
     currentSelection int
     hotspotLayout    [][]ButtonHotspot
     lastIndex        int
+
+    shouldClose bool
+}
+
+func (g *GridDialogueMenu) ShouldClose() bool {
+    return g.shouldClose
 }
 
 type ButtonHotspot struct {
@@ -54,20 +60,20 @@ func (g *GridDialogueMenu) Draw(screen *ebiten.Image) {
     }
 }
 
-func (g *GridDialogueMenu) OnMouseClicked(x, y int) bool {
+func (g *GridDialogueMenu) OnMouseClicked(x, y int) {
     relativeLine := y - g.topLeft.Y - 2
     if relativeLine < 0 || relativeLine >= len(g.hotspotLayout) {
-        return false
+        return
     }
     line := g.hotspotLayout[relativeLine]
 
     for _, hotspot := range line {
         if x >= hotspot.StartX && x < hotspot.EndX {
             hotspot.Action()
-            return false
+            return
         }
     }
-    return false
+    return
 }
 
 func (g *GridDialogueMenu) OnMouseMoved(x, y int) {
@@ -85,7 +91,7 @@ func (g *GridDialogueMenu) OnMouseMoved(x, y int) {
     }
 }
 
-func (g *GridDialogueMenu) ActionConfirm() bool {
+func (g *GridDialogueMenu) ActionConfirm() {
     relativeIndex := g.currentSelection
     currentLine := 0
     for relativeIndex >= len(g.hotspotLayout[currentLine]) {
@@ -93,7 +99,6 @@ func (g *GridDialogueMenu) ActionConfirm() bool {
         currentLine++
     }
     g.hotspotLayout[currentLine][relativeIndex].Action()
-    return false
 }
 
 func (g *GridDialogueMenu) ActionUp() {
@@ -116,7 +121,7 @@ func layoutMenuItems(items []MenuItem, width int) [][]ButtonHotspot {
     xOffset := 5
     currentLineWidth := 0
     for i, item := range items {
-        if currentLineWidth+len(item.Text) > width-2 {
+        if currentLineWidth+len(item.Text) > width-4 {
             result = append(result, currentLine)
             currentLine = make([]ButtonHotspot, 0)
             currentLineWidth = 0

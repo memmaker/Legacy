@@ -21,11 +21,26 @@ I wonder what it would be
 like to live in a time of
 =magic=.
 
+Maybe I could =join= you
+on your quest.
+
+# join
+## joins
+I will gladly join you.
+
 # philosophy
 I believe in the power of
 the =mind=.
 You can do anything if you
 =believe= it.
+
+I also =sell= these fine
+leather jackets.
+
+# sell
+## sells
+Sure, let's do some
+business.
 
 # magic
 I can do anything with my
