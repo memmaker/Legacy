@@ -10,12 +10,13 @@ import (
 
 type Party struct {
     members        []*Actor
-    partyInventory []Item
+    partyInventory [][]Item
     keys           map[string]*Key
     gridMap        *gridmap.GridMap[*Actor, Item, Object]
     fov            *geometry.FOV
     gold           int
     food           int
+    lockpicks      int
 }
 
 func (p *Party) Pos() geometry.Point {
@@ -25,7 +26,7 @@ func (p *Party) Pos() geometry.Point {
 func NewParty(leader *Actor) *Party {
     p := &Party{
         members:        []*Actor{leader},
-        partyInventory: []Item{},
+        partyInventory: [][]Item{},
         keys:           make(map[string]*Key),
         fov:            geometry.NewFOV(geometry.NewRect(-6, -6, 6, 6)),
         gold:           1000,
@@ -39,23 +40,46 @@ func (p *Party) AddItem(item Item) {
     if key, ok := item.(*Key); ok {
         p.keys[key.key] = key
     } else {
-        p.partyInventory = append(p.partyInventory, item)
+        p.addToInventory(item)
     }
     item.SetHolder(p)
+}
+
+func (p *Party) addToInventory(item Item) {
+    for i, it := range p.partyInventory {
+        if it[0].CanStackWith(item) {
+            p.partyInventory[i] = append(p.partyInventory[i], item)
+            return
+        }
+    }
+    p.partyInventory = append(p.partyInventory, []Item{item})
 }
 
 func (p *Party) RemoveItem(item Item) {
     if key, ok := item.(*Key); ok {
         delete(p.keys, key.key)
+        item.SetHolder(nil)
     } else {
         for i, it := range p.partyInventory {
-            if it == item {
-                p.partyInventory = append(p.partyInventory[:i], p.partyInventory[i+1:]...)
+            if it[0] == item {
+                p.partyInventory[i] = append(it[:0], it[1:]...)
+                if len(p.partyInventory[i]) == 0 {
+                    p.partyInventory = append(p.partyInventory[:i], p.partyInventory[i+1:]...)
+                }
+                item.SetHolder(nil)
                 return
+            }
+            if it[0].CanStackWith(item) {
+                for j, stackItem := range it {
+                    if stackItem == item {
+                        p.partyInventory[i] = append(it[:j], it[j+1:]...)
+                        item.SetHolder(nil)
+                        return
+                    }
+                }
             }
         }
     }
-    item.SetHolder(nil)
 }
 
 type MemberStatus struct {
@@ -96,12 +120,8 @@ func (p *Party) GetMember(index int) *Actor {
     return p.members[index]
 }
 
-func (p *Party) GetInventory() []Item {
-    allItems := p.partyInventory
-    for _, key := range p.keys {
-        allItems = append(allItems, key)
-    }
-    return allItems
+func (p *Party) GetStackedInventory() [][]Item {
+    return p.partyInventory
 }
 
 func (p *Party) GetMembers() []*Actor {
@@ -196,10 +216,47 @@ func (p *Party) TryRest() bool {
     if p.food < len(p.members) {
         return false
     }
+    p.food -= len(p.members)
     for _, member := range p.members {
-        member.Health = 10
+        member.FullRest()
     }
     return true
+}
+
+func (p *Party) AddFood(amount int) {
+    p.food += amount
+}
+
+func (p *Party) AddGold(amount int) {
+    p.gold += amount
+}
+
+func (p *Party) GetFood() int {
+    return p.food
+}
+
+func (p *Party) AddLockpicks(amount int) {
+    p.lockpicks += amount
+}
+
+func (p *Party) GetLockpicks() int {
+    return p.lockpicks
+}
+
+func (p *Party) RemoveLockpicks(amount int) {
+    p.lockpicks -= amount
+}
+
+func (p *Party) GetSpells() []*Spell {
+    var result []*Spell
+    for _, item := range p.partyInventory {
+        if scroll, ok := item[0].(*Scroll); ok {
+            if scroll.spell != nil {
+                result = append(result, scroll.spell)
+            }
+        }
+    }
+    return result
 }
 
 func healthToIcon(health int) rune {

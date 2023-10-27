@@ -14,7 +14,7 @@ type BaseObject struct {
     description []string
 }
 
-func (a *BaseObject) Icon() int {
+func (a *BaseObject) Icon(uint64) int {
     return a.icon
 }
 
@@ -51,7 +51,7 @@ func (a *BaseObject) Description() []string {
 
 type Object interface {
     Pos() geometry.Point
-    Icon() int
+    Icon(uint64) int
     TintColor() color.Color
     SetPos(geometry.Point)
     Name() string
@@ -60,4 +60,6 @@ type Object interface {
     IsTransparent() bool
     IsPassableForProjectile() bool
     Description() []string
+    IsHidden() bool
+    SetHidden(hidden bool)
 }

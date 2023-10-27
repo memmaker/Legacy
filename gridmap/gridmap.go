@@ -13,24 +13,15 @@ import (
     "time"
 )
 
-type MapMetaData struct {
-    MissionTitle string
-    HashAsHex    string
-    FileName     string
+type Transition struct {
+    TargetMap string
+    TargetPos geometry.Point
 }
-
 type MapObject interface {
     Pos() geometry.Point
-    Icon() int
+    Icon(tick uint64) int
     SetPos(geometry.Point)
 }
-
-type FoVMode uint8
-
-const (
-    FoVModeNormal FoVMode = iota
-    FoVModeScoped
-)
 
 type MapActor interface {
     MapObject
@@ -147,6 +138,7 @@ type GridMap[ActorType interface {
     comparable
     MapObjectWithProperties[ActorType]
 }] struct {
+    name            string
     Cells           []MapCell[ActorType, ItemType, ObjectType]
     AllActors       []ActorType
     AllDownedActors []ActorType
@@ -154,7 +146,6 @@ type GridMap[ActorType interface {
     AllItems        []ItemType
     AllObjects      []ObjectType
 
-    MetaData    MapMetaData
     PlayerSpawn geometry.Point
 
     MapWidth       int
@@ -171,6 +162,10 @@ type GridMap[ActorType interface {
 
     NamedLocations   map[string]geometry.Point
     AmbienceSoundCue string
+    noClip           bool
+
+    transitionMap map[geometry.Point]Transition
+    secretDoors   map[geometry.Point]bool
 }
 
 func (m *GridMap[ActorType, ItemType, ObjectType]) AddZone(zone *ZoneInfo) {
@@ -358,14 +353,6 @@ func (m *GridMap[ActorType, ItemType, ObjectType]) IsNextToTileWithSpecial(pos g
     }
     return false
 }
-
-func (m *GridMap[ActorType, ItemType, ObjectType]) MapHash() string {
-    return m.MetaData.HashAsHex
-}
-
-func (m *GridMap[ActorType, ItemType, ObjectType]) MapFileName() string {
-    return m.MetaData.FileName
-}
 func (m *GridMap[ActorType, ItemType, ObjectType]) Neighbors(point geometry.Point) []geometry.Point {
     return m.GetFilteredCardinalNeighbors(point, func(p geometry.Point) bool {
         return m.Contains(p) && m.IsTileWalkable(p)
@@ -454,6 +441,8 @@ func NewEmptyMap[ActorType interface {
         pathfinder:      pathRange,
         maxLOSRange:     geometry.NewRect(-maxVisionRange, -maxVisionRange, maxVisionRange+1, maxVisionRange+1),
         MaxVisionRange:  maxVisionRange,
+        secretDoors:     make(map[geometry.Point]bool),
+        transitionMap:   make(map[geometry.Point]Transition),
     }
     m.Fill(MapCell[ActorType, ItemType, ObjectType]{
         TileType: Tile{
@@ -498,7 +487,9 @@ func (m *GridMap[ActorType, ItemType, ObjectType]) MoveActor(actor ActorType, ne
     if !m.IsWalkableFor(newPos, actor) {
         return
     }
-    m.Cells[actor.Pos().X+actor.Pos().Y*m.MapWidth] = m.Cells[actor.Pos().X+actor.Pos().Y*m.MapWidth].WithActorHereRemoved(actor)
+    if m.Contains(actor.Pos()) {
+        m.Cells[actor.Pos().X+actor.Pos().Y*m.MapWidth] = m.Cells[actor.Pos().X+actor.Pos().Y*m.MapWidth].WithActorHereRemoved(actor)
+    }
     actor.SetPos(newPos)
     m.Cells[newPos.X+newPos.Y*m.MapWidth] = m.Cells[newPos.X+newPos.Y*m.MapWidth].WithActor(actor)
 }
@@ -664,6 +655,10 @@ func (m *GridMap[ActorType, ItemType, ObjectType]) IsWalkableFor(p geometry.Poin
 
     if m.IsActorAt(p) && m.ActorAt(p) != person {
         return false
+    }
+
+    if m.noClip {
+        return true
     }
 
     if m.IsObjectAt(p) && (!m.ObjectAt(p).IsWalkable(person)) {
@@ -1094,4 +1089,38 @@ func (m *GridMap[ActorType, ItemType, ObjectType]) UpdateFieldOfView(fov *geomet
             m.SetExplored(p)
         }
     }
+}
+
+func (m *GridMap[ActorType, ItemType, ObjectType]) ToggleNoClip() bool {
+    m.noClip = !m.noClip
+    return m.noClip
+}
+
+func (m *GridMap[ActorType, ItemType, ObjectType]) SetSecretDoorAt(pos geometry.Point) {
+    m.secretDoors[pos] = true
+}
+
+func (m *GridMap[ActorType, ItemType, ObjectType]) IsSecretDoorAt(neighbor geometry.Point) bool {
+    if _, ok := m.secretDoors[neighbor]; ok {
+        return true
+    }
+    return false
+}
+
+func (m *GridMap[ActorType, ItemType, ObjectType]) SetName(name string) {
+    m.name = name
+}
+
+func (m *GridMap[ActorType, ItemType, ObjectType]) SetTransitionAt(pos geometry.Point, transition Transition) {
+    m.transitionMap[pos] = transition
+}
+
+func (m *GridMap[ActorType, ItemType, ObjectType]) GetTransitionAt(pos geometry.Point) (Transition, bool) {
+    transition, ok := m.transitionMap[pos]
+    return transition, ok
+
+}
+
+func (m *GridMap[ActorType, ItemType, ObjectType]) GetName() string {
+    return m.name
 }

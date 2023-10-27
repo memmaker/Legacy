@@ -29,6 +29,7 @@ type ButtonHotspot struct {
     EndX      int
     Label     string
     Action    func()
+    TextColor color.Color
 }
 
 func NewGridDialogueMenu(gridRenderer *DualGridRenderer, topLeft geometry.Point, menuItems []MenuItem) *GridDialogueMenu {
@@ -54,6 +55,8 @@ func (g *GridDialogueMenu) Draw(screen *ebiten.Image) {
             textColor = color.White
             if item.ItemIndex == g.currentSelection {
                 textColor = ega.BrightGreen
+            } else if item.TextColor != nil {
+                textColor = item.TextColor
             }
             g.gridRenderer.DrawColoredString(screen, item.StartX, g.topLeft.Y+2+line, item.Label, textColor)
         }
@@ -132,6 +135,7 @@ func layoutMenuItems(items []MenuItem, width int) [][]ButtonHotspot {
             EndX:      xOffset + currentLineWidth + len(item.Text),
             Label:     item.Text,
             Action:    item.Action,
+            TextColor: item.TextColor,
         })
         currentLineWidth += len(item.Text) + 1
     }

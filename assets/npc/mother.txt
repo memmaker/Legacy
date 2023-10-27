@@ -1,0 +1,34 @@
+Name: Mother
+Health: 1000
+
+# Description
+
+An enigmatic female figure.
+When you look at her, you
+see different things, all
+at once.
+
+She's a beautiful young
+girl in her prime, but
+also appears to be the
+caring mother of many.
+
+You are sure you can
+see the wisdom of an
+old woman in her eyes.
+
+# Inventory
+
+ - armor(5): a robe of leaves
+
+# Conversation
+;
+# _first_time
+"I feel weak"
+
+# name
+I am not supposed to
+have a name.
+
+# job
+What is a job?

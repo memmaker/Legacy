@@ -1,0 +1,85 @@
+
+
+# Mother Nature
+ - She starts with 1000 HP, she drains 1 hp per hour and every time the player uses magic
+ - Each MP the player spends is 1 damage to her
+ - When the player uses magic to open her prison door, she will scream in pain because it will need a big amount of power
+
+# First small but complete Quest..
+
+
+
+
+# NPCs
+The dead girl on the stairs
+The rich douchebag
+The self-sacrificing mother
+Mother Nature herself, who is the source of magic
+Vater Staat
+Die kleine Raupe Nimmersatt (verwandelt sich von einer Schlange in einen Vogel)
+ - Let's not make it too literal and obvious
+ - Wir benutzen das von mir gezeichnete Bild wenn der Spieler "Nova" als Namen eingibt
+
+Das letzte Einhorn
+
+# Plots
+
+The system of exploitation
+ - Scribes discovered a ritual to summon mother nature herself, trapping her in a human body
+ - She is held captive in a secret facility, where she is forced to produce magic essence by bloodletting
+ - The essence is sold as "magic potions" on the market
+ - The society has become dependent on magic potions for their daily lives
+ - Wheeled vehicles, driven by magic essence, are the main means of transportation for the rich
+ - While Mother Nature is slowly dying, the world is slowly dying with her
+
+The non-sense corporation
+ - Handling "magic potions" is a lucrative business
+ - The corporation is run by a bunch of greedy assholes
+ - They exploit the workers and the environment
+ - But they also acquire quite a management overhead
+ - They also don't know what they are doing
+ - Sabotaging themselves and being utterly incompetent and inefficient
+
+The circle of violence
+ - Push-backs against refugees
+The cycle of life
+The dystopian future
+ - Youth imprisoned for trying to save the world
+The joy of children
+The exploitation of the old and poor
+
+
+Death alone
+ - There are some old people in the villages, that don't have any children
+ - Their friends and family have died or left them
+ - They would be dying alone, unseen and unheard
+
+
+# Quests
+
+## Personal
+Your legacy        - You are leading by example and your actions will have a lasting impact on others.
+
+## Local
+Legacy of the people
+
+## Global
+Legacy of nature   - Mother nature is dying.
+
+Legacy of a nation - The country needs a future. Define it by selecting the new holy scriptures.
+
+# Main messages
+It's a mad world.
+Luckily, the extremes of good and evil rarely exist in reality.
+The world is not black and white, but shades of grey.
+Perpetrators are often victims themselves.
+Striving for virtue is a noble goal, but vices are part of human nature.
+For a single person, the world is virtually unchangeable.
+Act locally, think globally.
+Don't drive a car.
+
+# Main Plot
+
+
+
+# Quest Notes

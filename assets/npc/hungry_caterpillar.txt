@@ -1,0 +1,53 @@
+Name: A hungry small creature
+Health: 10
+
+# Description
+
+This worm-like creature is
+hungry and wants something
+to eat.
+
+# Inventory
+
+- armor(0): nothing
+
+# Conversation
+;
+# _first_time
+"I recognize you. You are
+the one who
+is coming from that
+strange place with
+human problems. And now
+you are here
+at our place of human
+problems."
+
+# name
+"I am just =hungry=."
+
+# job
+"My job is eating."
+
+# hungry
+"I am always hungry.
+=Food= is good."
+
+# Food
+"I cannot eat your kind of
+food.
+Actually, I follow a
+strict diet."
+
+"It depends on the day of
+the week.
+Let me see... Today is
+=Monday=."
+
+# Monday
+"On Mondays I eat... I
+eat...
+I cannot remember. I am
+too hungry to think."
+
+"Oh, please, help me!"

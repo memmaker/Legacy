@@ -8,7 +8,7 @@ import (
 
 type MapView interface {
     GetScreenOffset() geometry.Point
-    GetTextureIndexAt(x, y int) (*ebiten.Image, int, color.Color)
+    GetTextureIndexAt(x, y int, tick uint64) (*ebiten.Image, int, color.Color)
     GetScrollOffset() geometry.Point
     GetWindowSizeInCells() (int, int)
 }
@@ -25,7 +25,7 @@ func NewRenderer(gridRenderer *DualGridRenderer, input MapView) *MapRenderer {
     }
 }
 
-func (r *MapRenderer) Draw(fov *geometry.FOV, screen *ebiten.Image) {
+func (r *MapRenderer) Draw(fov *geometry.FOV, screen *ebiten.Image, tick uint64) {
     screenOffset := r.input.GetScreenOffset()
     tileCountX, tileCountY := r.input.GetWindowSizeInCells()
 
@@ -37,7 +37,7 @@ func (r *MapRenderer) Draw(fov *geometry.FOV, screen *ebiten.Image) {
             mapY := yOff + scrollOffset.Y
             x := (xOff)*r.gridRenderer.GetScaledBigGridSize() + int(float64(screenOffset.X)*r.gridRenderer.GetScale())
             y := (yOff)*r.gridRenderer.GetScaledBigGridSize() + int(float64(screenOffset.Y)*r.gridRenderer.GetScale())
-            textureAtlas, textureIndex, tintColor := r.input.GetTextureIndexAt(mapX, mapY)
+            textureAtlas, textureIndex, tintColor := r.input.GetTextureIndexAt(mapX, mapY, tick)
             if textureIndex == -1 {
                 continue
             }

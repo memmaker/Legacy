@@ -1,0 +1,121 @@
+# Annoyances
+ - The dialogue dilemma
+   - Adding the "join" keyword to the player knowledge base means every NPC can be asked this now
+   - Otoh, learning about the "murder in town" should allow asking all NPCs about this
+ - Saving / Loading
+   - We cannot load from the LDTK when we visited an area before
+   - Instead, when leaving a map, that map state has to be saved to disk
+ - You can walk while the modal is open
+ - The intro dialogue seems random (and maybe remove "job" & "name"?)
+ - Overflow for the hungry_caterpillar intro dialogue
+ - Cannot specify inventories, needs string -> item
+
+# Character customization
+ - Name & Pro-noun
+ - Map Icon
+ - Traits
+   - Strong physique (allow bashing and intimidation)
+   - Strong mind (spells are more effective)
+   - Materialistic (Start with money)
+   - Sneaky (Undetected movement)
+   -
+
+
+# A locked wooden door
+## Approaches to Problem solving
+ - Violence (bash it)
+ - Magic (cast "open" spell)
+ - Stealth (find a way around it)
+ - Communication (ask someone for the key or let him open for you)
+ - Money (bribe people or pay for a thief)
+ - Clever manipulation of the environment (pick the lock)
+
+# TODO
+ - Inventory management - BASIC
+ - Party movement - GOOD ENOUGH
+ - Doors & Keys - GOOD ENOUGH
+ - Containers - BASIC
+ - Equipping items
+ - Combat
+ - Magic - BASIC
+ - Vendors - BASIC
+ - Journal
+ - Save/Load
+ - Main Menu
+ - Line of Sight - GOOD ENOUGH
+
+
+# Non-Contextual actions
+ - Inventory - BASIC
+ - Cast spells
+ - Rest (to heal) - BASIC
+ - Attack
+ - Split up - GOOD ENOUGH
+
+# Contextual actions
+ - Move (w/a/s/d)
+ - Look/Examine (look at something)
+ - Take/Drop (inventory)
+ - Use/Interact (with something)
+ - Talk/Conversations (to someone)
+ - Mount/Dismount (a vehicle)
+ - Enter (a town)
+ - Open/Close (a door/chest)
+
+# Cool ideas
+ - Allow knocking on locked doors
+ - Magic is Mother Natures HP, the "Legacy" label on the top of the UI will turn into the damage you have done to nature
+ - We should provide alternatives to using the nature potions for spellcasting
+   - Staff of the Sun God
+     - Can be used as a source of mana
+     - Max Mana can be increased by meditating at shrines
+   - Blood pact of the Vampires
+     - You can drink the blood of humans to replenish your mana
+   - The Book of the Dead
+	 - You can sacrifice the souls of the dead to replenish your mana
+   - An ancient artifact
+	 - A machinery can extract mana from the artifact
+ - Magic potions are valuable and expensive
+ - The poor cannot afford them
+ - You can spend magic potions to increase your strength
+ - You can make a good amount of money selling mana potions
+ - You can definitely become a Vampire
+
+# Spells
+ - Need a scroll in the inventory of the caster
+ - Has to consume "magic potion" beforehand
+ - Can be combined for secret spell combinations
+
+# Design Guidelines
+ - No Monsters without a cause, given the right skill, you can negotiate with them
+ - Magic is exploitation of nature
+ - Quests will result in one of:
+   - A flag change
+   - A reward (XP, Items, Food, Gold)
+   - Party members lost / gained
+   - Valuable Information
+ - Some Ultima Staples
+   - Transport Vehicle
+   - Rich world interactions (bake bread, forge swords, etc.)
+   - Meditation at shrines
+ - A gruesome murder case
+ - What about the damsel in distress tropes (amalthea, mother nature..)??
+
+# Experience
+ - Track Experience by type
+   - combat
+   - quests
+   - exploration
+   - conversation
+
+# Approach
+
+ - As Contextual Actions on objects
+   - Ignite (a torch)
+   - Jimmy (a lock)
+   - Climbing (climb a tree)
+
+# Online Tools
+
+Word Wrap for books (34 chars): https://www.browserling.com/tools/word-wrap
+

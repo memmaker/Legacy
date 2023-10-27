@@ -1,8 +1,6 @@
-package dialogue
+package game
 
 import (
-    "bufio"
-    "io"
     "regexp"
     "sort"
     "strings"
@@ -13,30 +11,41 @@ import (
 // a response can be a simple text, the end of the dialogue, or combat
 // also every response can trigger a change in the world state
 
-type Response struct {
+type DialogueChoice struct {
+    Label           string
+    FollowUpTrigger string
+}
+type ConversationNode struct {
     Text         []string
     AddsKeywords []string
     Effect       string
+    ForcedChoice []DialogueChoice
+    NeededFlags  []string
 }
 type Dialogue struct {
-    triggers        map[string]Response
+    triggers        map[string]ConversationNode
     previouslyAsked map[string]bool
     keyWordsGiven   map[string]bool
 }
 
-func NewDialogueFromFile(dialogueFile io.Reader) *Dialogue {
+func NewDialogue(triggers map[string]ConversationNode) *Dialogue {
     return &Dialogue{
-        triggers:        triggersFromFile(dialogueFile),
+        triggers:        triggers,
         previouslyAsked: make(map[string]bool),
         keyWordsGiven:   make(map[string]bool),
     }
 }
 
-func (d *Dialogue) GetOptions(pk *PlayerKnowledge) []string {
+func (d *Dialogue) GetOptions(pk *PlayerKnowledge, flags *Flags) []string {
     var options []string
 
     for k, _ := range pk.knowsAbout {
-        if _, ok := d.triggers[k]; ok {
+        if node, ok := d.triggers[k]; ok {
+            if len(node.NeededFlags) > 0 {
+                if !flags.AllSet(node.NeededFlags) {
+                    continue
+                }
+            }
             options = append(options, k)
         }
     }
@@ -45,16 +54,27 @@ func (d *Dialogue) GetOptions(pk *PlayerKnowledge) []string {
         return options[i] < options[j]
     })
     // prepend "name", "job"
-    options = append([]string{"name", "job"}, options...)
+    defaultOptions := []string{"job", "name"}
+    for _, k := range defaultOptions {
+        if node, ok := d.triggers[k]; ok {
+            if len(node.NeededFlags) > 0 {
+                if !flags.AllSet(node.NeededFlags) {
+                    continue
+                }
+            }
+            // prepend to the slice
+            options = append([]string{k}, options...)
+        }
+    }
     return options
 }
 
-func (d *Dialogue) GetResponseAndAddKnowledge(pk *PlayerKnowledge, keyword string) ([]string, string) {
+func (d *Dialogue) GetResponseAndAddKnowledge(pk *PlayerKnowledge, keyword string) ConversationNode {
     d.previouslyAsked[keyword] = true
     response := d.triggers[keyword]
     pk.AddKnowledge(response.AddsKeywords)
     d.RememberKeywords(response.AddsKeywords)
-    return response.Text, response.Effect
+    return response
 }
 
 func (d *Dialogue) RememberKeywords(keywords []string) {
@@ -63,13 +83,30 @@ func (d *Dialogue) RememberKeywords(keywords []string) {
     }
 }
 
+func (d *Dialogue) HasFirstTimeText() bool {
+    if _, exists := d.triggers["_first_time"]; exists {
+        return true
+    }
+    return false
+}
+
+func (d *Dialogue) GetFirstTimeText() []string {
+    return d.triggers["_first_time"].Text
+}
+
+func (d *Dialogue) HasBeenUsed(keyword string) bool {
+    return d.previouslyAsked[keyword]
+}
+
 type PlayerKnowledge struct {
     knowsAbout map[string]bool
+    talkedTo   map[string]bool
 }
 
 func NewPlayerKnowledge() *PlayerKnowledge {
     return &PlayerKnowledge{
         knowsAbout: make(map[string]bool),
+        talkedTo:   make(map[string]bool),
     }
 }
 
@@ -79,46 +116,12 @@ func (p *PlayerKnowledge) AddKnowledge(knowledge []string) {
     }
 }
 
-func triggersFromFile(file io.Reader) map[string]Response {
-    // line by line
-    scanner := bufio.NewScanner(file)
-    triggers := make(map[string]Response)
-    currentTrigger := ""
-    currentOption := ""
-    currentText := make([]string, 0)
-    for scanner.Scan() {
-        line := scanner.Text()
-        if len(line) == 0 {
-            currentText = append(currentText, line)
-        } else if line[0] == ';' {
-            continue
-        } else if line[0] == '#' && line[1] == ' ' {
-            if currentTrigger != "" {
-                addedKeyWords, strippedText := parseKeywords(currentText)
-                currentText = make([]string, 0)
-                triggers[currentTrigger] = Response{
-                    Text:         strippedText,
-                    Effect:       currentOption,
-                    AddsKeywords: addedKeyWords,
-                }
-                currentOption = ""
-            }
-            currentTrigger = line[2:]
-        } else if line[0] == '#' && line[1] == '#' {
-            currentOption = line[3:]
-        } else {
-            currentText = append(currentText, line)
-        }
-    }
-    if currentTrigger != "" {
-        addedKeyWords, strippedText := parseKeywords(currentText)
-        triggers[currentTrigger] = Response{
-            Text:         strippedText,
-            Effect:       currentOption,
-            AddsKeywords: addedKeyWords,
-        }
-    }
-    return triggers
+func (p *PlayerKnowledge) AddTalkedTo(name string) {
+    p.talkedTo[name] = true
+}
+
+func (p *PlayerKnowledge) HasTalkedTo(name string) bool {
+    return p.talkedTo[name]
 }
 
 func parseKeywords(text []string) ([]string, []string) {
@@ -141,6 +144,9 @@ func parseKeywords(text []string) ([]string, []string) {
     }
     if !found {
         return nil, text
+    }
+    if lastLine := strippedText[len(strippedText)-1]; lastLine == "" {
+        strippedText = strippedText[:len(strippedText)-1]
     }
     return addedKeyWords, strippedText
 }

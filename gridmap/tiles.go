@@ -96,6 +96,16 @@ func (t Tile) ToString() string {
     return t.DefinedDescription
 }
 
+func (t Tile) WithIsWalkable(isWalkable bool) Tile {
+    t.IsWalkable = isWalkable
+    return t
+}
+
+func (t Tile) WithIcon(icon int) Tile {
+    t.DefinedIcon = icon
+    return t
+}
+
 type MapCell[ActorType interface {
     comparable
     MapActor

@@ -1,24 +1,22 @@
 package main
 
 import (
-    "Legacy/dialogue"
     "Legacy/game"
     "Legacy/geometry"
+    "Legacy/gocoro"
     "Legacy/gridmap"
     "Legacy/ldtk_go"
     "Legacy/renderer"
     "errors"
     "fmt"
     "github.com/hajimehoshi/ebiten/v2"
-    "github.com/hajimehoshi/ebiten/v2/inpututil"
     "image/color"
     _ "image/png"
     "log"
     "math"
     "os"
-    "path"
     "runtime/pprof"
-    "strings"
+    "strconv"
 )
 
 type Modal interface {
@@ -48,28 +46,33 @@ type GridEngine struct {
     avatar          *game.Actor
     splitControlled *game.Actor
     playerParty     *game.Party
-    playerKnowledge *dialogue.PlayerKnowledge
+    playerKnowledge *game.PlayerKnowledge
+    flags           *game.Flags
+    mapsInMemory    map[string]*gridmap.GridMap[*game.Actor, game.Item, game.Object]
 
     // Map
-    gridmap         *gridmap.GridMap[*game.Actor, game.Item, game.Object]
-    transitionLayer *ldtk_go.Layer
-    transitionMap   map[geometry.Point]Transition
-    ldtkMapProject  *ldtk_go.Project
+    currentMap     *gridmap.GridMap[*game.Actor, game.Item, game.Object]
+    ldtkMapProject *ldtk_go.Project
+    spawnPosition  geometry.Point
+
+    // Animation
+    animationRoutine gocoro.Coroutine
 
     // UI
-    deviceDPIScale float64
-    tileScale      float64
-    internalWidth  int
-    internalHeight int
-    modalElement   Modal
-    inputElement   UIWidget
-    uiOverlay      map[int]int
-    gridRenderer   *renderer.DualGridRenderer
-    mapRenderer    *renderer.MapRenderer
-    mapWindow      *renderer.MapWindow
-    lastMousePosX  int
-    lastMousePosY  int
-    contextActions []renderer.MenuItem
+    deviceDPIScale     float64
+    tileScale          float64
+    internalWidth      int
+    internalHeight     int
+    modalElement       Modal
+    inputElement       UIWidget
+    uiOverlay          map[int]int
+    gridRenderer       *renderer.DualGridRenderer
+    mapRenderer        *renderer.MapRenderer
+    mapWindow          *renderer.MapWindow
+    lastMousePosX      int
+    lastMousePosY      int
+    contextActions     []renderer.MenuItem
+    lastSelectedAction func()
 
     // Textures
     worldTiles  *ebiten.Image
@@ -78,7 +81,50 @@ type GridEngine struct {
 
     textToPrint   string
     ticksForPrint int
-    spawnPosition geometry.Point
+}
+
+func (g *GridEngine) DamageAvatar(amount int) {
+    g.GetAvatar().Damage(amount)
+    // TODO: visual indicator?
+}
+
+func (g *GridEngine) AddLockpicks(amount int) {
+    g.playerParty.AddLockpicks(amount)
+}
+
+func (g *GridEngine) PartyHasLockpick() bool {
+    return g.playerParty.GetLockpicks() > 0
+}
+
+func (g *GridEngine) RemoveLockpick() {
+    g.playerParty.RemoveLockpicks(1)
+}
+
+func (g *GridEngine) ManaSpent(caster *game.Actor, cost int) {
+    caster.RemoveMana(cost)
+    // TODO: remove HP from mother nature here..
+    g.ManaSpentInWorld(caster.Pos(), cost)
+}
+
+func (g *GridEngine) ShowDrinkPotionMenu(potion *game.Potion) {
+    var menuItems []renderer.MenuItem
+    for _, m := range g.playerParty.GetMembers() {
+        member := m
+        menuItems = append(menuItems, renderer.MenuItem{
+            Text: fmt.Sprintf("%s", member.Name()),
+            Action: func() {
+                if !potion.IsEmpty() {
+                    g.DrinkPotion(potion, member)
+                }
+
+            },
+        })
+    }
+    g.openMenu(menuItems)
+}
+
+func (g *GridEngine) Flags() *game.Flags {
+    return g.flags
 }
 
 func (g *GridEngine) IsPlayerControlled(holder game.ItemHolder) bool {
@@ -99,133 +145,36 @@ func (g *GridEngine) Update() error {
         g.ticksForPrint--
     }
     g.handleInput()
-    // These are global and don't need any focus..
-    //g.checkRecorderControls()
 
-    //g.Audio.Update()
-    // do we need this?
-    //g.Input.Update()
+    if g.animationRoutine.Running() {
+        g.animationRoutine.Update()
+    }
 
-    //g.UserInterface.Update(g.Input)
     g.WorldTicks++
-    /*
-       if !g.UserInterface.IsBlocking() {
-           g.UpdateScheduledCalls()
 
-       }
-    */
-    /*
-       g.UserInterface.Draw(g.Console)
-
-       g.Animator.Update()
-       g.Animator.Draw(g.Console)
-    */
     return nil
 }
-
-func (g *GridEngine) handleInput() {
-    if inpututil.IsKeyJustPressed(ebiten.KeyArrowRight) {
-        g.move(geometry.Point{X: 1, Y: 0})
-    }
-    if inpututil.IsKeyJustPressed(ebiten.KeyArrowLeft) {
-        g.move(geometry.Point{X: -1, Y: 0})
-    }
-    if inpututil.IsKeyJustPressed(ebiten.KeyArrowUp) {
-        if g.inputElement != nil {
-            g.inputElement.ActionUp()
-        } else if g.modalElement != nil {
-            g.modalElement.ActionUp()
-        } else {
-            g.move(geometry.Point{X: 0, Y: -1})
-        }
-    }
-    if inpututil.IsKeyJustPressed(ebiten.KeyArrowDown) {
-        if g.inputElement != nil {
-            g.inputElement.ActionDown()
-        } else if g.modalElement != nil {
-            g.modalElement.ActionDown()
-        } else {
-            g.move(geometry.Point{X: 0, Y: 1})
-        }
-    }
-
-    if inpututil.IsKeyJustPressed(ebiten.KeyEnter) {
-        if g.inputElement != nil {
-            g.inputElement.ActionConfirm()
-        } else if g.modalElement != nil {
-            g.modalElement.ActionConfirm()
-        } else if transition, ok := g.transitionMap[g.avatar.Pos()]; ok {
-            g.loadMap(transition.TargetMap)
-            g.PlaceParty(transition.TargetPos)
-        } else {
-            g.openContextMenu()
-        }
-    }
-
-    if inpututil.IsKeyJustPressed(ebiten.KeySpace) {
-        if g.gridmap.IsItemAt(g.avatar.Pos()) {
-            item := g.gridmap.ItemAt(g.avatar.Pos())
-            g.PickUpItem(item)
-        }
-    }
-    if inpututil.IsKeyJustPressed(ebiten.KeyI) {
-        g.openPartyInventory()
-    }
-    if inpututil.IsKeyJustPressed(ebiten.KeyEscape) {
-        if g.inputElement != nil {
-            g.inputElement = nil
-        }
-        if g.modalElement != nil {
-            g.modalElement = nil
-        }
-    }
-
-    if inpututil.IsKeyJustPressed(ebiten.KeyF1) {
-        g.openCharDetails(0)
-    } else if inpututil.IsKeyJustPressed(ebiten.KeyF2) {
-        //g.openCharDetails(1)
-        g.StartConversation(game.NewActor("Tim", 22))
-
-    } else if inpututil.IsKeyJustPressed(ebiten.KeyF3) {
-        //g.openCharDetails(2)
-        g.openMenu([]renderer.MenuItem{
-            {Text: "Item 1", Action: func() {
-                println("Item 1")
-            }},
-            {Text: "Item 2", Action: func() {
-                println("Item 2")
-            }},
-        })
-    } else if inpututil.IsKeyJustPressed(ebiten.KeyF4) {
-        g.openCharDetails(3)
-    } else if inpututil.IsKeyJustPressed(ebiten.KeyF5) {
-        g.openPartyMenu()
-    }
-
-    cellX, cellY := g.gridRenderer.ScreenToSmallCell(ebiten.CursorPosition())
-
-    if cellX != g.lastMousePosX || cellY != g.lastMousePosY {
-        g.onMouseMoved(cellX, cellY)
-        g.lastMousePosX = cellX
-        g.lastMousePosY = cellY
-    }
-    if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
-        g.onMouseClick(cellX, cellY)
-    }
+func (g *GridEngine) RunAnimationScript(script func(exe *gocoro.Execution)) error {
+    return g.animationRoutine.Run(script)
 }
+func (g *GridEngine) onMove(direction geometry.Point) {
+    g.flags.IncrementFlag("steps_taken")
 
-func (g *GridEngine) move(direction geometry.Point) {
     if g.splitControlled != nil {
-        g.gridmap.MoveActor(g.splitControlled, g.splitControlled.Pos().Add(direction))
+        g.currentMap.MoveActor(g.splitControlled, g.splitControlled.Pos().Add(direction))
         g.onAvatarMovedAlone()
     } else {
         g.playerParty.Move(direction)
         g.onPartyMoved()
     }
+
+    if g.flags.GetFlag("steps_taken") == 1 {
+        g.onVeryFirstStep()
+    }
 }
 func (g *GridEngine) Draw(screen *ebiten.Image) {
     g.drawUIOverlay(screen)
-    g.mapRenderer.Draw(g.playerParty.GetFoV(), screen)
+    g.mapRenderer.Draw(g.playerParty.GetFoV(), screen, g.CurrentTick())
 
     if g.ticksForPrint > 0 {
         g.drawPrintMessage(screen)
@@ -244,6 +193,10 @@ func (g *GridEngine) Draw(screen *ebiten.Image) {
     }
     if g.inputElement != nil {
         if g.inputElement.ShouldClose() {
+            if gridMenu, ok := g.inputElement.(*renderer.GridMenu); ok {
+                lastAction := gridMenu.GetLastAction()
+                g.lastSelectedAction = lastAction
+            }
             g.inputElement = nil
             g.updateContextActions()
         } else {
@@ -277,13 +230,15 @@ func main() {
     scaledScreenHeight := int(math.Floor(float64(internalScreenHeight) * totalScale))
 
     gridEngine := &GridEngine{
-        tileScale:      tileScaleFactor,
-        internalWidth:  internalScreenWidth,
-        internalHeight: internalScreenHeight,
-        worldTiles:     ebiten.NewImageFromImage(mustLoadImage("assets/MergedWorld.png")),
-        entityTiles:    ebiten.NewImageFromImage(mustLoadImage("assets/entities.png")),
-        uiTiles:        ebiten.NewImageFromImage(mustLoadImage("assets/charset-out.png")),
-        uiOverlay:      make(map[int]int),
+        tileScale:        tileScaleFactor,
+        internalWidth:    internalScreenWidth,
+        internalHeight:   internalScreenHeight,
+        worldTiles:       ebiten.NewImageFromImage(mustLoadImage("assets/MergedWorld.png")),
+        entityTiles:      ebiten.NewImageFromImage(mustLoadImage("assets/entities.png")),
+        uiTiles:          ebiten.NewImageFromImage(mustLoadImage("assets/charset-out.png")),
+        uiOverlay:        make(map[int]int),
+        mapsInMemory:     make(map[string]*gridmap.GridMap[*game.Actor, game.Item, game.Object]),
+        animationRoutine: gocoro.NewCoroutine(),
     }
     ebiten.SetWindowTitle(gameTitle)
     ebiten.SetWindowSize(scaledScreenWidth, scaledScreenHeight)
@@ -296,92 +251,12 @@ func main() {
     }
 }
 
-func (g *GridEngine) mapLookup(x, y int) (*ebiten.Image, int, color.Color) {
-    location := geometry.Point{X: x, Y: y}
-
-    if g.gridmap.IsActorAt(location) {
-        return g.entityTiles, g.gridmap.GetActor(location).Icon(), color.White
-    }
-
-    if g.gridmap.IsItemAt(location) {
-        itemAt := g.gridmap.ItemAt(location)
-        return g.entityTiles, itemAt.Icon(), itemAt.TintColor()
-    }
-
-    if g.gridmap.IsObjectAt(location) {
-        objectAt := g.gridmap.ObjectAt(location)
-        return g.entityTiles, objectAt.Icon(), objectAt.TintColor()
-    }
-
-    tile := g.gridmap.GetCell(location)
-    return g.worldTiles, tile.TileType.DefinedIcon, color.White
-}
-
-func (g *GridEngine) openCharDetails(partyIndex int) {
-    actor := g.playerParty.GetMember(partyIndex)
-    if actor != nil {
-        g.showModal(actor.GetDetails())
-    }
-}
-
-func (g *GridEngine) openPartyInventory() {
-    //header := []string{"Inventory", "---------"}
-    partyInventory := g.playerParty.GetInventory()
-    if len(partyInventory) == 0 {
-        g.showModal([]string{"Your party has no items."})
-        return
-    }
-    var menuItems []renderer.MenuItem
-    for _, i := range partyInventory {
-        item := i
-        menuItems = append(menuItems, renderer.MenuItem{
-            Text: i.Name(),
-            Action: func() {
-                g.openMenu(item.GetContextActions(g))
-            },
-        })
-    }
-    g.openMenu(menuItems)
-}
-
-func (g *GridEngine) showModal(text []string) {
-    g.modalElement = renderer.NewScrollableTextWindowWithAutomaticSize(g.gridRenderer, text)
-}
-
-func (g *GridEngine) ShowScrollableText(text []string, color color.Color) {
-    modal := renderer.NewScrollableTextWindowWithAutomaticSize(g.gridRenderer, text)
-    modal.SetTextColor(color)
-    g.modalElement = modal
-}
-
-func (g *GridEngine) TotalScale() float64 {
-    return g.tileScale * g.deviceDPIScale
-}
-func (g *GridEngine) Layout(outsideWidth, outsideHeight int) (screenWidth, screenHeight int) {
-    panic("should use layoutf")
-}
-
-func (g *GridEngine) LayoutF(outsideWidth, outsideHeight float64) (screenWidth, screenHeight float64) {
-    g.deviceDPIScale = ebiten.DeviceScaleFactor()
-    totalScale := g.tileScale * g.deviceDPIScale
-    return float64(g.internalWidth) * totalScale, float64(g.internalHeight) * totalScale
-}
-
 func (g *GridEngine) CurrentTick() uint64 {
     return g.WorldTicks
 }
 
 func (g *GridEngine) Reset() {
     g.WorldTicks = 0
-}
-
-func (g *GridEngine) drawUIOverlay(screen *ebiten.Image) {
-    screenW := 40 // in 8x8 cells
-    for cellIndex, tileIndex := range g.uiOverlay {
-        cellX := cellIndex % screenW
-        cellY := cellIndex / screenW
-        g.gridRenderer.DrawOnSmallGrid(screen, cellX, cellY, tileIndex)
-    }
 }
 
 func (g *GridEngine) drawStatusBar(screen *ebiten.Image) {
@@ -396,6 +271,31 @@ func (g *GridEngine) drawStatusBar(screen *ebiten.Image) {
         g.gridRenderer.DrawColoredString(screen, x+1, y, charStatus.Name, charStatus.StatusColor)
         //g.gridRenderer.DrawOnSmallGrid(screen, x+9, y, int(g.fontIndex[divider]))
     }
+
+    foodCount := g.playerParty.GetFood()
+    goldCount := g.playerParty.GetGold()
+    lockpickCount := g.playerParty.GetLockpicks()
+
+    foodString := strconv.Itoa(foodCount)
+    goldString := strconv.Itoa(goldCount)
+    lockpickString := strconv.Itoa(lockpickCount)
+
+    foodIcon := 131
+    goldIcon := 132
+    lockpickIcon := 133
+
+    yPos := screenSize.Y - 2
+    xPosFood := 2
+    xPosLockpick := xPosFood + len(foodString) + 2
+    xPosGold := screenSize.X - 2 - len(goldString)
+
+    g.gridRenderer.DrawColoredString(screen, xPosFood, yPos, foodString, color.White)
+    g.gridRenderer.DrawColoredString(screen, xPosLockpick, yPos, lockpickString, color.White)
+    g.gridRenderer.DrawColoredString(screen, xPosGold, yPos, goldString, color.White)
+
+    g.gridRenderer.DrawOnSmallGrid(screen, xPosFood-1, yPos, foodIcon)
+    g.gridRenderer.DrawOnSmallGrid(screen, xPosLockpick-1, yPos, lockpickIcon)
+    g.gridRenderer.DrawOnSmallGrid(screen, xPosGold+len(goldString), yPos, goldIcon)
 }
 
 func (g *GridEngine) QuitGame() {
@@ -433,40 +333,6 @@ func (g *GridEngine) onMouseClick(x int, y int) {
     }
 }
 
-func (g *GridEngine) PickUpItem(item game.Item) {
-    g.playerParty.AddItem(item)
-    g.gridmap.RemoveItem(item)
-    g.Print(fmt.Sprintf("Taken \"%s\"", item.Name()))
-}
-
-func (g *GridEngine) DropItem(item game.Item) {
-    g.playerParty.RemoveItem(item)
-    destPos := g.avatar.Pos()
-    if g.TryPlaceItem(item, destPos) {
-        g.Print(fmt.Sprintf("Dropped \"%s\"", item.Name()))
-    }
-}
-
-func (g *GridEngine) TryPlaceItem(item game.Item, destPos geometry.Point) bool {
-    if g.gridmap.IsItemAt(destPos) {
-        freeCells := g.gridmap.GetFreeCellsForDistribution(g.avatar.Pos(), 1, func(p geometry.Point) bool {
-            return g.gridmap.Contains(p) && g.gridmap.IsWalkableFor(p, g.avatar) && !g.gridmap.IsItemAt(p)
-        })
-        if len(freeCells) > 0 {
-            destPos = freeCells[0]
-        } else {
-            g.Print(fmt.Sprintf("No space to drop \"%s\"", item.Name()))
-            return false
-        }
-    }
-
-    g.gridmap.AddItem(item, destPos)
-    return true
-}
-func (g *GridEngine) openSpeechWindow(speaker *game.Actor, text []string, onLastPage func()) {
-    g.modalElement = renderer.NewMultiPageWindow(g.gridRenderer, 3, speaker.Icon(), text, onLastPage)
-}
-
 func (g *GridEngine) openMenu(items []renderer.MenuItem) {
     gridMenu := renderer.NewGridMenu(g.gridRenderer, items)
     gridMenu.SetAutoClose()
@@ -474,66 +340,6 @@ func (g *GridEngine) openMenu(items []renderer.MenuItem) {
     g.inputElement.OnMouseMoved(g.lastMousePosX, g.lastMousePosY)
 }
 
-func (g *GridEngine) openConversationMenu(topLeft geometry.Point, items []renderer.MenuItem) {
-    g.inputElement = renderer.NewGridDialogueMenu(g.gridRenderer, topLeft, items)
-    g.inputElement.OnMouseMoved(g.lastMousePosX, g.lastMousePosY)
-}
-
-func (g *GridEngine) StartConversation(npc *game.Actor) {
-    // NOTE: Conversations can have a line length of 27 chars
-    charName := npc.Name()
-    filename := strings.ToLower(charName) + ".txt"
-    dialogueFilename := path.Join("assets", "dialogue", filename)
-    if !doesFileExist(dialogueFilename) {
-        g.Print(fmt.Sprintf("\"%s\" has nothing to say.", charName))
-        return
-    }
-    dialogueFile := mustOpen(dialogueFilename)
-    loadedDialogue := dialogue.NewDialogueFromFile(dialogueFile)
-
-    options := loadedDialogue.GetOptions(g.playerKnowledge)
-    g.openSpeechWindow(npc, npc.LookDescription(), func() {
-        g.openConversationMenu(geometry.Point{X: 3, Y: 13}, g.toMenuItems(npc, loadedDialogue, options))
-    })
-}
-
-func (g *GridEngine) toMenuItems(npc *game.Actor, dialogue *dialogue.Dialogue, options []string) []renderer.MenuItem {
-    var items []renderer.MenuItem
-    for _, o := range options {
-        option := o
-        items = append(items, renderer.MenuItem{
-            Text: option,
-            Action: func() {
-                response, effect := dialogue.GetResponseAndAddKnowledge(g.playerKnowledge, option)
-                g.inputElement = nil
-                quitsDialogue := g.handleDialogueEffect(npc, effect)
-                if quitsDialogue {
-                    g.modalElement = nil
-                } else {
-                    g.openSpeechWindow(npc, response, func() {
-                        newOptions := dialogue.GetOptions(g.playerKnowledge)
-                        g.openConversationMenu(geometry.Point{X: 3, Y: 13}, g.toMenuItems(npc, dialogue, newOptions))
-                    })
-                }
-            },
-        })
-    }
-    return items
-}
-
-func (g *GridEngine) handleDialogueEffect(npc *game.Actor, effect string) bool {
-    switch effect {
-    case "quits":
-        return true
-    case "joins":
-        g.AddToParty(npc)
-        return false
-    case "sells":
-        g.openVendorMenu(npc)
-        return true
-    }
-    return false
-}
 func (g *GridEngine) updateContextActions() {
 
     // NOTE: We need to reverse the dependency here
@@ -544,25 +350,67 @@ func (g *GridEngine) updateContextActions() {
 
     g.contextActions = make([]renderer.MenuItem, 0)
 
-    neighborsWithStuff := g.gridmap.NeighborsCardinal(loc, func(p geometry.Point) bool {
-        return g.gridmap.Contains(p) && (g.gridmap.IsActorAt(p) || g.gridmap.IsItemAt(p) || g.gridmap.IsObjectAt(p))
+    neighborsWithStuff := g.currentMap.NeighborsCardinal(loc, func(p geometry.Point) bool {
+        return g.currentMap.Contains(p) && (g.currentMap.IsActorAt(p) || g.currentMap.IsItemAt(p) || g.currentMap.IsObjectAt(p))
     })
 
     neighborsWithStuff = append(neighborsWithStuff, loc)
 
+    var actorsNearby []*game.Actor
+    var uniqueItemsNearby []game.Item
+    var allItemsNearby []game.Item
+    var objectsNearby []game.Object
+
     for _, neighbor := range neighborsWithStuff {
-        if g.gridmap.IsActorAt(neighbor) {
-            actor := g.gridmap.GetActor(neighbor)
-            g.contextActions = append(g.contextActions, actor.GetContextActions(g)...)
+        if g.currentMap.IsActorAt(neighbor) {
+            actor := g.currentMap.GetActor(neighbor)
+            if !actor.IsHidden() {
+                actorsNearby = append(actorsNearby, actor)
+            }
         }
-        if g.gridmap.IsItemAt(neighbor) {
-            item := g.gridmap.ItemAt(neighbor)
-            g.contextActions = append(g.contextActions, item.GetContextActions(g)...)
+        if g.currentMap.IsItemAt(neighbor) {
+            item := g.currentMap.ItemAt(neighbor)
+            if !item.IsHidden() {
+                allItemsNearby = append(allItemsNearby, item)
+                if len(uniqueItemsNearby) == 0 {
+                    uniqueItemsNearby = append(uniqueItemsNearby, item)
+                } else { // can we stack it?
+                    for _, otherItem := range uniqueItemsNearby {
+                        if !otherItem.CanStackWith(item) {
+                            uniqueItemsNearby = append(uniqueItemsNearby, item)
+                        }
+                    }
+                }
+            }
         }
-        if g.gridmap.IsObjectAt(neighbor) {
-            object := g.gridmap.ObjectAt(neighbor)
-            g.contextActions = append(g.contextActions, object.GetContextActions(g)...)
+        if g.currentMap.IsObjectAt(neighbor) {
+            object := g.currentMap.ObjectAt(neighbor)
+            if !object.IsHidden() {
+                objectsNearby = append(objectsNearby, object)
+            }
         }
+    }
+
+    for _, actor := range actorsNearby {
+        g.contextActions = append(g.contextActions, actor.GetContextActions(g)...)
+    }
+
+    if len(allItemsNearby) > 1 {
+        g.contextActions = append(g.contextActions, renderer.MenuItem{
+            Text: "Pick up all",
+            Action: func() {
+                for _, item := range allItemsNearby {
+                    g.PickUpItem(item)
+                }
+            },
+        })
+    }
+    for _, item := range uniqueItemsNearby {
+        g.contextActions = append(g.contextActions, item.GetContextActions(g)...)
+    }
+
+    for _, object := range objectsNearby {
+        g.contextActions = append(g.contextActions, object.GetContextActions(g)...)
     }
 
     // extended range for talking to NPCs
@@ -575,8 +423,8 @@ func (g *GridEngine) updateContextActions() {
 
     for _, relative := range twoRangeCardinalRelative {
         neighbor := loc.Add(relative)
-        if g.gridmap.Contains(neighbor) && g.gridmap.IsActorAt(neighbor) {
-            actor := g.gridmap.GetActor(neighbor)
+        if g.currentMap.Contains(neighbor) && g.currentMap.IsActorAt(neighbor) {
+            actor := g.currentMap.GetActor(neighbor)
             g.contextActions = append(g.contextActions, actor.GetContextActions(g)...)
         }
     }
@@ -592,71 +440,56 @@ func (g *GridEngine) openContextMenu() {
     }
     g.openMenu(g.contextActions)
 }
-
-func (g *GridEngine) openPartyMenu() {
-    partyOptions := []renderer.MenuItem{
+func (g *GridEngine) openDebugMenu() {
+    g.openMenu([]renderer.MenuItem{
         {
-            Text: "Inventory",
+            Text: "Toggle NoClip",
             Action: func() {
-                g.openPartyInventory()
+                noClipActive := g.currentMap.ToggleNoClip()
+                g.Print(fmt.Sprintf("DEBUG(No Clip): %t", noClipActive))
             },
         },
         {
-            Text: "Magic",
+            Text: "impulse 9",
             Action: func() {
-                g.Print("Not implemented yet")
+                g.playerParty.AddFood(100)
+                g.playerParty.AddGold(100)
+                g.playerParty.AddLockpicks(100)
+                g.Print("DEBUG(impulse 9): Added 100 food, gold and lockpicks")
             },
         },
         {
-            Text: "Rest",
+            Text: "Set some flags",
             Action: func() {
-                g.TryRestParty()
+                g.flags.SetFlag("can_talk_to_ghosts", 1)
+                g.Print("DEBUG(Flags): Set flag \"can_talk_to_ghosts\"")
             },
         },
         {
-            Text: "Attack",
+            Text: "Set Avatar Name to 'Nova'",
             Action: func() {
-                g.Print("Not implemented yet")
+                g.avatar.SetName("Nova")
+                g.Print("DEBUG(Avatar): Set name to 'Nova'")
             },
         },
-    }
-    if g.playerParty.HasFollowers() {
-        partyOptions = append(partyOptions, renderer.MenuItem{
-            Text: "Split",
+        {
+            Text: "Show all Flags",
             Action: func() {
-                g.openMenu(g.playerParty.GetSplitActions(g))
+                g.ShowScrollableText(g.flags.GetDebugInfo(), color.White)
             },
-        })
-        if g.splitControlled != nil {
-            partyOptions = append(partyOptions, renderer.MenuItem{
-                Text: "Join",
-                Action: func() {
-                    g.TryJoinParty()
-                },
-            })
-        }
-    }
-
-    g.openMenu(partyOptions)
-}
-func (g *GridEngine) SwitchAvatarTo(actor *game.Actor) {
-    if !g.playerParty.IsMember(actor) {
-        g.Print(fmt.Sprintf("\"%s\" is not in your party", actor.Name()))
-        return
-    }
-    g.splitControlled = actor
-    g.onAvatarMovedAlone()
+        },
+    })
 }
 func (g *GridEngine) onPartyMoved() {
     g.mapWindow.CenterOn(g.playerParty.Pos())
     g.updateContextActions()
-    g.gridmap.UpdateFieldOfView(g.playerParty.GetFoV(), g.playerParty.Pos())
+    g.currentMap.UpdateFieldOfView(g.playerParty.GetFoV(), g.playerParty.Pos())
 }
 
 func (g *GridEngine) onAvatarMovedAlone() {
     g.mapWindow.CenterOn(g.GetAvatar().Pos())
     g.updateContextActions()
-    g.gridmap.UpdateFieldOfView(g.playerParty.GetFoV(), g.GetAvatar().Pos())
+    g.currentMap.UpdateFieldOfView(g.playerParty.GetFoV(), g.GetAvatar().Pos())
 }
 
 func (g *GridEngine) GetTextFile(filename string) []string {
@@ -685,69 +518,100 @@ func (g *GridEngine) drawPrintMessage(screen *ebiten.Image) {
     g.gridRenderer.DrawColoredString(screen, xOffsetForCenter, yPos, g.textToPrint, color.White)
 }
 
-func (g *GridEngine) AddToParty(npc *game.Actor) {
-    if g.playerParty.IsFull() {
-        g.Print(fmt.Sprintf("No room for \"%s\"", npc.Name()))
-        return
-    } else if g.playerParty.IsMember(npc) {
-        g.Print(fmt.Sprintf("\"%s\" is already in your party", npc.Name()))
-        return
+func (g *GridEngine) DrinkPotion(potion *game.Potion, member *game.Actor) {
+
+    member.AddMana(10)
+    g.growGrassAt(member.Pos())
+
+    if potion.IsHeld() {
+        g.playerParty.RemoveItem(potion)
+    } else {
+        g.currentMap.RemoveItem(potion)
     }
-    g.playerParty.AddMember(npc)
+    potion.SetEmpty()
+
+    g.Print(fmt.Sprintf("%s drank \"%s\"", member.Name(), potion.Name()))
 }
 
-func (g *GridEngine) TryJoinParty() {
-    for _, member := range g.playerParty.GetMembers() {
-        if member == g.avatar {
-            continue
-        }
-        if !member.IsNextTo(g.avatar) {
-            g.Print(fmt.Sprintf("\"%s\" is not next to you.", member.Name()))
-            return
-        }
+func (g *GridEngine) transition(transition gridmap.Transition) {
+
+    currentMapName := g.currentMap.GetName()
+    nextMapName := transition.TargetMap
+
+    // remove the party from the current map
+    g.RemovePartyFromMap(g.currentMap)
+
+    // save it
+    g.mapsInMemory[currentMapName] = g.currentMap
+
+    var nextMap *gridmap.GridMap[*game.Actor, game.Item, game.Object]
+    var isInMemory bool
+    // check if the next map is already loaded
+    if nextMap, isInMemory = g.mapsInMemory[nextMapName]; !isInMemory {
+        // if not, load it from ldtk
+        nextMap = g.loadMap(transition.TargetMap)
+    } else {
+        g.initMapWindow(nextMap.MapWidth, nextMap.MapHeight)
     }
-    g.splitControlled = nil
+
+    // set the new map
+    g.currentMap = nextMap
+
+    // add the party to the new map
+    g.PlaceParty(transition.TargetPos)
 }
 
-func (g *GridEngine) openVendorMenu(npc *game.Actor) {
-    itemsToSell := npc.GetItemsToSell()
-    if len(itemsToSell) == 0 {
-        g.openSpeechWindow(npc, []string{"Unfortunately, I have nothing left to sell."}, func() {})
-        return
+func (g *GridEngine) onVeryFirstStep() {
+    err := g.RunAnimationScript(g.animateDimensionGateDisappears)
+    if err != nil {
+        println(err.Error())
     }
+}
+
+func (g *GridEngine) animateDimensionGateDisappears(exe *gocoro.Execution) {
+    //gatePos := g.spawnPosition
+
+}
+
+func (g *GridEngine) ManaSpentInWorld(pos geometry.Point, cost int) {
+    // turn the tile into grass
+    g.growGrassAt(pos)
+
+    g.flags.IncrementFlagBy("damage_to_mother_nature", cost)
+}
+
+func (g *GridEngine) growGrassAt(pos geometry.Point) {
+    currentCell := g.currentMap.GetCell(pos)
+    currentTile := currentCell.TileType
+    if currentTile.Special == gridmap.SpecialTileNone {
+        grassTile := currentTile.WithIcon(4)
+        g.currentMap.SetTile(pos, grassTile)
+    }
+}
+
+func (g *GridEngine) openSpellMenu() {
     var menuItems []renderer.MenuItem
-    for _, i := range itemsToSell {
-        offer := i
-        itemLine := fmt.Sprintf("%s (%d)", offer.Item.Name(), offer.Price)
+    for _, s := range g.playerParty.GetSpells() {
+        spell := s
+        label := fmt.Sprintf("%s (%d)", spell.Name(), spell.ManaCost())
         menuItems = append(menuItems, renderer.MenuItem{
-            Text: itemLine,
+            Text: label,
             Action: func() {
-                g.TryBuyItem(npc, offer)
+                if spell.IsTargeted() {
+                    g.chooseTarget(func(target geometry.Point) {
+                        spell.CastOnTarget(g, g.GetAvatar(), target)
+                    })
+                } else {
+                    spell.Cast(g, g.GetAvatar())
+                }
             },
         })
     }
     g.openMenu(menuItems)
 }
 
-func (g *GridEngine) TryBuyItem(npc *game.Actor, offer game.SalesOffer) {
-    if g.playerParty.GetGold() < offer.Price {
-        g.openSpeechWindow(npc, []string{"You don't have enough gold."}, func() {})
-        return
-    }
-    npc.RemoveItem(offer.Item)
-    npc.AddGold(offer.Price)
-
-    g.playerParty.RemoveGold(offer.Price)
-    g.playerParty.AddItem(offer.Item)
-    g.openSpeechWindow(npc, []string{"Thank you for your business."}, func() {})
-}
-
-func (g *GridEngine) TryRestParty() {
-    if g.playerParty.TryRest() {
-        g.openSpeechWindow(g.GetAvatar(), []string{"You have eaten some food", "and rested the night.", "Your party has been healed."}, func() {})
-    } else {
-        g.Print("Not enough food to rest.")
-    }
+func (g *GridEngine) chooseTarget(onTargetChose func(target geometry.Point)) {
+    // TODO
 }
 
 func secondsToTicks(seconds float64) int {

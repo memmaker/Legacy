@@ -1,0 +1,64 @@
+Name: Chancellor Tauci
+Health: 10
+
+# Description
+
+The chancellor of Prucol.
+He is dressed in a fancy
+purple robe.
+
+# Inventory
+
+ - armor(0): a fancy purple robe
+ - weapon(1): a golden scepter
+ - key(5, kingdom_01): a golden key
+
+# Conversation
+;
+# _first_time
+"Oh well, it's you again.."
+He says with a sigh.
+
+# name
+My name and face should
+be well known to you.
+
+I am the just ruler of
+this country.
+The =elected= representative
+of the people.
+
+I am grand chancellor
+=Tauci=.
+
+# Tauci
+My full title is
+"Spid Tauci
+grand chancellor of
+the people's republic of
+=Prucol=".
+
+# elected
+I was elected by the
+people to represent them
+in the government.
+
+As a matter of fact,
+we currently have an
+=election= going on.
+
+# election
+The election is between
+me and that other guy.
+
+I am sure I will win.
+
+# job
+I am the elected
+representative of the
+people.
+
+I am the grand chancellor
+of =Prucol=.
+
+What is your job?

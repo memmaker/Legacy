@@ -8,8 +8,9 @@ import (
 )
 
 type MenuItem struct {
-    Text   string
-    Action func()
+    Text      string
+    Action    func()
+    TextColor color.Color
 }
 
 type GridMenu struct {
@@ -21,10 +22,16 @@ type GridMenu struct {
 
     shouldClose        bool
     autoCloseOnConfirm bool
+
+    lastAction func()
 }
 
 func (g *GridMenu) ShouldClose() bool {
     return g.shouldClose
+}
+
+func (g *GridMenu) GetLastAction() func() {
+    return g.lastAction
 }
 
 func (g *GridMenu) OnMouseMoved(x int, y int) {
@@ -51,7 +58,9 @@ func (g *GridMenu) OnMouseClicked(x int, y int) {
 }
 
 func (g *GridMenu) ActionConfirm() {
-    g.menuItems[g.currentSelection].Action()
+    action := g.menuItems[g.currentSelection].Action
+    g.lastAction = action
+    action()
     if g.autoCloseOnConfirm {
         g.shouldClose = true
     }
@@ -98,6 +107,8 @@ func (g *GridMenu) Draw(screen *ebiten.Image) {
         textColor = color.White
         if i == g.currentSelection {
             textColor = ega.BrightGreen
+        } else if item.TextColor != nil {
+            textColor = item.TextColor
         }
         g.gridRenderer.DrawColoredString(screen, g.topLeft.X+1, g.topLeft.Y+1+i, item.Text, textColor)
     }
