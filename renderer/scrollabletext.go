@@ -18,6 +18,7 @@ type ScrollableTextWindow struct {
     gridRenderer *DualGridRenderer
 
     shouldClose bool
+    title       string
 }
 
 func (r *ScrollableTextWindow) ShouldClose() bool {
@@ -38,24 +39,25 @@ func maxLen(text []string) int {
     return maxLength
 }
 
-func NewScrollableTextWindowWithAutomaticSize(gridRenderer *DualGridRenderer, text []string) *ScrollableTextWindow {
-    height := min(len(text)+2, 15)
-    width := min(maxLen(text)+2, 36)
-    // in 8x8 cells
-    // center
-    screenSize := gridRenderer.GetSmallGridScreenSize()
-    topLeft := geometry.Point{X: (screenSize.X - width) / 2, Y: (screenSize.Y - height) / 2}
-    bottomRight := geometry.Point{X: topLeft.X + width, Y: topLeft.Y + height}
+func NewAutoTextWindow(gridRenderer *DualGridRenderer, text []string) *ScrollableTextWindow {
+    text = AutoLayoutText(text, min(maxLen(text), 34))
+    topLeft, bottomRight := gridRenderer.AutoPositionText(text)
     modal := NewScrollableTextWindow(gridRenderer, topLeft, bottomRight)
     modal.SetText(text)
     return modal
 }
-func NewScrollableTextWindow(gridRenderer *DualGridRenderer, topLeft geometry.Point, bottomRight geometry.Point) *ScrollableTextWindow {
+func NewFixedTextWindow(gridRenderer *DualGridRenderer, text []string) *ScrollableTextWindow {
+    topLeft, bottomRight := gridRenderer.AutoPositionText(text)
+    modal := NewScrollableTextWindow(gridRenderer, topLeft, bottomRight)
+    modal.SetText(text)
+    return modal
+}
+func NewScrollableTextWindow(gridRenderer *DualGridRenderer, topLeft, bottomRight geometry.Point) *ScrollableTextWindow {
     return &ScrollableTextWindow{
-        topLeft:      topLeft,
-        bottomRight:  bottomRight,
         gridRenderer: gridRenderer,
         textColor:    color.White,
+        topLeft:      topLeft,
+        bottomRight:  bottomRight,
     }
 }
 
@@ -81,11 +83,11 @@ func (r *ScrollableTextWindow) ActionDown() {
     }
 }
 func (r *ScrollableTextWindow) Draw(screen *ebiten.Image) {
-    r.gridRenderer.DrawFilledBorder(screen, r.topLeft, r.bottomRight)
-    for y := r.topLeft.Y + 1; y < r.bottomRight.Y-1; y++ {
-        for x := r.topLeft.X + 1; x < r.bottomRight.X-1; x++ {
-            currentLine := r.text[y-r.topLeft.Y-1+r.scrollOffset]
-            horizontalIndex := x - r.topLeft.X - 1
+    r.gridRenderer.DrawFilledBorder(screen, r.topLeft, r.bottomRight, r.title)
+    for y := r.topLeft.Y + 2; y < r.bottomRight.Y-2; y++ {
+        for x := r.topLeft.X + 2; x < r.bottomRight.X-2; x++ {
+            currentLine := r.text[y-r.topLeft.Y-2+r.scrollOffset]
+            horizontalIndex := x - r.topLeft.X - 2
             asRunes := []rune(currentLine)
             if horizontalIndex >= len(asRunes) {
                 continue

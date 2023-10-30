@@ -1,4 +1,64 @@
+Plot, Character & Lore
+-> Focus on characters
 
+Plot (needs at least one)
+ - Be original
+ - Have a twist
+ - Have something to say
+
+Characters
+ - Who are they?
+ - What do they want?
+ - What do they fear?
+ - What do they love?
+ - What do they hate?
+ - What are their flaws?
+
+# What should the game be about?
+The self-destruction of mankind.
+The destruction of nature by mankind.
+
+# What do I want the player to feel?
+
+-> I want a roller coaster of emotions.
+
+He should start out confused but intrigued.
+
+He'll encounter evil, oppression and injustice.
+
+But he will gain hope and find allies.
+
+His confidence will grow and he will feel powerful.
+
+But then he will be betrayed or left alone.
+
+And even all his power won't be enough to save the world.
+
+He will be left with a feeling of emptiness and despair.
+
+That can only be overcome by focusing on the good things in life.
+
+Like family, friends and nature. Becoming a better person.
+
+PROBLEM: In this scenario/setting the player choices cannot have a lasting impact on the world.
+That's because it's basically a dystopian future, where the world is already doomed.
+
+# What did I love about CRPGS?
+ - Exploration
+   - Interesting Encounters (Battles / NPCs)
+   - Gear upgrades
+   - Cool Puzzles
+   - Story / Lore / Twists
+ - Choices & Visible Consequences -> Alternative Paths
+ - Roles
+   - Smooth Talker
+   - Sneaky Thief
+   - Powerful Mage
+   - Mighty Warrior
+   - Vampire
+   - Necromancer
+
+NOTE: Don't put key information in just one place.
 
 # Mother Nature
  - She starts with 1000 HP, she drains 1 hp per hour and every time the player uses magic
@@ -6,9 +66,33 @@
  - When the player uses magic to open her prison door, she will scream in pain because it will need a big amount of power
 
 # First small but complete Quest..
+ - Gain access to the Tauci Prison Level 1
+   - Acquire Lockpicks - POSSIBLE
+   - Bash the door open, and either run or excuse yourself to the guards - POSSIBLE
+   - Befriend the guards or intimidate them
+   - Steal the key from the guards - POSSIBLE
+   - Find the hidden backup key in the guards room - POSSIBLE
+ -> What if that fails and you get caught?
+   - You can kill the guards.
+   - You can bribe the guards.
+   - You can let them imprison you.
+
+RPG Design
+Why is the quest giver not doing anything himself?
+Why doesn't he care if I do nothing?
+Why does no one else care about the problem?
 
 
-
+# Problems
+ - If Monsters aren't really monsters, where do we provide combat?
+   -> War Zones (there are factions at war, you can chose a side)
+   -> Sports (there are arenas where you can fight for money)
+   -> Thugs (there are thugs that attack you for money)
+   -> The undead (there are undead that attack you for yet unknown reasons)
+   -> The wild (there are wild animals that attack you for food)
+   -> The police (there are police officers that attack you for breaking the law)
+   -> Bounty Hunters (there are bounty hunters that attack you for money)
+   -> Genuinely evil people (there are people that attack you for fun)
 
 # NPCs
 The dead girl on the stairs
@@ -73,6 +157,7 @@ It's a mad world.
 Luckily, the extremes of good and evil rarely exist in reality.
 The world is not black and white, but shades of grey.
 Perpetrators are often victims themselves.
+There is no redemption for some people.
 Striving for virtue is a noble goal, but vices are part of human nature.
 For a single person, the world is virtually unchangeable.
 Act locally, think globally.
@@ -80,6 +165,18 @@ Don't drive a car.
 
 # Main Plot
 
+# Decisions
+Not only provide the player with options to be good or evil.
+Ask the player, how much he is willing to sacrifice for his ideals.
+Introduce dilemmas, where the player has to choose between his ideals and another goal.
 
+# Encounter Structure
+1. Dialogue
+2. Decision
+3. Consequences
 
-# Quest Notes
+# Mystery Structure
+1. A question is raised
+2. Investigation / Gathering of clues
+3. Twist / New Revelations
+4. Resolution / Decisions

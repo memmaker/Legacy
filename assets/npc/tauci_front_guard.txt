@@ -1,5 +1,7 @@
 Name: Guard Gregor
 Health: 10
+Torso: armor(chainmail, torso, 4)
+Head: armor(mail coif, head, 2)
 
 # Description
 
@@ -14,8 +16,10 @@ chance to leave.
 
 # Inventory
 
- - armor(4): a chain mail
- - weapon(4): a halberd
+ - key(small key, tauci_cellar, 1)
+ - potion()
+ - noitem(gold, 10)
+ - noitem(food, 1)
 
 # Conversation
 ;

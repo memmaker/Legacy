@@ -2,7 +2,6 @@ package main
 
 import (
     "Legacy/bmpfonts"
-    "Legacy/ega"
     "Legacy/game"
     "Legacy/geometry"
     "Legacy/gridmap"
@@ -10,7 +9,6 @@ import (
     "Legacy/renderer"
     "fmt"
     "github.com/hajimehoshi/ebiten/v2"
-    "image/color"
     "path"
     "strings"
 )
@@ -26,6 +24,8 @@ func (g *GridEngine) Init() {
         CornerTextureIndex:         2,
         BackgroundTextureIndex:     32,
     })
+
+    g.combatManager = NewCombatManager(g)
 
     g.ldtkMapProject, _ = ldtk_go.Open("assets/Legacy.ldtk")
 
@@ -166,6 +166,11 @@ func (g *GridEngine) loadMap(mapName string) *gridmap.GridMap[*game.Actor, game.
         isHidden := entity.PropertyByIdentifier("IsHidden").AsBool()
         iconFrames := entity.PropertyByIdentifier("IconFrames").AsInt()
 
+        var discoveryMessage []string
+        if !entity.PropertyByIdentifier("OnDiscovery").IsNull() {
+            discoveryMessage = strings.Split(entity.PropertyByIdentifier("OnDiscovery").AsString(), "\n")
+        }
+
         tileset := g.ldtkMapProject.TilesetByUID(int(npcTile["tilesetUid"].(float64)))
         tilesetWidth := tileset.Width / tileset.GridSize
         atlasX := int(npcTile["x"].(float64) / float64(tileset.GridSize))
@@ -184,7 +189,7 @@ func (g *GridEngine) loadMap(mapName string) *gridmap.GridMap[*game.Actor, game.
         }
         npc.SetIconFrames(iconFrames)
         npc.SetInternalName(name)
-        npc.SetHidden(isHidden)
+        npc.SetHidden(isHidden, discoveryMessage)
         loadedMap.AddActor(npc, pos)
     }
 
@@ -280,7 +285,7 @@ func (g *GridEngine) getItemFromEntity(entity *ldtk_go.Entity) game.Item {
 func (g *GridEngine) getObjectFromEntity(entity *ldtk_go.Entity) game.Object {
     switch entity.Identifier {
     case "Door":
-        return game.NewDoor()
+        return g.getDoorFromEntity(entity)
     case "Locked_Door":
         return g.getLockedDoorFromEntity(entity)
     case "Magically_Locked_Door":
@@ -295,10 +300,25 @@ func (g *GridEngine) getObjectFromEntity(entity *ldtk_go.Entity) game.Object {
     return nil
 }
 
+func (g *GridEngine) getDoorFromEntity(entity *ldtk_go.Entity) *game.Door {
+    var onListenText []string
+    if !entity.PropertyByIdentifier("OnListenText").IsNull() {
+        onListenText = strings.Split(entity.PropertyByIdentifier("OnListenText").AsString(), "\n")
+    }
+    door := game.NewDoor()
+    door.SetListenText(onListenText)
+    return door
+}
+
 func (g *GridEngine) getLockedDoorFromEntity(entity *ldtk_go.Entity) game.Object {
     key := entity.PropertyByIdentifier("Key").AsString()
     strength := entity.PropertyByIdentifier("Strength").AsFloat64()
+    var onBreakEvent string
+    if !entity.PropertyByIdentifier("OnBreakEvent").IsNull() {
+        onBreakEvent = entity.PropertyByIdentifier("OnBreakEvent").AsString()
+    }
     door := game.NewLockedDoor(key, strength)
+    door.SetBreakEvent(onBreakEvent)
     return door
 }
 
@@ -312,10 +332,14 @@ func (g *GridEngine) getScrollFromEntity(entity *ldtk_go.Entity) game.Item {
     filename := entity.PropertyByIdentifier("Filename").AsString()
     isHidden := entity.PropertyByIdentifier("IsHidden").AsBool()
     spellName := entity.PropertyByIdentifier("SpellName").AsString()
+    var discoveryMessage []string
+    if !entity.PropertyByIdentifier("OnDiscovery").IsNull() {
+        discoveryMessage = strings.Split(entity.PropertyByIdentifier("OnDiscovery").AsString(), "\n")
+    }
 
     bookPath := path.Join("assets", "scrolls", filename)
     scroll := game.NewScroll(title, bookPath)
-    scroll.SetHidden(isHidden)
+    scroll.SetHidden(isHidden, discoveryMessage)
     if spellName != "" {
         spell := game.NewSpellFromName(spellName)
         if spell != nil {
@@ -330,8 +354,14 @@ func (g *GridEngine) getKeyFromEntity(entity *ldtk_go.Entity) game.Item {
     key := entity.PropertyByIdentifier("Key").AsString()
     importance := entity.PropertyByIdentifier("Importance").AsInt()
     isHidden := entity.PropertyByIdentifier("IsHidden").AsBool()
-    newKey := game.NewKey(name, key, keyColor(importance))
-    newKey.SetHidden(isHidden)
+
+    var discoveryMessage []string
+    if !entity.PropertyByIdentifier("OnDiscovery").IsNull() {
+        discoveryMessage = strings.Split(entity.PropertyByIdentifier("OnDiscovery").AsString(), "\n")
+    }
+
+    newKey := game.NewKeyFromImportance(name, key, importance)
+    newKey.SetHidden(isHidden, discoveryMessage)
     return newKey
 }
 
@@ -349,30 +379,36 @@ func (g *GridEngine) getChestFromEntity(entity *ldtk_go.Entity) game.Object {
     }
     isHidden := entity.PropertyByIdentifier("IsHidden").AsBool()
     lootLevel := entity.PropertyByIdentifier("LootLevel").AsInt()
-    lootType := entity.PropertyByIdentifier("LootType").Value.(string)
-    chest := game.NewChest(lootLevel, game.Loot(lootType))
+    lootTypeList := entity.PropertyByIdentifier("LootType").Value
+
+    var lootList []game.Loot
+    for _, lootTypeRaw := range lootTypeList.([]interface{}) {
+        lootType := game.Loot(strings.ToLower(lootTypeRaw.(string)))
+        lootList = append(lootList, lootType)
+    }
+
+    var fixedLoot []game.Item
+    if !entity.PropertyByIdentifier("FixedLoot").IsNull() {
+        for _, fixedLootRaw := range entity.PropertyByIdentifier("FixedLoot").Value.([]interface{}) {
+            itemString := fixedLootRaw.(string)
+            fixedLoot = append(fixedLoot, game.NewItemFromString(itemString))
+        }
+    }
+
+    var discoveryMessage []string
+    if !entity.PropertyByIdentifier("OnDiscovery").IsNull() {
+        discoveryMessage = strings.Split(entity.PropertyByIdentifier("OnDiscovery").AsString(), "\n")
+    }
+    chest := game.NewChest(lootLevel, lootList)
     chest.SetLockedWithKey(needsKey)
-    chest.SetHidden(isHidden)
+    chest.SetHidden(isHidden, discoveryMessage)
+    if len(fixedLoot) > 0 {
+        chest.SetFixedLoot(fixedLoot)
+    }
     return chest
 }
 
 func (g *GridEngine) getFireplaceFromEntity(entity *ldtk_go.Entity) game.Object {
     foodCount := entity.PropertyByIdentifier("FoodCount").AsInt()
     return game.NewFireplace(foodCount)
-}
-
-func keyColor(importance int) color.Color {
-    switch importance {
-    case 1:
-        return ega.BrightBlack
-    case 2:
-        return ega.White
-    case 3:
-        return ega.BrightWhite
-    case 4:
-        return ega.Yellow
-    case 5:
-        return ega.BrightYellow
-    }
-    return ega.White
 }

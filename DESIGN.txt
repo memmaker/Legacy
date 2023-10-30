@@ -5,20 +5,62 @@
  - Saving / Loading
    - We cannot load from the LDTK when we visited an area before
    - Instead, when leaving a map, that map state has to be saved to disk
- - You can walk while the modal is open
  - The intro dialogue seems random (and maybe remove "job" & "name"?)
- - Overflow for the hungry_caterpillar intro dialogue
- - Cannot specify inventories, needs string -> item
+ - I cannot click on equipment in the inventory screen and just select something different
+ - Encounters need a definition in text files, like conversations
 
 # Character customization
  - Name & Pro-noun
  - Map Icon
- - Traits
-   - Strong physique (allow bashing and intimidation)
-   - Strong mind (spells are more effective)
-   - Materialistic (Start with money)
-   - Sneaky (Undetected movement)
-   -
+ - 12 Points:
+   -> Split up into further skills each
+   -> Determines the learning cap for these skills
+ -> Signature Skill
+
+ - Intellect
+ - Psyche
+ - Physique
+ - Motorics
+
+ -> If player wants to be a thief, let him be a thief
+    -> Skill check success -> reward or even another opportunity
+    -> Skill check fail    -> double down on options (Depending on skill)
+ -> Give options in the PAST.. Flashbacks
+
+A BELIEF as a gamemechanic.
+It's a tradeoff like: Always draw your weapon in a dangerous situation
+Can be enforced by the game, but can be selected by the player.
+
+The Disco Elysium Approach:
+In any given Situation, you will be able to choose depending on
+your chosen abilities. Even after a failure.
+ -> Choose between morale and health damage on failure
+Failure is always part of the story, not a game over.
+
+NOTE: Allow All Skills to be applied both inside and outside of combat
+
+# What Skills / Attributes?
+What do we want to measure?
+
+Party Stats?
+ - Food Preservation (max. 4 rations -> 10, 20, 30, 40..)
+
+# Primary Stats
+ - Max Health
+ - Offense Bonus (Melee, Ranged, Magic)
+ - Defense Bonus
+ - Luck Bonus
+
+Melee Combat Skill
+Ranged Combat Skill
+Magic Skill
+Prayers Skill
+Thievery Skill (Sneak, Pickpocket, Lockpick, Steal)
+Talking Skill (Deceive, Persuade, Intimidate, Bluff)
+Knowledge Skill
+Outdoors Skill (Survival, Hunting, Fishing, Tracking)
+Athletics Skill (Climbing, Swimming, Jumping, Running)
+Foreign Language Skill (Basic, All-Humanoids, All-Beasts, All)
 
 
 # A locked wooden door
@@ -29,6 +71,7 @@
  - Communication (ask someone for the key or let him open for you)
  - Money (bribe people or pay for a thief)
  - Clever manipulation of the environment (pick the lock)
+
 
 # TODO
  - Inventory management - BASIC
@@ -80,6 +123,8 @@
  - You can spend magic potions to increase your strength
  - You can make a good amount of money selling mana potions
  - You can definitely become a Vampire
+ - Party members should tell stuff and influence conversations
+   -> Don't like some actions
 
 # Spells
  - Need a scroll in the inventory of the caster

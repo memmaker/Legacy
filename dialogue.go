@@ -8,11 +8,11 @@ import (
     "fmt"
 )
 
-func (g *GridEngine) openSpeechWindow(speaker *game.Actor, text []string, onLastPage func()) {
+func (g *GridEngine) openIconWindow(icon int, text []string, onLastPage func()) {
     if len(text) == 0 {
         return
     }
-    g.modalElement = renderer.NewMultiPageWindow(g.gridRenderer, 3, speaker.Icon(0), text, onLastPage)
+    g.modalElement = renderer.NewMultiPageWindow(g.gridRenderer, 3, icon, text, onLastPage)
 }
 
 func (g *GridEngine) openConversationMenu(topLeft geometry.Point, items []renderer.MenuItem) {
@@ -31,18 +31,43 @@ func (g *GridEngine) StartConversation(npc *game.Actor) {
     options := loadedDialogue.GetOptions(g.playerKnowledge, g.flags)
 
     var openingLines []string
+    var items []renderer.MenuItem
+
     if !g.playerKnowledge.HasTalkedTo(npc.Name()) && loadedDialogue.HasFirstTimeText() {
         g.playerKnowledge.AddTalkedTo(npc.Name())
-        openingLines = loadedDialogue.GetFirstTimeText()
+        opening := loadedDialogue.GetOpening()
+        openingLines = opening.Text
+        if len(opening.ForcedChoice) > 0 {
+            items = g.toForcedMenuItems(npc, loadedDialogue, opening.ForcedChoice)
+        }
     } else {
         openingLines = npc.LookDescription()
     }
 
-    g.openSpeechWindow(npc, openingLines, func() {
-        if len(options) > 0 {
-            g.openConversationMenu(geometry.Point{X: 3, Y: 13}, g.toMenuItems(npc, loadedDialogue, options))
+    if len(items) == 0 {
+        items = g.toMenuItems(npc, loadedDialogue, options)
+    }
+
+    g.openIconWindow(npc.Icon(0), openingLines, func() {
+        if len(items) > 0 {
+            g.openConversationMenu(geometry.Point{X: 3, Y: 13}, items)
         }
     })
+}
+func (g *GridEngine) ShowMultipleChoiceDialogue(icon int, text []string, choices []renderer.MenuItem) {
+    g.openIconWindow(icon, text, func() {
+        if len(choices) > 0 {
+            g.openMenuForDialogue(choices)
+        }
+    })
+}
+
+func (g *GridEngine) openMenuForDialogue(items []renderer.MenuItem) {
+    // geometry.Point{X: 3, Y: 13},
+    gridMenu := renderer.NewGridMenuAtY(g.gridRenderer, items, 13)
+    //gridMenu.SetAutoClose()
+    g.inputElement = gridMenu
+    g.inputElement.OnMouseMoved(g.lastMousePosX, g.lastMousePosY)
 }
 
 func (g *GridEngine) toMenuItems(npc *game.Actor, dialogue *game.Dialogue, options []string) []renderer.MenuItem {
@@ -83,9 +108,9 @@ func (g *GridEngine) handleDialogueChoice(dialogue *game.Dialogue, followUp stri
     g.inputElement = nil
     quitsDialogue := g.handleDialogueEffect(npc, response.Effect)
     if quitsDialogue {
-        g.openSpeechWindow(npc, response.Text, func() { g.modalElement = nil })
+        g.openIconWindow(npc.Icon(0), response.Text, func() { g.modalElement = nil })
     } else {
-        g.openSpeechWindow(npc, response.Text, func() {
+        g.openIconWindow(npc.Icon(0), response.Text, func() {
             var optionsMenuItems []renderer.MenuItem
 
             if len(response.ForcedChoice) > 0 {

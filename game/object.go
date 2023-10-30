@@ -3,7 +3,6 @@ package game
 import (
     "Legacy/geometry"
     "Legacy/renderer"
-    "fmt"
     "image/color"
 )
 
@@ -33,9 +32,9 @@ func (a *BaseObject) IsPassableForProjectile() bool {
 func (a *BaseObject) GetContextActions(engine Engine, implObject Object) []renderer.MenuItem {
     return []renderer.MenuItem{
         {
-            Text: fmt.Sprintf("Look at \"%s\"", implObject.Name()),
+            Text: "Examine",
             Action: func() {
-                engine.ShowScrollableText(implObject.Description(), color.White)
+                engine.ShowColoredText(implObject.Description(), color.White, true)
             },
         },
     }
@@ -61,5 +60,6 @@ type Object interface {
     IsPassableForProjectile() bool
     Description() []string
     IsHidden() bool
-    SetHidden(hidden bool)
+    SetHidden(hidden bool, discoveryMessage []string)
+    Discover() []string
 }

@@ -90,8 +90,8 @@ func (d *Dialogue) HasFirstTimeText() bool {
     return false
 }
 
-func (d *Dialogue) GetFirstTimeText() []string {
-    return d.triggers["_first_time"].Text
+func (d *Dialogue) GetOpening() ConversationNode {
+    return d.triggers["_first_time"]
 }
 
 func (d *Dialogue) HasBeenUsed(keyword string) bool {

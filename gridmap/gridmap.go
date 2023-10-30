@@ -591,13 +591,12 @@ func (m *GridMap[ActorType, ItemType, ObjectType]) displaceDownedActor(a ActorTy
     freePos := free[0]
     m.MoveDownedActor(a, freePos)
 }
-func (m *GridMap[ActorType, ItemType, ObjectType]) GetJPSPath(start geometry.Point, end geometry.Point, isWalkable func(geometry.Point) bool, buffer []geometry.Point) []geometry.Point {
+func (m *GridMap[ActorType, ItemType, ObjectType]) GetJPSPath(start geometry.Point, end geometry.Point, isWalkable func(geometry.Point) bool) []geometry.Point {
     if !isWalkable(end) {
         end = m.getNearestFreeNeighbor(start, end, isWalkable)
     }
     //println(fmt.Sprintf("JPS from %v to %v", start, end))
-    buffer = m.pathfinder.JPSPath(buffer, start, end, isWalkable, false)
-    return buffer
+    return m.pathfinder.JPSPath([]geometry.Point{}, start, end, isWalkable, false)
 }
 func (m *GridMap[ActorType, ItemType, ObjectType]) getNearestFreeNeighbor(origin, pos geometry.Point, isFree func(geometry.Point) bool) geometry.Point {
     dist := math.MaxInt32

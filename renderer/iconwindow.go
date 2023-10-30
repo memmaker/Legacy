@@ -90,6 +90,7 @@ type IconWindow struct {
     iconOffset geometry.Point
 
     gridRenderer *DualGridRenderer
+    title        string
 }
 
 func (i *IconWindow) ActionUp() {
@@ -101,11 +102,13 @@ func (i *IconWindow) ActionDown() {
 }
 
 func NewIconWindow(dualGrid *DualGridRenderer, yOffset int, icon int, text []string) *IconWindow {
+
     screenSize := dualGrid.GetSmallGridScreenSize()
     topLeft := geometry.Point{X: 3, Y: yOffset}
     bottomRight := geometry.Point{X: screenSize.X - 3, Y: yOffset + 9}
     maxLineLength := bottomRight.X - topLeft.X - 7
     maxLines := bottomRight.Y - topLeft.Y - 4
+    text = AutoLayoutText(text, maxLineLength)
 
     for i, line := range text {
         if i >= maxLines {
@@ -135,7 +138,7 @@ func (i *IconWindow) Draw(screen *ebiten.Image) {
 
     iconScreenX, iconScreenY := i.gridRenderer.SmallCellToScreen(iconSmallGridX, iconSmallGridY)
 
-    i.gridRenderer.DrawFilledBorder(screen, i.topLeft, i.bottomRight)
+    i.gridRenderer.DrawFilledBorder(screen, i.topLeft, i.bottomRight, i.title)
 
     i.gridRenderer.DrawBigOnScreen(screen, iconScreenX, iconScreenY, i.iconTextureIndex)
 

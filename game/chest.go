@@ -2,33 +2,35 @@ package game
 
 import (
     "Legacy/renderer"
-    "fmt"
     "image/color"
 )
 
 type Loot string
 
 const (
-    Common  Loot = "common"
-    Healer  Loot = "healer"
-    Food    Loot = "food"
-    Weapon  Loot = "weapon"
-    Armor   Loot = "armor"
-    Scrolls Loot = "scrolls"
+    LootCommon    Loot = "common"
+    LootHealer    Loot = "healer"
+    LootFood      Loot = "food"
+    LootPotions   Loot = "potions"
+    LootGold      Loot = "gold"
+    LootWeapon    Loot = "weapon"
+    LootArmor     Loot = "armor"
+    LootScrolls   Loot = "scrolls"
+    LootLockpicks Loot = "lockpicks"
 )
 
 type Chest struct {
     BaseObject
-    needsKey  string
-    lootLevel int
-    lootType  Loot
-    items     []Item
+    needsKey       string
+    lootLevel      int
+    lootType       []Loot
+    items          []Item
+    hasCreatedLoot bool
 }
 
 func (s *Chest) GetItems() []Item {
     return s.items
 }
-
 func (s *Chest) RemoveItem(item Item) {
     for i, v := range s.items {
         if v == item {
@@ -50,13 +52,22 @@ func (s *Chest) Name() string {
     return "chest"
 }
 
-func NewChest(lootLevel int, lootType Loot) *Chest {
+func NewChest(lootLevel int, lootType []Loot) *Chest {
     return &Chest{
         BaseObject: BaseObject{
             icon: 25,
         },
         lootLevel: lootLevel,
         lootType:  lootType,
+    }
+}
+func NewFixedChest(contents []Item) *Chest {
+    return &Chest{
+        BaseObject: BaseObject{
+            icon: 25,
+        },
+        items:          contents,
+        hasCreatedLoot: true,
     }
 }
 
@@ -85,20 +96,33 @@ func (s *Chest) IsTransparent() bool {
     return true
 }
 
-func (s *Chest) open(engine Engine) {
-    s.items = engine.CreateLoot(s.lootLevel, s.lootType)
+func (s *Chest) spawnLoot(engine Engine) {
+    if s.hasCreatedLoot {
+        return
+    }
+    s.items = engine.CreateLootForContainer(s.lootLevel, s.lootType)
+    s.hasCreatedLoot = true
 }
 func (s *Chest) GetContextActions(engine Engine) []renderer.MenuItem {
     actions := s.BaseObject.GetContextActions(engine, s)
+    var additionalActions []renderer.MenuItem
     if s.needsKey == "" || engine.PartyHasKey(s.needsKey) {
-        actions = append(actions, renderer.MenuItem{
-            Text:   fmt.Sprintf("Open \"%s\"", s.Name()),
-            Action: func() { s.open(engine); engine.ShowContainer(s) },
+        additionalActions = append(additionalActions, renderer.MenuItem{
+            Text: "Open",
+            Action: func() {
+                s.spawnLoot(engine)
+                engine.ShowContainer(s)
+            },
         })
     }
-    return actions
+    return append(additionalActions, actions...)
 }
 
 func (s *Chest) SetLockedWithKey(key string) {
     s.needsKey = key
+}
+
+func (s *Chest) SetFixedLoot(loot []Item) {
+    s.items = loot
+    s.hasCreatedLoot = true
 }

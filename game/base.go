@@ -3,8 +3,9 @@ package game
 import "Legacy/geometry"
 
 type GameObject struct {
-    pos      geometry.Point
-    isHidden bool
+    pos              geometry.Point
+    isHidden         bool
+    discoveryMessage []string
 }
 
 func (a *GameObject) Pos() geometry.Point {
@@ -19,6 +20,12 @@ func (a *GameObject) IsHidden() bool {
     return a.isHidden
 }
 
-func (a *GameObject) SetHidden(hidden bool) {
+func (a *GameObject) SetHidden(hidden bool, message []string) {
     a.isHidden = hidden
+    a.discoveryMessage = message
+}
+
+func (a *GameObject) Discover() []string {
+    a.isHidden = false
+    return a.discoveryMessage
 }

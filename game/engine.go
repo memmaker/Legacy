@@ -1,6 +1,7 @@
 package game
 
 import (
+    "Legacy/renderer"
     "image/color"
 )
 
@@ -11,7 +12,7 @@ type ItemContainer interface {
 
 type Engine interface {
     StartConversation(a *Actor)
-    ShowScrollableText(text []string, textcolor color.Color)
+    ShowColoredText(text []string, textcolor color.Color, autolayout bool)
     GetTextFile(filename string) []string
     PickUpItem(item Item)
     DropItem(item Item)
@@ -19,8 +20,9 @@ type Engine interface {
     IsPlayerControlled(holder ItemHolder) bool
     SwitchAvatarTo(member *Actor)
     Flags() *Flags
-    CreateLoot(level int, lootType Loot) []Item
+    CreateLootForContainer(level int, lootType []Loot) []Item
     ShowContainer(container ItemContainer)
+    OpenPickpocketMenu(victim *Actor)
     Print(text string)
     AddFood(amount int)
     AddGold(amount int)
@@ -32,4 +34,13 @@ type Engine interface {
     ShowDrinkPotionMenu(potion *Potion)
     ManaSpent(caster *Actor, cost int)
     DamageAvatar(amount int)
+    TriggerEvent(event string)
+    GetMapName() string
+    CurrentTick() uint64
+    TicksToSeconds(ticks uint64) float64
+    ShowMultipleChoiceDialogue(icon int, text []string, choices []renderer.MenuItem)
+    RemoveItem(item Item)
+    GetPartyMembers() []*Actor
+    ShowEquipMenu(a *Armor)
+    StartCombat(opponents *Actor)
 }

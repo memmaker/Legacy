@@ -223,6 +223,15 @@ func (p *Party) TryRest() bool {
     return true
 }
 
+func (p *Party) NeedsRest() bool {
+    for _, member := range p.members {
+        if member.Health < member.maxHealth {
+            return true
+        }
+    }
+    return false
+}
+
 func (p *Party) AddFood(amount int) {
     p.food += amount
 }
@@ -259,6 +268,14 @@ func (p *Party) GetSpells() []*Spell {
     return result
 }
 
+func (p *Party) IsDefeated() bool {
+    for _, member := range p.members {
+        if member.IsAlive() {
+            return false
+        }
+    }
+    return true
+}
 func healthToIcon(health int) rune {
     switch {
     case health < 7:

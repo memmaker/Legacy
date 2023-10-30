@@ -71,3 +71,10 @@ func (m *MapWindow) setScrollOffset(newScrollX, newScrollY int) {
 
     m.scrollOffset = geometry.Point{X: newScrollX, Y: newScrollY}
 }
+
+func (m *MapWindow) GetScreenGridPositionFromMapGridPosition(mapGridPosition geometry.Point) geometry.Point {
+    return geometry.Point{
+        X: mapGridPosition.X - m.scrollOffset.X,
+        Y: mapGridPosition.Y - m.scrollOffset.Y,
+    }
+}

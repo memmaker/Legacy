@@ -9,11 +9,12 @@ import (
 )
 
 func (g *GridEngine) handleInput() {
-    if inpututil.IsKeyJustPressed(ebiten.KeyArrowRight) {
-        g.onMove(geometry.Point{X: 1, Y: 0})
+    windowsOpen := g.inputElement != nil || g.modalElement != nil
+    if inpututil.IsKeyJustPressed(ebiten.KeyArrowRight) && !windowsOpen {
+        g.playerMovement(geometry.Point{X: 1, Y: 0})
     }
-    if inpututil.IsKeyJustPressed(ebiten.KeyArrowLeft) {
-        g.onMove(geometry.Point{X: -1, Y: 0})
+    if inpututil.IsKeyJustPressed(ebiten.KeyArrowLeft) && !windowsOpen {
+        g.playerMovement(geometry.Point{X: -1, Y: 0})
     }
     if inpututil.IsKeyJustPressed(ebiten.KeyArrowUp) {
         if g.inputElement != nil {
@@ -21,7 +22,7 @@ func (g *GridEngine) handleInput() {
         } else if g.modalElement != nil {
             g.modalElement.ActionUp()
         } else {
-            g.onMove(geometry.Point{X: 0, Y: -1})
+            g.playerMovement(geometry.Point{X: 0, Y: -1})
         }
     }
     if inpututil.IsKeyJustPressed(ebiten.KeyArrowDown) {
@@ -30,7 +31,7 @@ func (g *GridEngine) handleInput() {
         } else if g.modalElement != nil {
             g.modalElement.ActionDown()
         } else {
-            g.onMove(geometry.Point{X: 0, Y: 1})
+            g.playerMovement(geometry.Point{X: 0, Y: 1})
         }
     }
 
@@ -46,7 +47,7 @@ func (g *GridEngine) handleInput() {
         }
     }
 
-    if inpututil.IsKeyJustPressed(ebiten.KeySpace) {
+    if inpututil.IsKeyJustPressed(ebiten.KeySpace) && !windowsOpen {
         if g.currentMap.IsItemAt(g.avatar.Pos()) {
             item := g.currentMap.ItemAt(g.avatar.Pos())
             g.PickUpItem(item)
@@ -90,6 +91,9 @@ func (g *GridEngine) handleInput() {
 
     if inpututil.IsKeyJustPressed(ebiten.KeyR) {
         g.lastSelectedAction()
+    }
+    if inpututil.IsKeyJustPressed(ebiten.KeyT) {
+        g.ShowText(g.lastShownText)
     }
 
     cellX, cellY := g.gridRenderer.ScreenToSmallCell(ebiten.CursorPosition())

@@ -5,6 +5,7 @@ import (
     "github.com/hajimehoshi/ebiten/v2"
     "image"
     "image/color"
+    "strings"
 )
 
 type DualGridRenderer struct {
@@ -94,18 +95,28 @@ func (g *DualGridRenderer) DrawSmallOnScreen(screen *ebiten.Image, xPos, yPos fl
     screen.DrawImage(ExtractSubImageFromAtlas(textureIndex, g.smallGridSize, g.smallGridSize, g.smallAtlas), g.op)
 }
 
-func (g *DualGridRenderer) DrawBorder(screen *ebiten.Image, topLeft, bottomRight geometry.Point) {
-    BorderTraversal(topLeft, bottomRight, func(p geometry.Point, borderType BorderCase) {
-        textureIndex := borderType.GetIndex(g.borderDef)
-        g.DrawOnSmallGrid(screen, p.X, p.Y, textureIndex)
-    })
-}
+func (g *DualGridRenderer) DrawFilledBorder(screen *ebiten.Image, topLeft, bottomRight geometry.Point, title string) {
+    centeredTitleXStart := (bottomRight.X - topLeft.X - len(title)) / 2
+    centeredTitleXEnd := centeredTitleXStart + len(title)
 
-func (g *DualGridRenderer) DrawFilledBorder(screen *ebiten.Image, topLeft, bottomRight geometry.Point) {
-    BorderTraversal(topLeft, bottomRight, func(p geometry.Point, borderType BorderCase) {
-        textureIndex := borderType.GetIndex(g.borderDef)
-        g.DrawOnSmallGrid(screen, p.X, p.Y, textureIndex)
-    })
+    var borderFunc func(p geometry.Point, borderType BorderCase)
+    if len(title) > 0 {
+        borderFunc = func(p geometry.Point, borderType BorderCase) {
+            textureIndex := borderType.GetIndex(g.borderDef)
+            relativeX := p.X - topLeft.X
+            if relativeX >= centeredTitleXStart && relativeX < centeredTitleXEnd && p.Y == topLeft.Y {
+                g.DrawColoredChar(screen, p.X, p.Y, rune(title[relativeX-centeredTitleXStart]), color.White)
+            } else {
+                g.DrawOnSmallGrid(screen, p.X, p.Y, textureIndex)
+            }
+        }
+    } else {
+        borderFunc = func(p geometry.Point, borderType BorderCase) {
+            textureIndex := borderType.GetIndex(g.borderDef)
+            g.DrawOnSmallGrid(screen, p.X, p.Y, textureIndex)
+        }
+    }
+    BorderTraversal(topLeft, bottomRight, borderFunc)
 
     width := bottomRight.X - topLeft.X - 2
     height := bottomRight.Y - topLeft.Y - 2
@@ -121,11 +132,12 @@ func (g *DualGridRenderer) DrawFilledBorder(screen *ebiten.Image, topLeft, botto
     screen.DrawImage(subImage, g.op)
 }
 
-func (g *DualGridRenderer) DrawOnBigGrid(screen *ebiten.Image, cellX, cellY int, textureIndex int) {
+func (g *DualGridRenderer) DrawOnBigGrid(screen *ebiten.Image, cellPos, offset geometry.Point, textureIndex int) {
     g.op.ColorScale.Reset()
     g.op.GeoM.Reset()
     g.op.GeoM.Scale(g.scale, g.scale)
-    g.op.GeoM.Translate(g.BigCellToScreen(cellX, cellY))
+    g.op.GeoM.Translate(float64(offset.X), float64(offset.Y))
+    g.op.GeoM.Translate(g.BigCellToScreen(cellPos.X, cellPos.Y))
     screen.DrawImage(ExtractSubImageFromAtlas(textureIndex, g.bigGridSize, g.bigGridSize, g.bigAtlas), g.op)
 }
 
@@ -154,6 +166,15 @@ func (g *DualGridRenderer) GetScale() float64 {
     return g.scale
 }
 
+func (g *DualGridRenderer) AutoPositionText(text []string) (geometry.Point, geometry.Point) {
+    height := min(len(text)+4, 15)
+    width := min(maxLen(text)+4, 36)
+    screenSize := g.GetSmallGridScreenSize()
+    topLeft := geometry.Point{X: (screenSize.X - width) / 2, Y: (screenSize.Y - height) / 2}
+    bottomRight := geometry.Point{X: topLeft.X + width, Y: topLeft.Y + height}
+    return topLeft, bottomRight
+}
+
 func ExtractSubImageFromAtlas(textureIndex int, tileSizeX int, tileSizeY int, textureAtlas *ebiten.Image) *ebiten.Image {
     atlasItemCountX := textureAtlas.Bounds().Size().X / tileSizeX
     textureRectTopLeft := image.Point{
@@ -170,4 +191,23 @@ func ExtractSubImageFromAtlas(textureIndex int, tileSizeX int, tileSizeY int, te
 
     tileImage := textureAtlas.SubImage(textureRect).(*ebiten.Image)
     return tileImage
+}
+
+func AutoLayoutText(inputText []string, width int) []string {
+    tokens := strings.Split(strings.Join(inputText, " "), " ")
+
+    var lines []string
+    currentLine := ""
+    for i, token := range tokens {
+        if len(currentLine)+len(token)+1 > width {
+            lines = append(lines, currentLine)
+            currentLine = token
+        } else if i == 0 {
+            currentLine = token
+        } else {
+            currentLine += " " + token
+        }
+    }
+    lines = append(lines, currentLine)
+    return lines
 }

@@ -24,6 +24,7 @@ type GridMenu struct {
     autoCloseOnConfirm bool
 
     lastAction func()
+    title      string
 }
 
 func (g *GridMenu) ShouldClose() bool {
@@ -81,13 +82,35 @@ func (g *GridMenu) ActionDown() {
 }
 
 func NewGridMenu(gridRenderer *DualGridRenderer, menuItems []MenuItem) *GridMenu {
+    topLeft, bottomRight := positionGridMenu(gridRenderer, menuItems, "")
+    return &GridMenu{
+        gridRenderer: gridRenderer,
+        topLeft:      topLeft,
+        bottomRight:  bottomRight,
+        menuItems:    menuItems,
+    }
+}
+
+func positionGridMenu(gridRenderer *DualGridRenderer, menuItems []MenuItem, title string) (geometry.Point, geometry.Point) {
+    height := min(len(menuItems)+2, 15)
+    width := min(max(maxLenOfItems(menuItems)+2, len(title)+4), 36)
+    screenGridSize := gridRenderer.GetSmallGridScreenSize()
+    // center
+    topLeft := geometry.Point{
+        X: (screenGridSize.X - width) / 2,
+        Y: (screenGridSize.Y - height) / 4,
+    }
+    bottomRight := geometry.Point{X: topLeft.X + width, Y: topLeft.Y + height}
+    return topLeft, bottomRight
+}
+func NewGridMenuAtY(gridRenderer *DualGridRenderer, menuItems []MenuItem, yOffset int) *GridMenu {
     height := min(len(menuItems)+2, 15)
     width := min(maxLenOfItems(menuItems)+2, 36)
     screenGridSize := gridRenderer.GetSmallGridScreenSize()
     // center
     topLeft := geometry.Point{
         X: (screenGridSize.X - width) / 2,
-        Y: (screenGridSize.Y - height) / 4,
+        Y: yOffset,
     }
     bottomRight := geometry.Point{X: topLeft.X + width, Y: topLeft.Y + height}
     return &GridMenu{
@@ -102,7 +125,7 @@ func (g *GridMenu) SetAutoClose() {
 }
 func (g *GridMenu) Draw(screen *ebiten.Image) {
     var textColor color.Color
-    g.gridRenderer.DrawFilledBorder(screen, g.topLeft, g.bottomRight)
+    g.gridRenderer.DrawFilledBorder(screen, g.topLeft, g.bottomRight, g.title)
     for i, item := range g.menuItems {
         textColor = color.White
         if i == g.currentSelection {
@@ -112,6 +135,11 @@ func (g *GridMenu) Draw(screen *ebiten.Image) {
         }
         g.gridRenderer.DrawColoredString(screen, g.topLeft.X+1, g.topLeft.Y+1+i, item.Text, textColor)
     }
+}
+
+func (g *GridMenu) SetTitle(title string) {
+    g.title = title
+    g.topLeft, g.bottomRight = positionGridMenu(g.gridRenderer, g.menuItems, title)
 }
 func maxLenOfItems(items []MenuItem) int {
     maxLength := 0

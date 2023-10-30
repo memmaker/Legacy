@@ -2,7 +2,6 @@ package game
 
 import (
     "Legacy/renderer"
-    "fmt"
     "image/color"
 )
 
@@ -26,7 +25,7 @@ func (b *Potion) TintColor() color.Color {
 func (b *Potion) GetContextActions(engine Engine) []renderer.MenuItem {
     actions := inventoryItemActions(b, engine)
     actions = append(actions, renderer.MenuItem{
-        Text: fmt.Sprintf("Quaff \"%s\"", b.name),
+        Text: "Quaff",
         Action: func() {
             if !b.isEmpty {
                 engine.ShowDrinkPotionMenu(b)

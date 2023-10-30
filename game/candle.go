@@ -2,7 +2,6 @@ package game
 
 import (
     "Legacy/renderer"
-    "fmt"
     "image/color"
 )
 
@@ -34,12 +33,12 @@ func (b *Candle) GetContextActions(engine Engine) []renderer.MenuItem {
     actions := inventoryItemActions(b, engine)
     if b.isLit {
         actions = append(actions, renderer.MenuItem{
-            Text:   fmt.Sprintf("Extinguish \"%s\"", b.name),
+            Text:   "Extinguish",
             Action: func() { b.isLit = false },
         })
     } else {
         actions = append(actions, renderer.MenuItem{
-            Text:   fmt.Sprintf("Light \"%s\"", b.name),
+            Text:   "Light",
             Action: func() { b.isLit = true },
         })
     }

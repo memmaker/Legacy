@@ -9,7 +9,7 @@ to eat.
 
 # Inventory
 
-- armor(0): nothing
+ - armor(0): nothing
 
 # Conversation
 ;
@@ -18,7 +18,9 @@ to eat.
 the one who
 is coming from that
 strange place with
-human problems. And now
+human problems."
+
+"And now
 you are here
 at our place of human
 problems."

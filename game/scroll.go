@@ -4,6 +4,7 @@ import (
     "Legacy/renderer"
     "fmt"
     "image/color"
+    "regexp"
 )
 
 type Scroll struct {
@@ -11,11 +12,16 @@ type Scroll struct {
     icon     int
     filename string
     spell    *Spell
+    wearer   ItemWearer
+}
+
+func (b *Scroll) GetWearer() ItemWearer {
+    return b.wearer
 }
 
 func (b *Scroll) CanStackWith(other Item) bool {
     if otherScroll, ok := other.(*Scroll); ok {
-        return b.spell == otherScroll.spell && b.filename == otherScroll.filename && b.name == otherScroll.name && b.icon == otherScroll.icon
+        return b.spell == otherScroll.spell && b.filename == otherScroll.filename && b.name == otherScroll.name && b.icon == otherScroll.icon && b.wearer == otherScroll.wearer
     } else {
         return false
     }
@@ -42,7 +48,7 @@ func (b *Scroll) GetContextActions(engine Engine) []renderer.MenuItem {
 
 func (b *Scroll) read(engine Engine) {
     text := engine.GetTextFile(b.filename)
-    engine.ShowScrollableText(text, color.White)
+    engine.ShowColoredText(text, color.White, true)
 }
 
 func (b *Scroll) SetSpell(spell *Spell) {
@@ -52,6 +58,10 @@ func (b *Scroll) SetSpell(spell *Spell) {
 func (b *Scroll) Icon(uint64) int {
     return b.icon
 }
+
+func (b *Scroll) SetWearer(a *Actor) {
+    b.wearer = a
+}
 func NewScroll(title, filename string) *Scroll {
     return &Scroll{
         BaseItem: BaseItem{
@@ -60,4 +70,29 @@ func NewScroll(title, filename string) *Scroll {
         icon:     181,
         filename: filename,
     }
+}
+
+func NewSpellScroll(title, filename string, spell *Spell) *Scroll {
+    return &Scroll{
+        BaseItem: BaseItem{
+            name: title,
+        },
+        icon:     181,
+        filename: filename,
+        spell:    spell,
+    }
+}
+
+func NewScrollFromString(encoded string) *Scroll {
+    // format is scroll title, filename, spell name
+    paramRegex := regexp.MustCompile(`^([^,]+), ?([^,]+), ?([^,]+)$`)
+    scrollTitle := "Invalid Scroll"
+    filename := "invalid_scroll"
+    spellName := "invalid_spell"
+    if matches := paramRegex.FindStringSubmatch(encoded); matches != nil {
+        scrollTitle = matches[1]
+        filename = matches[2]
+        spellName = matches[3]
+    }
+    return NewSpellScroll(scrollTitle, filename, NewSpellFromName(spellName))
 }

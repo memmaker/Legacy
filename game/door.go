@@ -2,7 +2,6 @@ package game
 
 import (
     "Legacy/renderer"
-    "fmt"
     "image/color"
     "math/rand"
 )
@@ -15,6 +14,9 @@ type Door struct {
     lockStrength      float64
     frameStrength     float64
     isBroken          bool
+    listenText        []string
+    knockEvent        string
+    breakEvent        string
 }
 
 func (d *Door) TintColor() color.Color {
@@ -103,9 +105,35 @@ func (d *Door) IsTransparent() bool {
 
 func (d *Door) GetContextActions(engine Engine) []renderer.MenuItem {
     actions := d.BaseObject.GetContextActions(engine, d)
+    if !d.isBroken {
+        actions = append(actions, renderer.MenuItem{
+            Text: "Listen",
+            Action: func() {
+                if !d.isBroken {
+                    if d.listenText != nil && len(d.listenText) > 0 {
+                        engine.ShowColoredText(d.listenText, color.White, true)
+                    } else {
+                        engine.Print("You hear nothing.")
+                    }
+                }
+            },
+        })
+        actions = append(actions, renderer.MenuItem{
+            Text: "Knock",
+            Action: func() {
+                if !d.isBroken {
+                    if d.knockEvent != "" {
+                        engine.TriggerEvent(d.knockEvent)
+                    } else {
+                        engine.Print("Knocking yields no response.")
+                    }
+                }
+            },
+        })
+    }
     if d.isLocked && !d.isMagicallyLocked && !d.isBroken {
         actions = append(actions, renderer.MenuItem{
-            Text: fmt.Sprintf("Break \"%s\"", d.Name()),
+            Text: "Break",
             Action: func() {
                 if d.isLocked && !d.isMagicallyLocked && !d.isBroken {
                     if rand.Float64() > d.frameStrength {
@@ -113,6 +141,9 @@ func (d *Door) GetContextActions(engine Engine) []renderer.MenuItem {
                         d.isLocked = false
                         engine.DamageAvatar(8)
                         engine.Print("You broke the door.")
+                        if d.breakEvent != "" {
+                            engine.TriggerEvent(d.breakEvent)
+                        }
                     } else {
                         engine.DamageAvatar(10)
                         engine.Print("You failed to break the door.")
@@ -122,7 +153,7 @@ func (d *Door) GetContextActions(engine Engine) []renderer.MenuItem {
         })
         if engine.PartyHasKey(d.key) {
             actions = append(actions, renderer.MenuItem{
-                Text: fmt.Sprintf("Unlock \"%s\"", d.Name()),
+                Text: "Unlock",
                 Action: func() {
                     if d.isLocked && !d.isMagicallyLocked && !d.isBroken && engine.PartyHasKey(d.key) {
                         d.isLocked = false
@@ -132,7 +163,7 @@ func (d *Door) GetContextActions(engine Engine) []renderer.MenuItem {
             })
         } else if engine.PartyHasLockpick() {
             actions = append(actions, renderer.MenuItem{
-                Text: fmt.Sprintf("Pick \"%s\"", d.Name()),
+                Text: "Pick lock",
                 Action: func() {
                     if d.isLocked && !d.isMagicallyLocked && !d.isBroken && engine.PartyHasLockpick() {
                         if rand.Float64() > d.lockStrength {
@@ -149,4 +180,12 @@ func (d *Door) GetContextActions(engine Engine) []renderer.MenuItem {
         }
     }
     return actions
+}
+
+func (d *Door) SetListenText(text []string) {
+    d.listenText = text
+}
+
+func (d *Door) SetBreakEvent(event string) {
+    d.breakEvent = event
 }

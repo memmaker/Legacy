@@ -17,6 +17,7 @@ type GridDialogueMenu struct {
     lastIndex        int
 
     shouldClose bool
+    title       string
 }
 
 func (g *GridDialogueMenu) ShouldClose() bool {
@@ -49,7 +50,7 @@ func NewGridDialogueMenu(gridRenderer *DualGridRenderer, topLeft geometry.Point,
 
 func (g *GridDialogueMenu) Draw(screen *ebiten.Image) {
     var textColor color.Color
-    g.gridRenderer.DrawFilledBorder(screen, g.topLeft, g.bottomRight)
+    g.gridRenderer.DrawFilledBorder(screen, g.topLeft, g.bottomRight, g.title)
     for line, items := range g.hotspotLayout {
         for _, item := range items {
             textColor = color.White

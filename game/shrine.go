@@ -61,14 +61,14 @@ func (s *Shrine) IsTransparent() bool {
 func (s *Shrine) GetContextActions(engine Engine) []renderer.MenuItem {
     actions := s.BaseObject.GetContextActions(engine, s)
     actions = append(actions, renderer.MenuItem{
-        Text: fmt.Sprintf("Meditate at \"%s\"", s.Name()),
+        Text: "Meditate",
         Action: func() {
             engine.Flags().IncrementFlag(fmt.Sprintf("meditated_for_%s", strings.ToLower(string(s.principle))))
-            engine.ShowScrollableText([]string{
+            engine.ShowColoredText([]string{
                 "You meditate at the shrine.",
                 "Aligning yourself with",
                 fmt.Sprintf("the principle of %s.", s.principle),
-            }, color.White)
+            }, color.White, true)
         },
     })
     return actions
