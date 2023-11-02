@@ -1,24 +1,22 @@
+%rec: Details
+
 Name: Ghost of a Tauci
 Health: 10
+Description: The ghost of a Tauci. It is a very weak apparition.
 
-# Description
+%rec: Inventory
 
-The ghost of a Tauci. It
-is a very weak apparition.
+Item: armor(clothes, torso, 0)
 
-# Inventory
+%rec: Conversation
 
- - armor(0): clothes
+Key: _first_time
+Text: "Boooohhh..."
 
-# Conversation
-;
-# _first_time
-"Boooohhh..."
+Key: name
+NeedsFlag: can_talk_to_ghosts
+Text: "Boooohhh..."
 
-# name
-#f can_talk_to_ghosts
-"Boooohhh..."
-
-# job
-#f can_talk_to_ghosts
-"Boooohhh..."
+Key: job
+NeedsFlag: can_talk_to_ghosts
+Text: "Boooohhh..."

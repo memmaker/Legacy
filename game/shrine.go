@@ -1,6 +1,8 @@
 package game
 
 import (
+    "Legacy/geometry"
+    "Legacy/recfile"
     "Legacy/renderer"
     "fmt"
     "image/color"
@@ -28,7 +30,34 @@ func (s *Shrine) TintColor() color.Color {
 func (s *Shrine) Name() string {
     return s.name
 }
+func (s *Shrine) ToRecordAndType() (recfile.Record, string) {
+    return recfile.Record{
+        {Name: "name", Value: s.name},
+        {Name: "icon", Value: recfile.Int32Str(s.icon)},
+        {Name: "pos", Value: s.Pos().Encode()},
+        {Name: "isHidden", Value: recfile.BoolStr(s.isHidden)},
+        {Name: "principle", Value: string(s.principle)},
+    }, "shrine"
+}
 
+func NewShrineFromRecord(record recfile.Record) *Shrine {
+    shrine := NewShrine("", Void)
+    for _, field := range record {
+        switch field.Name {
+        case "name":
+            shrine.name = field.Value
+        case "icon":
+            shrine.icon = field.AsInt32()
+        case "pos":
+            shrine.SetPos(geometry.MustDecodePoint(field.Value))
+        case "isHidden":
+            shrine.isHidden = field.AsBool()
+        case "principle":
+            shrine.principle = Principle(field.Value)
+        }
+    }
+    return shrine
+}
 func NewShrine(name string, principle Principle) *Shrine {
     return &Shrine{
         BaseObject: BaseObject{
@@ -47,7 +76,7 @@ func (s *Shrine) Description() []string {
     }
 }
 
-func (s *Shrine) Icon(uint64) int {
+func (s *Shrine) Icon(uint64) int32 {
     return s.icon
 }
 func (s *Shrine) IsWalkable(person *Actor) bool {

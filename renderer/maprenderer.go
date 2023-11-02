@@ -8,7 +8,7 @@ import (
 
 type MapView interface {
     GetScreenOffset() geometry.Point
-    GetTextureIndexAt(x, y int, tick uint64) (*ebiten.Image, int, color.Color)
+    GetTextureIndexAt(x, y int, tick uint64) (*ebiten.Image, int32, color.Color)
     GetScrollOffset() geometry.Point
     GetWindowSizeInCells() (int, int)
 }

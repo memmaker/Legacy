@@ -8,6 +8,15 @@
  - The intro dialogue seems random (and maybe remove "job" & "name"?)
  - I cannot click on equipment in the inventory screen and just select something different
  - Encounters need a definition in text files, like conversations
+ - It's not possible to have a conversation with your followers
+ - How to handle items without icons when dropping them?
+ - Repeat last action will continue attacking dead enemies
+ - Dialogue options will only depend on the skills of the Avatar, not the whole party
+ - Scrolling windows (eg. skill window) could be a big higher and show an indicator when scrolling is enabled
+ - Scrolls should not store the full path to their files
+ - Save/Load of Objects fails
+ - Hidden Items not hidden after loading
+ - Dialogue missing from NPCs after loading
 
 # Character customization
  - Name & Pro-noun
@@ -39,34 +48,107 @@ Failure is always part of the story, not a game over.
 
 NOTE: Allow All Skills to be applied both inside and outside of combat
 
+A (RE)-ACTIVE ANTAGONIST - Der Architekt
+Should not sit in his lair and wait for the Player to level up and kill him
+
+# What makes good combat?
+ - High Stakes
+ - Meaningful Choices
+ - No Single Solution
+ - Interesting Enemies
+ - The possibility to change the approach
+
 # What Skills / Attributes?
 What do we want to measure?
+
+SPECIAL?
+ - Strength
+ - Perception
+ - Endurance
+ - Charisma
+ - Intelligence
+ - Agility
+ - Luck
 
 Party Stats?
  - Food Preservation (max. 4 rations -> 10, 20, 30, 40..)
 
+# Axes
+ - Magic
+   - From Nature
+     - Through Dark means
+     - Through Light means
+
 # Primary Stats
  - Max Health
- - Offense Bonus (Melee, Ranged, Magic)
- - Defense Bonus
- - Luck Bonus
+ - Speed (determines initiative & movement allowance)
+ - Magic Affinity
+    - Determines the effectiveness of potion consumption
+    - How many spells you have available in combat
+ - Physical Attacks (Melee, Ranged) / (Dark, Light) / (Magic, Physical)
+ - Physical Defense (Melee, Ranged) / (Dark, Light) / (Magic, Physical)
+ - Luck Bonus (Loot & Critical Hits)
+ - Encumbrance (For chance to hit modifiers based on armor)
+ - Performed rituals
+    - How many gods you can talk to
+    - Gained by finding the information in the world and performing rituals
 
-Melee Combat Skill
-Ranged Combat Skill
-Magic Skill
-Prayers Skill
-Thievery Skill (Sneak, Pickpocket, Lockpick, Steal)
-Talking Skill (Deceive, Persuade, Intimidate, Bluff)
-Knowledge Skill
+# Avatar only
+ - Knowledge Gained (increased by reading books which trigger knowledge flags) (Will activate specific topics and this only counts how many you know about)
+    - Gained by reading books
+    - Tracks the books you have read on important topics
+    - Some spells scale off of this
+
+## Add these first (only flags & counters)
+
+## two types - flags only & flags + counters
+
+-> These can be just flags
+Art of theft (Sneak, Pickpocket, Lockpick, Steal)
+ - More options per level
+ - (Sneak, Pickpocket, Lockpick, Glasscutting, etc.)
+
+-> These can be just flags
+Social Skills (Deceive, Persuade, Intimidate, Bluff, Spot Lies) (Choose a specific technique per Level)
+ - More options per level
+ - (Persuasion, Intimidation, Bluff, Spot Lies, etc.)
+ -> Do we still roll for failure? We draw from a bag of 1-10
+ -> Does taking "Spot lies" then mean no NPC can effectively lie anymore?
+
+-> Needs a counter
 Outdoors Skill (Survival, Hunting, Fishing, Tracking)
-Athletics Skill (Climbing, Swimming, Jumping, Running)
-Foreign Language Skill (Basic, All-Humanoids, All-Beasts, All)
+ - More catch, more food per level
+ - Harder to spot when resting
 
+-> Needs a counter
+Athletics Skill (Climbing, Swimming, Jumping, Running)
+ - Reduce encumbrance per level
+ - Increase speed per level
+
+-> Just flags
+Foreign Language Skill
+ - Choose a language per Level
+ - Animals, Monsters, etc.
+
+-> Flags + Counter
+Perception Skill (Spot Hidden, Danger Sense, Listen, Search)
+ - More options per level
+ - (Spot Hidden, Danger Sense)
+ - Further levels increase range
+
+
+
+## Save these for later
+-> These are special and need coding support
+Melee Combat Skills
+ - Choose active/passive skills usable in battle
+Ranged Combat Skills
+ - Choose active/passive skills usable in battle
 
 # A locked wooden door
 ## Approaches to Problem solving
  - Violence (bash it)
- - Magic (cast "open" spell)
+ - Magic (cast "open"/"fireball" spell)
  - Stealth (find a way around it)
  - Communication (ask someone for the key or let him open for you)
  - Money (bribe people or pay for a thief)
@@ -74,28 +156,38 @@ Foreign Language Skill (Basic, All-Humanoids, All-Beasts, All)
 
 
 # TODO
- - Inventory management - BASIC
+ - Inventory management - BASIC (needs nice UI)
  - Party movement - GOOD ENOUGH
  - Doors & Keys - GOOD ENOUGH
- - Containers - BASIC
- - Equipping items
- - Combat
- - Magic - BASIC
+ - Containers - BASIC (moving stuff into containers, other containers than chests)
+ - Encounters - BASIC (needs better engine support)
+ - Dialogues - BASIC (needs better engine support)
+ - Equipping items - BASIC (needs weapons and more loot variety)
+ - Combat - BASIC - (needs ranged & spells, target selection & better UI & AI)
+ - Magic - BASIC (needs more spells and better UI and effects)
  - Vendors - BASIC
- - Journal
- - Save/Load
+ - Journal - GOOD ENOUGH (add a search)
+ - Save/Load - BASIC
  - Main Menu
  - Line of Sight - GOOD ENOUGH
+
+# What we won't do
+ - Off the grid effects
+ - Fluid fancy animations
+ - Require Grinding
+ - Level Scaling
+ - Dumb Fights (Even Combat Encounters should be interesting)
+ - Useless Skills
 
 
 # Non-Contextual actions
  - Inventory - BASIC
- - Cast spells
+ - Cast spells - BASIC
  - Rest (to heal) - BASIC
- - Attack
+ - Attack - BASIC
  - Split up - GOOD ENOUGH
 
-# Contextual actions
+# Contextual actions - GOOD ENOUGH
  - Move (w/a/s/d)
  - Look/Examine (look at something)
  - Take/Drop (inventory)
@@ -106,6 +198,10 @@ Foreign Language Skill (Basic, All-Humanoids, All-Beasts, All)
  - Open/Close (a door/chest)
 
 # Cool ideas
+ - Don't allow revival of party members?
+ - Track the wealth of the party and let them be the target of thieves and robbers
+ - Let them buy a house and deal with break-ins
+ - The 4 Orb Stones in the UI corners can actually be found in the world, n/e/w/s
  - Allow knocking on locked doors
  - Magic is Mother Natures HP, the "Legacy" label on the top of the UI will turn into the damage you have done to nature
  - We should provide alternatives to using the nature potions for spellcasting

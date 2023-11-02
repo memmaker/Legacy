@@ -13,10 +13,10 @@ func (g *GridEngine) playerMovement(direction geometry.Point) {
 
     if g.splitControlled != nil {
         g.currentMap.MoveActor(g.splitControlled, g.splitControlled.Pos().Add(direction))
-        g.onAvatarMovedAlone()
+        g.onViewedActorMoved(g.splitControlled.Pos())
     } else {
         g.playerParty.Move(direction)
-        g.onPartyMoved()
+        g.onViewedActorMoved(g.avatar.Pos())
     }
 
     if g.flags.GetFlag("steps_taken") == 1 {
@@ -33,7 +33,7 @@ func (g *GridEngine) Update() error {
         return ebiten.Termination
     }
 
-    if g.playerParty.IsDefeated() && g.modalElement == nil {
+    if g.playerParty.IsDefeated() {
         g.showGameOver()
         return nil
     }
@@ -64,22 +64,6 @@ func (g *GridEngine) Draw(screen *ebiten.Image) {
 
     g.mapRenderer.Draw(g.playerParty.GetFoV(), screen, g.CurrentTick())
 
-    g.drawUpperStatusBar(screen)
-
-    if g.ticksForPrint > 0 {
-        g.drawPrintMessage(screen)
-    } else {
-        g.drawLowerStatusBar(screen)
-    }
-
-    if g.modalElement != nil {
-        if g.modalElement.ShouldClose() {
-            g.modalElement = nil
-            g.updateContextActions()
-        } else {
-            g.modalElement.Draw(screen)
-        }
-    }
     if g.inputElement != nil {
         if g.inputElement.ShouldClose() {
             if gridMenu, ok := g.inputElement.(*renderer.GridMenu); ok {
@@ -92,8 +76,38 @@ func (g *GridEngine) Draw(screen *ebiten.Image) {
             g.inputElement.Draw(screen)
         }
     }
+    if g.modalElement != nil {
+        if g.modalElement.ShouldClose() && g.inputElement == nil {
+            g.modalElement = nil
+            g.updateContextActions()
+        } else {
+            g.modalElement.Draw(screen)
+        }
+    }
+    if g.combatManager.IsInCombat() {
+        g.drawWarTimeStatusBar(screen)
+        g.combatManager.Draw(screen)
+    } else {
+        g.drawPeaceTimeStatusBar(screen)
+    }
+}
 
-    g.combatManager.Draw(screen)
+func (g *GridEngine) drawPeaceTimeStatusBar(screen *ebiten.Image) {
+    g.drawUpperStatusBar(screen)
+
+    if g.ticksForPrint > 0 {
+        g.drawPrintMessage(screen, false)
+    } else {
+        g.drawLowerStatusBar(screen)
+    }
+}
+func (g *GridEngine) drawWarTimeStatusBar(screen *ebiten.Image) {
+    g.drawLowerStatusBar(screen)
+    if g.ticksForPrint > 0 {
+        g.drawPrintMessage(screen, true)
+    } else {
+        g.drawUpperStatusBar(screen)
+    }
 }
 
 func (g *GridEngine) transition(transition gridmap.Transition) {
@@ -147,7 +161,7 @@ func (g *GridEngine) updateContextActions() {
     for _, neighbor := range neighborsWithStuff {
         if g.currentMap.IsActorAt(neighbor) {
             actor := g.currentMap.GetActor(neighbor)
-            if !actor.IsHidden() && actor != g.avatar && actor != g.splitControlled {
+            if !actor.IsHidden() && !g.IsPlayerControlled(actor) {
                 actorsNearby = append(actorsNearby, actor)
             }
         }
@@ -186,7 +200,7 @@ func (g *GridEngine) updateContextActions() {
         neighbor := loc.Add(relative)
         if g.currentMap.Contains(neighbor) && g.currentMap.IsActorAt(neighbor) {
             actor := g.currentMap.GetActor(neighbor)
-            if !actor.IsHidden() {
+            if !actor.IsHidden() && !g.IsPlayerControlled(actor) {
                 actorsNearby = append(actorsNearby, actor)
             }
         }

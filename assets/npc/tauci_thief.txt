@@ -1,45 +1,46 @@
+%rec: Details
+
 Name: Inconspicuous Person
 Health: 10
+Description: This person is trying to blend in with the crowd.
 
-# Description
+%rec: Inventory
 
-This person is trying
-to blend in with the
-crowd.
+Item: armor(a cloak, torso, 1)
 
-# Inventory
+%rec: Conversation
 
- - armor(1): a cloak
+Key: _first_time
+Text: "Hello, Stranger. Are you with the guild?" \
+He is forming his hands into a triangle while talking to you.
+#
+OptionNeedsSkill: Lying(1)
+Option: _with_guild: yes (lie)
+#
+OptionNeedsFlag: _with_guild
+Option: _with_guild: yes
+#
+Option: _not_with_guild: no
+#
+Option: _not_with_guild: no (lie)
 
-# Conversation
-;
-# _first_time
-#! yes: _with_guild
-#! no: _not_with_guild
-"Hello, Stranger.
-Are you with the guild?"
-He is forming his hands
-into a triangle while
-talking to you.
-
-# _with_guild
-"Gosh, I'm so glad to
-see you. I lost my tools
+Key: _with_guild
+Text: "Gosh, I'm so glad to \
+see you. I lost my tools \
 last night."
-
-"It's a bit embarassing.
-I was trying my final
++ \
+"It's a bit embarassing. \
+I was trying my final \
 test for the guild."
-
-"I had to run away and
-lost my leather case
-when I dived out of the
++ \
+"I had to run away and \
+lost my leather case \
+when I dived out of the \
 window."
-
-"It was one of the houses
++ \
+"It was one of the houses \
 on the east side of town."
 
-# _not_with_guild
-## quits
-"Yes, me neither."
-He quickly turns away.
+Key: _not_with_guild
+Effect: quits
+Text: "Yes, me neither." He quickly turns away.

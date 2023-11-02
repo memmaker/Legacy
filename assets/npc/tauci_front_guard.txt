@@ -1,79 +1,78 @@
+%rec: Details
+
 Name: Guard Gregor
 Health: 10
 Torso: armor(chainmail, torso, 4)
 Head: armor(mail coif, head, 2)
-
-# Description
-
-This sympathetic looking
-guard is standing in front
+Description: This sympathetic looking \
+guard is standing in front \
 of the castle entrance.
-
-He looks like he's been
-standing there for a while
-and is waiting for a
++ \
+He looks like he's been \
+standing there for a while \
+and is waiting for a \
 chance to leave.
 
-# Inventory
+%rec: Inventory
 
- - key(small key, tauci_cellar, 1)
- - potion()
- - noitem(gold, 10)
- - noitem(food, 1)
+Item: key(small key, tauci_cellar, 1)
+Item: potion()
+Item: noitem(gold, 10)
+Item: noitem(food, 1)
 
-# Conversation
-;
-# _first_time
-"Ah, the saviour of the
-country! I am pleased to
-make your acquaintance.
-The chancellor is inside.
+%rec: Conversation
+
+Key: _first_time
+Text: "Ah, the saviour of the \
+country! I am pleased to \
+make your acquaintance. \
+The chancellor is inside. \
 Please go ahead."
 
-# name
-"Gregor, loyal guard of
+Key: name
+Text: "Gregor, loyal guard of \
 the =chancellor=."
-
-He is obviously a very
++ \
+He is obviously a very \
 enthusiastic guard.
 
-# job
-"I am a guard of the
-=chancellor=. I am
-responsible for the
-=safety= of the castle."
+Key: job
+Text: "I am a guard of the \
+=chancellor=. I am \
+responsible for the \
+=safety= of the castle." \
 He is eager to explain.
 
-# safety
-"Now that you mention it,
-we didn't have any
-security issues for a
-while. I guess I'm doing
+Key: safety
+Text: "Now that you mention it, \
+we didn't have any \
+security issues for a \
+while. I guess I'm doing \
 a good job."
-
-"Say, you wouldn't happen
++ \
+"Say, you wouldn't happen \
 to have some =spare time=?"
 
-# spare time
-#! yes: _spare_time
+Key: spare time
+Text: #! yes: _spare_time
 #! no: _no_spare_time
-"I have some personal
-matters to attend to. I
-would be very grateful if
-you could take over my
+"I have some personal \
+matters to attend to. I \
+would be very grateful if \
+you could take over my \
 =shift= for a minute."
 
-# _spare_time
-;# trigger_event: guard_duty
-"Really? That's great!
-Please stand here and
-don't let anyone pass
+Key: _spare_time
+TriggerEvent: guard_duty
+Text: "Really? That's great! \
+Please stand here and \
+don't let anyone pass \
 until I return."
 
-# _no_spare_time
-## quits
-"Ah, I see. Well, I guess
-I'll have to wait until
-later then."
-He turns back to his
+Key: _no_spare_time
+Effect: quits
+Text: "Ah, I see. Well, I guess \
+I'll have to wait until \
+later then." \
+He turns back to his \
 post.

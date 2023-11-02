@@ -19,7 +19,7 @@ func doesFileExist(filename string) bool {
     _, err := os.Stat(filename)
     return !os.IsNotExist(err)
 }
-func mustOpen(filename string) io.Reader {
+func mustOpen(filename string) io.ReadCloser {
     f, err := os.Open(filename)
     if err != nil {
         log.Fatal(err)

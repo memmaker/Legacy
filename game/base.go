@@ -20,9 +20,13 @@ func (a *GameObject) IsHidden() bool {
     return a.isHidden
 }
 
-func (a *GameObject) SetHidden(hidden bool, message []string) {
+func (a *GameObject) SetDiscoveryMessage(hidden bool, message []string) {
     a.isHidden = hidden
     a.discoveryMessage = message
+}
+
+func (a *GameObject) SetHidden(hidden bool) {
+    a.isHidden = hidden
 }
 
 func (a *GameObject) Discover() []string {

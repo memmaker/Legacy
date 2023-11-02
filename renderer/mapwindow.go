@@ -7,7 +7,7 @@ import (
 )
 
 type MapWindow struct {
-    lookup       func(x, y int, tick uint64) (*ebiten.Image, int, color.Color)
+    lookup       func(x, y int, tick uint64) (*ebiten.Image, int32, color.Color)
     screenOffset geometry.Point
     windowSize   geometry.Point
     mapSize      geometry.Point
@@ -18,7 +18,7 @@ func NewMapWindow(
     screenOffset geometry.Point,
     windowSize geometry.Point,
     mapSize geometry.Point,
-    lookup func(x, y int, tick uint64) (*ebiten.Image, int, color.Color),
+    lookup func(x, y int, tick uint64) (*ebiten.Image, int32, color.Color),
 ) *MapWindow {
     return &MapWindow{
         lookup:       lookup,
@@ -36,7 +36,7 @@ func (m *MapWindow) GetScreenOffset() geometry.Point {
     return m.screenOffset
 }
 
-func (m *MapWindow) GetTextureIndexAt(cellX, cellY int, tick uint64) (*ebiten.Image, int, color.Color) {
+func (m *MapWindow) GetTextureIndexAt(cellX, cellY int, tick uint64) (*ebiten.Image, int32, color.Color) {
     return m.lookup(cellX, cellY, tick)
 }
 
@@ -76,5 +76,12 @@ func (m *MapWindow) GetScreenGridPositionFromMapGridPosition(mapGridPosition geo
     return geometry.Point{
         X: mapGridPosition.X - m.scrollOffset.X,
         Y: mapGridPosition.Y - m.scrollOffset.Y,
+    }
+}
+
+func (m *MapWindow) GetMapGridPositionFromScreenGridPosition(screenGridPosition geometry.Point) geometry.Point {
+    return geometry.Point{
+        X: screenGridPosition.X + m.scrollOffset.X,
+        Y: screenGridPosition.Y + m.scrollOffset.Y,
     }
 }

@@ -6,7 +6,7 @@ import (
     "image/color"
 )
 
-func (g *GridEngine) mapLookup(x, y int, tick uint64) (*ebiten.Image, int, color.Color) {
+func (g *GridEngine) mapLookup(x, y int, tick uint64) (*ebiten.Image, int32, color.Color) {
     location := geometry.Point{X: x, Y: y}
 
     if g.currentMap.IsActorAt(location) {

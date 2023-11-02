@@ -27,6 +27,14 @@ type GridMenu struct {
     title      string
 }
 
+func (g *GridMenu) ActionLeft() {
+    g.ActionUp()
+}
+
+func (g *GridMenu) ActionRight() {
+    g.ActionDown()
+}
+
 func (g *GridMenu) ShouldClose() bool {
     return g.shouldClose
 }
@@ -46,16 +54,17 @@ func (g *GridMenu) OnMouseMoved(x int, y int) {
     g.currentSelection = relativeLine
 }
 
-func (g *GridMenu) OnMouseClicked(x int, y int) {
+func (g *GridMenu) OnMouseClicked(x int, y int) bool {
     relativeLine := y - g.topLeft.Y - 1
     if relativeLine < 0 || relativeLine >= len(g.menuItems) {
-        return
+        return false
     }
     if x < g.topLeft.X+1 || x >= g.bottomRight.X-1 {
-        return
+        return false
     }
     g.currentSelection = relativeLine
     g.ActionConfirm()
+    return true
 }
 
 func (g *GridMenu) ActionConfirm() {

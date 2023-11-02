@@ -1,64 +1,100 @@
+%rec: Details
+
 Name: Chancellor Tauci
 Health: 10
-
-# Description
-
-The chancellor of Prucol.
-He is dressed in a fancy
+Description: The chancellor of Prucol. \
+He is dressed in a fancy \
 purple robe.
 
-# Inventory
+%rec: Inventory
 
- - armor(0): a fancy purple robe
- - weapon(1): a golden scepter
- - key(5, kingdom_01): a golden key
+Item: armor(0): a fancy purple robe
+Item: weapon(1): a golden scepter
+Item: key(5, kingdom_01): a golden key
 
-# Conversation
-;
-# _first_time
-"Oh well, it's you again.."
+%rec: Conversation
+
+Key: _first_time
+Text: "Oh well, it's you again.." \
 He says with a sigh.
 
-# name
-My name and face should
+Key: name
+Text: My name and face should \
 be well known to you.
-
-I am the just ruler of
-this country.
-The =elected= representative
++ \
+I am the just ruler of \
+this country. \
+The =elected= representative \
 of the people.
-
-I am grand chancellor
++ \
+I am grand chancellor \
 =Tauci=.
 
-# Tauci
-My full title is
-"Spid Tauci
-grand chancellor of
-the people's republic of
+Key: Tauci
+Text: My full title is \
+"Spid Tauci \
+grand chancellor of \
+the people's republic of \
 =Prucol=".
 
-# elected
-I was elected by the
-people to represent them
+Key: elected
+Text: I was elected by the \
+people to represent them \
 in the government.
-
-As a matter of fact,
-we currently have an
++ \
+As a matter of fact, \
+we currently have an \
 =election= going on.
 
-# election
-The election is between
+Key: election
+Text: The election is between \
 me and that other guy.
-
++ \
 I am sure I will win.
 
-# job
-I am the elected
-representative of the
+Key: job
+Text: I am the elected \
+representative of the \
 people.
-
-I am the grand chancellor
++ \
+I am the grand chancellor \
 of =Prucol=.
++ \
+What is your job, =outsider=?
 
-What is your job?
+Key: outsider
+Text: "My spies have told me \
+everything I need to know \
+about you."
++ \
+"You came through one of \
+the portals, didn't you? \
+The creatures our mages \
+=summon= usually do the same."
+
+Key: summon
+Text: "Summon you? What do you mean? \
+I have no idea what you are \
+talking about."
++ \
+"I did certainly not summon \
+you here. We have no need \
+for your services. \
+This country is doing just \
+fine without you."
++ \
+"Well, there is =one thing= \
+you could do for me."
+
+Key: one thing
+Text: "We have a bit of a problem \
+with rats in the castle."
++ \
+"Could you please get rid \
+of them for me?"
++ \
+"Just take the stairs down \
+to the cellar and you will \
+find them."
++ \
+"Here, take this key."

@@ -10,6 +10,10 @@ type Candle struct {
     isLit bool
 }
 
+func (b *Candle) Encode() string {
+    return "candle()"
+}
+
 func (b *Candle) Name() string {
     if b.isLit {
         return "lit candle"
@@ -45,7 +49,7 @@ func (b *Candle) GetContextActions(engine Engine) []renderer.MenuItem {
     return actions
 }
 
-func (b *Candle) Icon(uint64) int {
+func (b *Candle) Icon(uint64) int32 {
     if b.isLit {
         return 190
     } else {

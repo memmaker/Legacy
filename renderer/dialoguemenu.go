@@ -20,6 +20,14 @@ type GridDialogueMenu struct {
     title       string
 }
 
+func (g *GridDialogueMenu) ActionLeft() {
+    g.ActionUp()
+}
+
+func (g *GridDialogueMenu) ActionRight() {
+    g.ActionDown()
+}
+
 func (g *GridDialogueMenu) ShouldClose() bool {
     return g.shouldClose
 }
@@ -64,20 +72,20 @@ func (g *GridDialogueMenu) Draw(screen *ebiten.Image) {
     }
 }
 
-func (g *GridDialogueMenu) OnMouseClicked(x, y int) {
+func (g *GridDialogueMenu) OnMouseClicked(x, y int) bool {
     relativeLine := y - g.topLeft.Y - 2
     if relativeLine < 0 || relativeLine >= len(g.hotspotLayout) {
-        return
+        return false
     }
     line := g.hotspotLayout[relativeLine]
 
     for _, hotspot := range line {
         if x >= hotspot.StartX && x < hotspot.EndX {
             hotspot.Action()
-            return
+            return true
         }
     }
-    return
+    return false
 }
 
 func (g *GridDialogueMenu) OnMouseMoved(x, y int) {
@@ -108,14 +116,14 @@ func (g *GridDialogueMenu) ActionConfirm() {
 func (g *GridDialogueMenu) ActionUp() {
     g.currentSelection--
     if g.currentSelection < 0 {
-        g.currentSelection = 0
+        g.currentSelection = g.lastIndex
     }
 }
 
 func (g *GridDialogueMenu) ActionDown() {
     g.currentSelection++
     if g.currentSelection > g.lastIndex {
-        g.currentSelection = g.lastIndex
+        g.currentSelection = 0
     }
 }
 

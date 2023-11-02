@@ -1,8 +1,11 @@
 package game
 
 import (
+    "Legacy/recfile"
+    "fmt"
     "regexp"
     "sort"
+    "strconv"
     "strings"
 )
 
@@ -11,16 +14,28 @@ import (
 // a response can be a simple text, the end of the dialogue, or combat
 // also every response can trigger a change in the world state
 
+/*
+Condition: Flag(has_key)
+Condition: Skill(lockpick, 3)
+Condition: Item(potion, 1)
+Condition: Item(gold, 1000)
+*/
+
 type DialogueChoice struct {
-    Label           string
-    FollowUpTrigger string
+    Text         string
+    TransitionTo string
+    NeededFlags  []string
+    NeededSkills map[string]int
 }
 type ConversationNode struct {
     Text         []string
+    FlagsSet     []string
     AddsKeywords []string
     Effect       string
     ForcedChoice []DialogueChoice
     NeededFlags  []string
+    NeededSkills map[string]int
+    TriggerEvent string
 }
 type Dialogue struct {
     triggers        map[string]ConversationNode
@@ -36,13 +51,90 @@ func NewDialogue(triggers map[string]ConversationNode) *Dialogue {
     }
 }
 
-func (d *Dialogue) GetOptions(pk *PlayerKnowledge, flags *Flags) []string {
+func NewDialogueFromRecords(records []recfile.Record) *Dialogue {
+    skillRegex := regexp.MustCompile(`([a-zA-Z]+)\(([0-9]+)\)`)
+    triggers := make(map[string]ConversationNode)
+    for _, record := range records {
+        currentTrigger := ""
+        currentText := make([]string, 0)
+        currentNode := ConversationNode{}
+        currentOption := DialogueChoice{}
+        for _, field := range record {
+            fieldValue := field.Value
+            fieldName := field.Name
+            switch fieldName {
+            case "Key":
+                currentTrigger = fieldValue
+            case "Text":
+                currentText = strings.Split(fieldValue, "\n")
+            case "Effect":
+                currentNode.Effect = fieldValue
+            case "NeedsFlag":
+                currentNode.NeededFlags = append(currentNode.NeededFlags, fieldValue)
+            case "TriggerEvent":
+                currentNode.TriggerEvent = fieldValue
+            case "SetsFlag":
+                currentNode.FlagsSet = append(currentNode.FlagsSet, fieldValue)
+            case "NeedsSkill":
+                matches := skillRegex.FindStringSubmatch(fieldValue)
+                if len(matches) == 3 {
+                    skillName := matches[1]
+                    skillLevel := matches[2]
+                    if currentNode.NeededSkills == nil {
+                        currentNode.NeededSkills = make(map[string]int)
+                    }
+                    level, _ := strconv.Atoi(skillLevel)
+                    currentNode.NeededSkills[skillName] = level
+                } else {
+                    println(fmt.Sprintf("ERR: invalid skill: %s", fieldValue))
+                }
+            case "OptionNeedsFlag":
+                currentOption.NeededFlags = append(currentOption.NeededFlags, fieldValue)
+            case "OptionNeedsSkill":
+                matches := skillRegex.FindStringSubmatch(fieldValue)
+                if len(matches) == 3 {
+                    skillName := matches[1]
+                    skillLevel := matches[2]
+                    if currentOption.NeededSkills == nil {
+                        currentOption.NeededSkills = make(map[string]int)
+                    }
+                    level, _ := strconv.Atoi(skillLevel)
+                    currentOption.NeededSkills[skillName] = level
+                } else {
+                    println(fmt.Sprintf("ERR: invalid skill: %s", fieldValue))
+                }
+            case "Option":
+                parts := strings.Split(fieldValue, ":")
+                if len(parts) != 2 {
+                    println(fmt.Sprintf("ERR: invalid option: %s", fieldValue))
+                } else {
+                    currentOption.TransitionTo = strings.TrimSpace(parts[0])
+                    currentOption.Text = strings.TrimSpace(parts[1])
+                    currentNode.ForcedChoice = append(currentNode.ForcedChoice, currentOption)
+                    currentOption = DialogueChoice{}
+                }
+            }
+        }
+        addedKeyWords, strippedText := parseKeywords(currentText)
+        currentNode.Text = strippedText
+        currentNode.AddsKeywords = addedKeyWords
+        triggers[currentTrigger] = currentNode
+    }
+    return NewDialogue(triggers)
+}
+
+func (d *Dialogue) GetOptions(speaker *Actor, pk *PlayerKnowledge, flags *Flags) []string {
     var options []string
 
     for k, _ := range pk.knowsAbout {
         if node, ok := d.triggers[k]; ok {
             if len(node.NeededFlags) > 0 {
                 if !flags.AllSet(node.NeededFlags) {
+                    continue
+                }
+            }
+            if len(node.NeededSkills) > 0 {
+                if !speaker.GetSkills().HasSkills(node.NeededSkills) {
                     continue
                 }
             }
@@ -98,15 +190,23 @@ func (d *Dialogue) HasBeenUsed(keyword string) bool {
     return d.previouslyAsked[keyword]
 }
 
+type JournalEntry struct {
+    Time   uint64
+    Text   []string
+    Source string
+}
+
 type PlayerKnowledge struct {
     knowsAbout map[string]bool
     talkedTo   map[string]bool
+    journal    map[string][]JournalEntry
 }
 
 func NewPlayerKnowledge() *PlayerKnowledge {
     return &PlayerKnowledge{
         knowsAbout: make(map[string]bool),
         talkedTo:   make(map[string]bool),
+        journal:    make(map[string][]JournalEntry),
     }
 }
 
@@ -122,6 +222,72 @@ func (p *PlayerKnowledge) AddTalkedTo(name string) {
 
 func (p *PlayerKnowledge) HasTalkedTo(name string) bool {
     return p.talkedTo[name]
+}
+
+func (p *PlayerKnowledge) AddJournalEntry(source string, text []string, time uint64) {
+    if _, exists := p.journal[source]; !exists {
+        p.journal[source] = make([]JournalEntry, 0)
+    }
+    p.journal[source] = append(p.journal[source], JournalEntry{
+        Time:   time,
+        Text:   text,
+        Source: source,
+    })
+}
+
+func (p *PlayerKnowledge) GetChronologicalJournal() []string {
+    entries := p.getSortedEntries()
+    var result []string
+    for index, entry := range entries {
+        header := fmt.Sprintf("%s (%d)", entry.Source, entry.Time)
+        result = append(result, header, "")
+        result = append(result, entry.Text...)
+        if index < len(entries)-1 {
+            result = append(result, "", "")
+        }
+    }
+    return result
+}
+
+func (p *PlayerKnowledge) GetJournalBySource(source string) []string {
+    entries := p.journal[source]
+    var result []string
+    header := fmt.Sprintf("%s", source)
+    result = append(result, header)
+    for index, entry := range entries {
+        result = append(result, fmt.Sprintf("at %d", entry.Time), "")
+        result = append(result, entry.Text...)
+        if index < len(entries)-1 {
+            result = append(result, "", "")
+        }
+    }
+    return result
+}
+
+func (p *PlayerKnowledge) getSortedEntries() []JournalEntry {
+    var entries []JournalEntry
+    for _, entry := range p.journal {
+        entries = append(entries, entry...)
+    }
+    sort.SliceStable(entries, func(i, j int) bool {
+        return entries[i].Time < entries[j].Time
+    })
+    return entries
+}
+
+func (p *PlayerKnowledge) GetJournalSources() []string {
+    var sources []string
+    for k, _ := range p.journal {
+        sources = append(sources, k)
+    }
+    sort.SliceStable(sources, func(i, j int) bool {
+        return sources[i] < sources[j]
+    })
+    return sources
+}
+
+func (p *PlayerKnowledge) IsJournalEmpty() bool {
+    return len(p.journal) == 0
 }
 
 func parseKeywords(text []string) ([]string, []string) {

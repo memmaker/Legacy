@@ -1,11 +1,14 @@
 package game
 
 import (
+    "Legacy/ega"
     "Legacy/geometry"
     "Legacy/gridmap"
     "Legacy/renderer"
+    "Legacy/util"
     "fmt"
     "image/color"
+    "strconv"
 )
 
 type Party struct {
@@ -84,17 +87,21 @@ func (p *Party) RemoveItem(item Item) {
 
 type MemberStatus struct {
     Name        string
-    HealthIcon  rune
+    HealthIcon  int32
     StatusColor color.Color
 }
 
 func (p *Party) Status() []MemberStatus {
     var result []MemberStatus
     for _, member := range p.members {
+        nameColor := ega.BrightWhite
+        if !member.IsAlive() {
+            nameColor = ega.BrightRed
+        }
         result = append(result, MemberStatus{
-            Name:        paddedName(member.Name()),
-            HealthIcon:  healthToIcon(member.Health),
-            StatusColor: color.White,
+            Name:        member.Name(),
+            HealthIcon:  healthToIcon(member.health, member.maxHealth),
+            StatusColor: nameColor,
         })
     }
     return result
@@ -124,6 +131,13 @@ func (p *Party) GetStackedInventory() [][]Item {
     return p.partyInventory
 }
 
+func (p *Party) GetFlatInventory() []Item {
+    var result []Item
+    for _, stack := range p.partyInventory {
+        result = append(result, stack...)
+    }
+    return result
+}
 func (p *Party) GetMembers() []*Actor {
     return p.members
 }
@@ -225,7 +239,7 @@ func (p *Party) TryRest() bool {
 
 func (p *Party) NeedsRest() bool {
     for _, member := range p.members {
-        if member.Health < member.maxHealth {
+        if member.health < member.maxHealth {
             return true
         }
     }
@@ -276,13 +290,131 @@ func (p *Party) IsDefeated() bool {
     }
     return true
 }
-func healthToIcon(health int) rune {
-    switch {
-    case health < 7:
-        return 'Ө'
-    case health < 4:
-        return 'ӽ'
-    default:
-        return 'ө'
+
+func (p *Party) GetPartyOverview() []string {
+
+    tableData := []util.TableRow{
+        {Label: "Name", Columns: []string{"HP", "MP", "Arm.", "Dmg."}},
+        {Label: "----", Columns: []string{"--", "--", "----", "----"}},
+    }
+
+    for i := 0; i < len(p.members); i++ {
+        member := p.members[i]
+        tableData = append(tableData, util.TableRow{
+            Label: member.Name(),
+            Columns: []string{
+                strconv.Itoa(member.health),
+                strconv.Itoa(member.mana),
+                strconv.Itoa(member.GetTotalArmor()),
+                strconv.Itoa(member.GetMeleeDamage()),
+            }})
+    }
+
+    return util.TableLayout(tableData)
+}
+
+func (p *Party) RemoveMember(member *Actor) {
+    for i, m := range p.members {
+        if m == member {
+            p.members = append(p.members[:i], p.members[i+1:]...)
+            return
+        }
+    }
+}
+
+func (p *Party) GetMemberIndex(wearer ItemWearer) int {
+    for i, member := range p.members {
+        if member == wearer {
+            return i
+        }
+    }
+    return -1
+}
+
+func (p *Party) GetFinanceOverview(engine Engine) []string {
+    var valueOfCarriedItems int
+    var valueOfWornItems int
+    for _, itemStack := range p.partyInventory {
+        firstItemOfStack := itemStack[0]
+        stackSize := len(itemStack)
+        if wearable, ok := firstItemOfStack.(Wearable); ok && wearable.IsEquipped() {
+            valueOfWornItems += wearable.GetValue() * stackSize
+        } else {
+            valueOfCarriedItems += firstItemOfStack.GetValue() * stackSize
+        }
+    }
+    rules := engine.GetRules()
+    foodValue := p.food * rules.GetBaseValueOfFood()
+    lockpickValue := p.lockpicks * rules.GetBaseValueOfLockpick()
+    netWorth := p.gold + valueOfCarriedItems + valueOfWornItems + foodValue + lockpickValue
+
+    tableData := []util.TableRow{
+        {Label: "Gold", Columns: []string{moneyFormat(p.gold)}},
+        {Label: "Food", Columns: []string{moneyFormat(foodValue)}},
+        {Label: "Lockpicks", Columns: []string{moneyFormat(lockpickValue)}},
+        {Label: "Carried items", Columns: []string{moneyFormat(valueOfCarriedItems)}},
+        {Label: "Worn items", Columns: []string{moneyFormat(valueOfWornItems)}},
+        {Label: "Net worth", Columns: []string{moneyFormat(netWorth)}},
+    }
+    return util.TableLayout(tableData)
+}
+
+func (p *Party) GetKeys() []*Key {
+    var result []*Key
+    for _, key := range p.keys {
+        result = append(result, key)
+    }
+    return result
+}
+
+func (p *Party) SetFood(foodCount int) {
+    p.food = foodCount
+}
+
+func (p *Party) SetGold(amount int) {
+    p.gold = amount
+}
+
+func (p *Party) SetLockpicks(amount int) {
+    p.lockpicks = amount
+}
+
+func (p *Party) GetCurrentMapName() string {
+    return p.gridMap.GetName()
+}
+
+func moneyFormat(value int) string {
+    return strconv.Itoa(value) + "g"
+}
+
+func healthToIcon(health, maxhealth int) int32 {
+    startIndex := int32(137)
+    // 137 = 100%
+    // 138 = 90%
+    // 139 = 80%
+    // 140 = 70%
+    // 141 = 60%
+    // ...
+    ratio := float64(health) / float64(maxhealth)
+    if ratio > 0.9 {
+        return startIndex
+    } else if ratio > 0.8 {
+        return startIndex + 1
+    } else if ratio > 0.7 {
+        return startIndex + 2
+    } else if ratio > 0.6 {
+        return startIndex + 3
+    } else if ratio > 0.5 {
+        return startIndex + 4
+    } else if ratio > 0.4 {
+        return startIndex + 5
+    } else if ratio > 0.3 {
+        return startIndex + 6
+    } else if ratio > 0.2 {
+        return startIndex + 7
+    } else if ratio > 0.1 {
+        return startIndex + 8
+    } else {
+        return startIndex + 9
     }
 }

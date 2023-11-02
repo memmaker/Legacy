@@ -1,6 +1,8 @@
 package game
 
 import (
+    "Legacy/geometry"
+    "Legacy/recfile"
     "Legacy/renderer"
     "fmt"
     "image/color"
@@ -17,6 +19,35 @@ func (s *FirePlace) TintColor() color.Color {
 
 func (s *FirePlace) Name() string {
     return "a fireplace"
+}
+
+func (s *FirePlace) ToRecordAndType() (recfile.Record, string) {
+    return recfile.Record{
+        {Name: "name", Value: s.name},
+        {Name: "icon", Value: recfile.Int32Str(s.icon)},
+        {Name: "pos", Value: s.Pos().Encode()},
+        {Name: "isHidden", Value: recfile.BoolStr(s.isHidden)},
+        {Name: "foodCount", Value: recfile.IntStr(s.foodCount)},
+    }, "fireplace"
+}
+
+func NewFireplaceFromRecord(record recfile.Record) *FirePlace {
+    firePlace := NewFireplace(0)
+    for _, field := range record {
+        switch field.Name {
+        case "name":
+            firePlace.name = field.Value
+        case "icon":
+            firePlace.icon = field.AsInt32()
+        case "pos":
+            firePlace.SetPos(geometry.MustDecodePoint(field.Value))
+        case "isHidden":
+            firePlace.isHidden = field.AsBool()
+        case "foodCount":
+            firePlace.foodCount = field.AsInt()
+        }
+    }
+    return firePlace
 }
 
 func NewFireplace(foodCount int) *FirePlace {
@@ -43,7 +74,7 @@ func (s *FirePlace) Description() []string {
     }
 }
 
-func (s *FirePlace) Icon(uint64) int {
+func (s *FirePlace) Icon(uint64) int32 {
     return s.icon
 }
 func (s *FirePlace) IsWalkable(person *Actor) bool {

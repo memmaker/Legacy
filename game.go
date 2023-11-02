@@ -4,9 +4,11 @@ import (
     "Legacy/game"
     "Legacy/geometry"
     "Legacy/renderer"
+    "Legacy/util"
     "fmt"
     "image/color"
     "math/rand"
+    "strconv"
 )
 
 func (g *GridEngine) openPartyMenu() {
@@ -20,6 +22,12 @@ func (g *GridEngine) openPartyMenu() {
             Action: g.openPartyInventory,
         },
         {
+            Text: "Ranged",
+            Action: func() {
+                g.combatManager.PlayerStartsRangedAttack()
+            },
+        },
+        {
             Text:   "Magic",
             Action: g.openSpellMenu,
         },
@@ -28,13 +36,19 @@ func (g *GridEngine) openPartyMenu() {
             Action: g.TryRestParty,
         },
         {
-            Text: "Attack",
-            Action: func() {
-                g.Print("Not implemented yet")
-            },
+            Text:   "Journal",
+            Action: g.openJournal,
         },
     }
     if g.playerParty.HasFollowers() {
+        partyRanged := renderer.MenuItem{
+            Text: "Party Ranged",
+            Action: func() {
+                g.combatManager.OrchestratedRangedAttack()
+            },
+        }
+        //insert at index 3
+        partyOptions = append(partyOptions[:3], append([]renderer.MenuItem{partyRanged}, partyOptions[3:]...)...)
         partyOptions = append(partyOptions, renderer.MenuItem{
             Text: "Split",
             Action: func() {
@@ -47,6 +61,10 @@ func (g *GridEngine) openPartyMenu() {
                 Action: g.TryJoinParty,
             })
         }
+        partyOptions = append(partyOptions, renderer.MenuItem{
+            Text:   "Dismiss",
+            Action: g.openDismissMenu,
+        })
     }
 
     g.openMenu(partyOptions)
@@ -55,12 +73,22 @@ func (g *GridEngine) openPartyMenu() {
 func (g *GridEngine) openCharDetails(partyIndex int) {
     actor := g.playerParty.GetMember(partyIndex)
     if actor != nil {
-        g.ShowFixedFormatText(actor.GetDetails())
+        window := g.ShowFixedFormatText(actor.GetDetails())
+        window.SetTitle(actor.Name())
+    }
+}
+func (g *GridEngine) openCharSkills(partyIndex int) {
+    actor := g.playerParty.GetMember(partyIndex)
+    if actor != nil {
+        skills := actor.GetSkills()
+        window := g.ShowFixedFormatText(skills.AsStringTable())
+        window.SetTitle(actor.Name())
     }
 }
 
 func (g *GridEngine) openPartyInventory() {
     //header := []string{"Inventory", "---------"}
+    wearerIcons := []rune{'Ⅰ', 'Ⅱ', 'Ⅲ', 'Ⅳ'}
     partyInventory := g.playerParty.GetStackedInventory()
     if len(partyInventory) == 0 {
         g.ShowText([]string{"Your party has no items."})
@@ -69,14 +97,21 @@ func (g *GridEngine) openPartyInventory() {
     var menuItems []renderer.MenuItem
     for _, i := range partyInventory {
         itemStack := i
-        stackLabel := fmt.Sprintf("%s (%d)", itemStack[0].Name(), len(itemStack))
+        firstItemInStack := itemStack[0]
+        stackLabel := fmt.Sprintf("  %s (%d)", firstItemInStack.Name(), len(itemStack))
         if len(itemStack) == 1 {
-            stackLabel = itemStack[0].Name()
+            stackLabel = "  " + firstItemInStack.Name()
+            if wornItem, ok := firstItemInStack.(game.Wearable); ok && wornItem.IsEquipped() {
+                wearer := wornItem.GetWearer()
+                partyIndex := g.playerParty.GetMemberIndex(wearer)
+                wearerIcon := wearerIcons[partyIndex]
+                stackLabel = string(wearerIcon) + " " + firstItemInStack.Name()
+            }
         }
         menuItems = append(menuItems, renderer.MenuItem{
             Text: stackLabel,
             Action: func() {
-                g.openMenu(itemStack[0].GetContextActions(g))
+                g.openMenu(firstItemInStack.GetContextActions(g))
             },
         })
     }
@@ -87,13 +122,13 @@ func (g *GridEngine) ShowText(text []string) {
     g.ShowColoredText(text, color.White, true)
 }
 
-func (g *GridEngine) ShowFixedFormatText(text []string) {
-    g.ShowColoredText(text, color.White, false)
+func (g *GridEngine) ShowFixedFormatText(text []string) *renderer.ScrollableTextWindow {
+    return g.ShowColoredText(text, color.White, false)
 }
 
-func (g *GridEngine) ShowColoredText(text []string, color color.Color, autolayoutText bool) {
+func (g *GridEngine) ShowColoredText(text []string, textcolor color.Color, autolayoutText bool) *renderer.ScrollableTextWindow {
     if len(text) == 0 {
-        return
+        return nil
     }
     var textWindow *renderer.ScrollableTextWindow
     if autolayoutText {
@@ -101,9 +136,10 @@ func (g *GridEngine) ShowColoredText(text []string, color color.Color, autolayou
     } else {
         textWindow = renderer.NewFixedTextWindow(g.gridRenderer, text)
     }
-    textWindow.SetTextColor(color)
+    textWindow.SetTextColor(textcolor)
     g.modalElement = textWindow
     g.lastShownText = text
+    return textWindow
 }
 
 func (g *GridEngine) PickPocketItem(item game.Item, owner *game.Actor) {
@@ -165,7 +201,7 @@ func (g *GridEngine) SwitchAvatarTo(actor *game.Actor) {
         return
     }
     g.splitControlled = actor
-    g.onAvatarMovedAlone()
+    g.onViewedActorMoved(actor.Pos())
 }
 func (g *GridEngine) AddToParty(npc *game.Actor) {
     if g.playerParty.IsFull() {
@@ -191,16 +227,23 @@ func (g *GridEngine) TryJoinParty() {
     g.splitControlled = nil
 }
 
+func (g *GridEngine) ForceJoinParty() {
+    g.splitControlled = nil
+    g.onViewedActorMoved(g.GetAvatar().Pos())
+}
 func (g *GridEngine) openVendorMenu(npc *game.Actor) {
     itemsToSell := npc.GetItemsToSell()
     if len(itemsToSell) == 0 {
         g.openIconWindow(npc.Icon(0), []string{"Unfortunately, I have nothing left to sell."}, func() {})
         return
     }
+
+    labelWidth, colWidth := getLineLengthInfo(itemsToSell)
     var menuItems []renderer.MenuItem
     for _, i := range itemsToSell {
         offer := i
-        itemLine := fmt.Sprintf("%s (%d)", offer.Item.Name(), offer.Price)
+        itemLine := util.TableLine(labelWidth, colWidth, offer.Item.Name(), strconv.Itoa(offer.Price))
+        //itemLine := fmt.Sprintf("%s (%d)", offer.Item.Name(), offer.Price)
         menuItems = append(menuItems, renderer.MenuItem{
             Text: itemLine,
             Action: func() {
@@ -208,7 +251,20 @@ func (g *GridEngine) openVendorMenu(npc *game.Actor) {
             },
         })
     }
-    g.openMenu(menuItems)
+    g.openMenuForVendor(menuItems)
+}
+
+func getLineLengthInfo(sell []game.SalesOffer) (int, int) {
+    var longestItemNameLength, longestPriceLength int
+    for _, i := range sell {
+        if len(i.Item.Name()) > longestItemNameLength {
+            longestItemNameLength = len(i.Item.Name())
+        }
+        if len(strconv.Itoa(i.Price)) > longestPriceLength {
+            longestPriceLength = len(strconv.Itoa(i.Price))
+        }
+    }
+    return longestItemNameLength, longestPriceLength
 }
 
 func (g *GridEngine) TryBuyItem(npc *game.Actor, offer game.SalesOffer) {
@@ -245,53 +301,58 @@ func (g *GridEngine) searchForHiddenObjects() {
         return true
     })
     neighbors = append(neighbors, source)
+    for _, n := range neighbors {
+        neighbor := n
+        g.HitAnimation(neighbor, 195, func() {
+            g.revealHiddenObjectsAt(neighbor)
+        })
+    }
+}
+
+func (g *GridEngine) revealHiddenObjectsAt(location geometry.Point) {
     foundSomething := false
-    for _, neighbor := range neighbors {
-        if g.currentMap.IsSecretDoorAt(neighbor) {
-            wallTile := g.currentMap.GetCell(neighbor).TileType
-            g.currentMap.SetTile(neighbor, wallTile.WithIsWalkable(true))
-            g.currentMap.AddObject(game.NewDoor(), neighbor)
-            foundSomething = true
-            g.flags.IncrementFlag("found_hidden_things")
-        } else {
-            if g.currentMap.IsObjectAt(neighbor) {
-                objectAt := g.currentMap.ObjectAt(neighbor)
-                if objectAt != nil && objectAt.IsHidden() {
-                    message := objectAt.Discover()
-                    foundSomething = true
-                    g.flags.IncrementFlag("found_hidden_things")
-                    if len(message) > 0 {
-                        g.ShowText(message)
-                    }
+    if g.currentMap.IsSecretDoorAt(location) {
+        wallTile := g.currentMap.GetCell(location).TileType
+        g.currentMap.SetTile(location, wallTile.WithIsWalkable(true))
+        g.currentMap.AddObject(game.NewDoor(), location)
+        foundSomething = true
+        g.flags.IncrementFlag("found_hidden_things")
+    } else {
+        if g.currentMap.IsObjectAt(location) {
+            objectAt := g.currentMap.ObjectAt(location)
+            if objectAt != nil && objectAt.IsHidden() {
+                message := objectAt.Discover()
+                foundSomething = true
+                g.flags.IncrementFlag("found_hidden_things")
+                if len(message) > 0 {
+                    g.ShowText(message)
                 }
-            } else if g.currentMap.IsItemAt(neighbor) {
-                itemAt := g.currentMap.ItemAt(neighbor)
-                if itemAt != nil && itemAt.IsHidden() {
-                    message := itemAt.Discover()
-                    foundSomething = true
-                    g.flags.IncrementFlag("found_hidden_things")
-                    if len(message) > 0 {
-                        g.ShowText(message)
-                    }
+            }
+        } else if g.currentMap.IsItemAt(location) {
+            itemAt := g.currentMap.ItemAt(location)
+            if itemAt != nil && itemAt.IsHidden() {
+                message := itemAt.Discover()
+                foundSomething = true
+                g.flags.IncrementFlag("found_hidden_things")
+                if len(message) > 0 {
+                    g.ShowText(message)
                 }
-            } else if g.currentMap.IsActorAt(neighbor) {
-                actorAt := g.currentMap.GetActor(neighbor)
-                if actorAt != nil && actorAt.IsHidden() {
-                    message := actorAt.Discover()
-                    foundSomething = true
-                    g.flags.IncrementFlag("found_hidden_things")
-                    if len(message) > 0 {
-                        g.ShowText(message)
-                    }
+            }
+        } else if g.currentMap.IsActorAt(location) {
+            actorAt := g.currentMap.GetActor(location)
+            if actorAt != nil && actorAt.IsHidden() {
+                message := actorAt.Discover()
+                foundSomething = true
+                g.flags.IncrementFlag("found_hidden_things")
+                if len(message) > 0 {
+                    g.ShowText(message)
                 }
             }
         }
     }
-
     if foundSomething {
         g.Print("Fascinating..")
-    } else {
-        g.Print("You find nothing.")
+        g.updateContextActions()
     }
 }
 
@@ -332,6 +393,10 @@ func (g *GridEngine) CreateLootForContainer(level int, lootType []game.Loot) []g
         case game.LootArmor:
             armorAmount := max(1, int(float64(level)*randFloat))
             lootItems = g.createArmor(level, armorAmount)
+        case game.LootWeapon:
+            weaponAmount := max(1, int(float64(level)*randFloat))
+            lootItems = g.createWeapons(level, weaponAmount)
+
         }
         lootFound = append(lootFound, lootItems...)
     }
@@ -349,8 +414,8 @@ func (g *GridEngine) ShowContainer(container game.ItemContainer) {
         menuItems = append(menuItems, renderer.MenuItem{
             Text: "Take all",
             Action: func() {
-                for _, i := range containerItems {
-                    g.moveItemToParty(i, container)
+                for i := len(containerItems) - 1; i >= 0; i-- {
+                    g.moveItemToParty(containerItems[i], container)
                 }
             },
         })

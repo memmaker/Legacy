@@ -5,8 +5,21 @@ import "Legacy/geometry"
 func NewSpellFromName(name string) *Spell {
     switch name {
     case "Create Food":
-        return NewSpell(name, 10, func(engine Engine) {
+        return NewSpell(name, 10, func(engine Engine, caster *Actor) {
             engine.AddFood(10)
+        })
+    case "Fireball":
+        return NewTargetedSpell(name, 10, func(engine Engine, caster *Actor, pos geometry.Point) {
+            radius := 3
+            explosionIcon := int32(28)
+            fireballDamagePerTile := 10
+            hitPositions := engine.GetAoECircle(pos, radius)
+            for _, p := range hitPositions {
+                hitPos := p
+                engine.HitAnimation(hitPos, explosionIcon, func() {
+                    engine.SpellDamageAt(caster, hitPos, fireballDamagePerTile)
+                })
+            }
         })
     }
     return nil
@@ -14,12 +27,12 @@ func NewSpellFromName(name string) *Spell {
 
 type Spell struct {
     manaCost       int
-    effect         func(engine Engine)
-    targetedEffect func(engine Engine, pos geometry.Point)
+    effect         func(engine Engine, caster *Actor)
+    targetedEffect func(engine Engine, caster *Actor, pos geometry.Point)
     name           string
 }
 
-func NewSpell(name string, cost int, effect func(engine Engine)) *Spell {
+func NewSpell(name string, cost int, effect func(engine Engine, caster *Actor)) *Spell {
     return &Spell{
         name:     name,
         effect:   effect,
@@ -27,7 +40,7 @@ func NewSpell(name string, cost int, effect func(engine Engine)) *Spell {
     }
 }
 
-func NewTargetedSpell(name string, cost int, effect func(engine Engine, pos geometry.Point)) *Spell {
+func NewTargetedSpell(name string, cost int, effect func(engine Engine, caster *Actor, pos geometry.Point)) *Spell {
     return &Spell{
         name:           name,
         targetedEffect: effect,
@@ -42,7 +55,7 @@ func (s *Spell) Cast(engine Engine, caster *Actor) {
     }
     engine.ManaSpent(caster, s.manaCost)
     if s.effect != nil {
-        s.effect(engine)
+        s.effect(engine, caster)
     }
 }
 
@@ -53,7 +66,7 @@ func (s *Spell) CastOnTarget(engine Engine, caster *Actor, pos geometry.Point) {
     }
     caster.RemoveMana(s.manaCost)
     if s.targetedEffect != nil {
-        s.targetedEffect(engine, pos)
+        s.targetedEffect(engine, caster, pos)
     }
 }
 func (s *Spell) IsTargeted() bool {
@@ -65,4 +78,8 @@ func (s *Spell) ManaCost() int {
 }
 func (s *Spell) Name() string {
     return s.name
+}
+
+func (s *Spell) GetValue() int {
+    return s.manaCost * 10
 }

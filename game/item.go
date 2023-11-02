@@ -2,9 +2,10 @@ package game
 
 import (
     "Legacy/geometry"
+    "Legacy/recfile"
     "Legacy/renderer"
+    "fmt"
     "image/color"
-    "regexp"
 )
 
 type ItemHolder interface {
@@ -18,7 +19,7 @@ type ItemWearer interface {
 }
 type Item interface {
     Pos() geometry.Point
-    Icon(uint64) int
+    Icon(uint64) int32
     TintColor() color.Color
     SetPos(geometry.Point)
     Name() string
@@ -26,20 +27,37 @@ type Item interface {
     SetHolder(owner ItemHolder)
     GetHolder() ItemHolder
     IsHidden() bool
-    SetHidden(hidden bool, discoveryMessage []string)
     Discover() []string
     CanStackWith(other Item) bool
     IsHeld() bool
+    GetValue() int
+    Encode() string
+    SetName(value string)
+    SetHidden(asBool bool)
+    SetValue(asInt int)
 }
 
 type BaseItem struct {
     GameObject
-    holder ItemHolder
-    name   string
+    holder    ItemHolder
+    name      string
+    baseValue int
+}
+
+func (i *BaseItem) SetName(value string) {
+    i.name = value
 }
 
 func (i *BaseItem) Name() string {
     return i.name
+}
+
+func (i *BaseItem) SetValue(value int) {
+    i.baseValue = value
+}
+
+func (i *BaseItem) GetValue() int {
+    return i.baseValue
 }
 
 func (i *BaseItem) SetHolder(holder ItemHolder) {
@@ -81,33 +99,56 @@ func inventoryItemActions(item Item, engine Engine) []renderer.MenuItem {
     return actions
 }
 
+func ItemToRecord(item Item) recfile.Record {
+    return recfile.Record{
+        recfile.Field{Name: "item", Value: item.Encode()},
+        recfile.Field{Name: "name", Value: item.Name()},
+        recfile.Field{Name: "position", Value: item.Pos().Encode()},
+        recfile.Field{Name: "isHidden", Value: recfile.BoolStr(item.IsHidden())},
+        recfile.Field{Name: "value", Value: recfile.IntStr(item.GetValue())},
+    }
+}
+func NewItemFromRecord(record recfile.Record) Item {
+    theItem := NewItemFromString(record[0].Value)
+    for _, field := range record {
+        switch field.Name {
+        case "name":
+            theItem.SetName(field.Value)
+        case "position":
+            theItem.SetPos(geometry.MustDecodePoint(field.Value))
+        case "isHidden":
+            theItem.SetHidden(field.AsBool())
+        case "value":
+            theItem.SetValue(field.AsInt())
+        }
+    }
+    return theItem
+}
 func NewItemFromString(encoded string) Item {
-    // format:
-    // {ItemType}:({Param1},{Param2},...)
-
-    regex := regexp.MustCompile(`([a-zA-Z]+)\(([^)]*)\)`)
-
-    matches := regex.FindStringSubmatch(encoded)
-    if len(matches) != 3 {
+    predicate := recfile.StrPredicate(encoded)
+    if predicate == nil {
+        println(fmt.Sprintf("Unknown item type and params: %s", encoded))
         return NewKeyFromImportance("unknown item", "unknown item", 1)
     }
 
-    itemType := matches[1]
-    params := matches[2]
-
-    switch itemType {
+    switch predicate.Name() {
     case "key":
-        return NewKeyFromString(params)
+        return NewKeyFromPredicate(predicate)
     case "potion":
         return NewPotion()
     case "candle":
         return NewCandle(false)
     case "scroll":
-        return NewScrollFromString(params)
+        return NewScrollFromPredicate(predicate)
     case "armor":
-        return NewArmorFromString(params)
+        return NewArmorFromPredicate(predicate)
     case "noitem":
-        return NewPseudoItemFromString(params)
+        return NewPseudoItemFromPredicate(predicate)
+    case "flavor": // example flavor(a teddy|20)
+        return NewFlavorItemFromPredicate(predicate)
+    case "weapon":
+        return NewWeaponFromPredicate(predicate)
     }
+    println(fmt.Sprintf("Unknown item type and params: %s", encoded))
     return NewKeyFromImportance("unknown item", "unknown item", 1)
 }

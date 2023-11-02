@@ -1,32 +1,30 @@
 package game
 
 import (
+    "Legacy/recfile"
     "Legacy/renderer"
     "fmt"
     "math/rand"
-    "regexp"
     "strconv"
-)
-
-type ArmorSlot string
-
-const (
-    ArmorSlotHead  ArmorSlot = "head"
-    ArmorSlotTorso ArmorSlot = "torso"
 )
 
 type Armor struct {
     BaseItem
     protection int
-    slot       ArmorSlot
+    slot       EquipmentSlot
     wearer     ItemWearer
 }
 
 func (a *Armor) GetWearer() ItemWearer {
     return a.wearer
 }
-
-func (a *Armor) Icon(u uint64) int {
+func (a *Armor) GetValue() int {
+    if a.slot == ArmorSlotHead {
+        return a.protection * 7
+    }
+    return a.protection * 10
+}
+func (a *Armor) Icon(u uint64) int32 {
     return 0
 }
 func (a *Armor) GetContextActions(engine Engine) []renderer.MenuItem {
@@ -54,13 +52,28 @@ func (a *Armor) SetWearer(wearer ItemWearer) {
     a.wearer = wearer
 }
 
-func (a *Armor) Unequip(item Item) {
+func (a *Armor) Unequip() {
     if a.wearer != nil {
-        a.wearer.Unequip(item)
+        a.wearer.Unequip(a)
     }
 }
 
-func NewArmor(name string, slot ArmorSlot, protection int) *Armor {
+func (a *Armor) GetSlot() EquipmentSlot {
+    return a.slot
+}
+
+func (a *Armor) IsBetterThan(other *Armor) bool {
+    if other == nil {
+        return true
+    }
+    return a.protection > other.protection
+}
+
+func (a *Armor) IsEquipped() bool {
+    return a.wearer != nil
+}
+
+func NewArmor(name string, slot EquipmentSlot, protection int) *Armor {
     return &Armor{
         BaseItem: BaseItem{
             name: name,
@@ -71,12 +84,12 @@ func NewArmor(name string, slot ArmorSlot, protection int) *Armor {
 }
 func NewRandomArmor(lootLevel int) *Armor {
     slot := randomSlot()
-    protection := protectionFromSlot(slot, lootLevel)
+    protection := damage(slot, lootLevel)
     armorName := nameFromSlot(slot, lootLevel)
     return NewArmor(armorName, slot, protection)
 }
 
-func protectionFromSlot(slot ArmorSlot, level int) int {
+func damage(slot EquipmentSlot, level int) int {
     switch slot {
     case ArmorSlotHead:
         return 1 + level*2
@@ -86,7 +99,7 @@ func protectionFromSlot(slot ArmorSlot, level int) int {
     return 0
 }
 
-func randomSlot() ArmorSlot {
+func randomSlot() EquipmentSlot {
     randomInt := rand.Intn(2)
     if randomInt == 0 {
         return ArmorSlotHead
@@ -95,7 +108,7 @@ func randomSlot() ArmorSlot {
     }
 }
 
-func nameFromSlot(slot ArmorSlot, level int) string {
+func nameFromSlot(slot EquipmentSlot, level int) string {
     materialName := materialNameFromLootLevel(level)
     switch slot {
     case ArmorSlotHead:
@@ -123,18 +136,15 @@ func materialNameFromLootLevel(level int) string {
     }
     return "unknown"
 }
-func NewArmorFromString(encoded string) *Armor {
+func NewArmorFromPredicate(encoded recfile.StringPredicate) *Armor {
     // extract name, slot, and protection
-    paramRegex := regexp.MustCompile(`^([^,]+), ?([^,]+), ?(\d+)$`)
-    var name string
-    var slot ArmorSlot
-    var protection int
-    if matches := paramRegex.FindStringSubmatch(encoded); matches != nil {
-        name = matches[1]
-        slot = ArmorSlot(matches[2])
-        protection, _ = strconv.Atoi(matches[3])
-        return NewArmor(name, slot, protection)
-    }
-    println("Invalid Armor: " + encoded)
-    return NewArmor("Invalid Armor", ArmorSlotHead, 0)
+    return NewArmor(
+        encoded.GetString(0),
+        EquipmentSlot(encoded.GetString(1)),
+        encoded.GetInt(2),
+    )
+}
+
+func (a *Armor) Encode() string {
+    return recfile.ToPredicate("armor", a.name, string(a.slot), strconv.Itoa(a.protection))
 }

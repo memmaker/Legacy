@@ -52,3 +52,9 @@ func (f *Flags) GetDebugInfo() []string {
     }
     return result
 }
+
+func (f *Flags) SetFlags(flagsSet []string) {
+    for _, flag := range flagsSet {
+        f.SetFlag(flag, 1)
+    }
+}

@@ -42,6 +42,9 @@ func (g *DualGridRenderer) GetScaledSmallGridSize() int {
 func (g *DualGridRenderer) ScreenToSmallCell(x, y int) (int, int) {
     return x / g.GetScaledSmallGridSize(), y / g.GetScaledSmallGridSize()
 }
+func (g *DualGridRenderer) ScreenToBigCell(x int, y int) geometry.Point {
+    return geometry.Point{X: x / g.GetScaledBigGridSize(), Y: y / g.GetScaledBigGridSize()}
+}
 func (g *DualGridRenderer) SetBorderDefinition(borderDef GridBorderDefinition) {
     g.borderDef = borderDef
 }
@@ -54,7 +57,7 @@ func (g *DualGridRenderer) SmallCellToScreen(cellX, cellY int) (float64, float64
     return float64(cellX*g.smallGridSize) * g.scale, float64(cellY*g.smallGridSize) * g.scale
 }
 
-func (g *DualGridRenderer) DrawOnSmallGrid(screen *ebiten.Image, cellX, cellY int, textureIndex int) {
+func (g *DualGridRenderer) DrawOnSmallGrid(screen *ebiten.Image, cellX, cellY int, textureIndex int32) {
     g.op.ColorScale.Reset()
     g.op.GeoM.Reset()
     g.op.GeoM.Scale(g.scale, g.scale)
@@ -62,7 +65,7 @@ func (g *DualGridRenderer) DrawOnSmallGrid(screen *ebiten.Image, cellX, cellY in
     screen.DrawImage(ExtractSubImageFromAtlas(textureIndex, g.smallGridSize, g.smallGridSize, g.smallAtlas), g.op)
 }
 
-func (g *DualGridRenderer) DrawMappingOnSmallGrid(screen *ebiten.Image, gridMapping map[geometry.Point]int) {
+func (g *DualGridRenderer) DrawMappingOnSmallGrid(screen *ebiten.Image, gridMapping map[geometry.Point]int32) {
     for point, textureIndex := range gridMapping {
         g.DrawOnSmallGrid(screen, point.X, point.Y, textureIndex)
     }
@@ -78,16 +81,17 @@ func (g *DualGridRenderer) DrawColoredChar(screen *ebiten.Image, cellX, cellY in
     g.op.GeoM.Reset()
     g.op.GeoM.Scale(g.scale, g.scale)
     g.op.GeoM.Translate(g.SmallCellToScreen(cellX, cellY))
-    screen.DrawImage(ExtractSubImageFromAtlas(int(textureIndex), g.smallGridSize, g.smallGridSize, g.smallAtlas), g.op)
+    screen.DrawImage(ExtractSubImageFromAtlas(int32(textureIndex), g.smallGridSize, g.smallGridSize, g.smallAtlas), g.op)
 }
 
 func (g *DualGridRenderer) DrawColoredString(screen *ebiten.Image, cellX, cellY int, text string, textColor color.Color) {
-    for i, char := range text {
+    asRunes := []rune(text)
+    for i, char := range asRunes {
         g.DrawColoredChar(screen, cellX+i, cellY, char, textColor)
     }
 }
 
-func (g *DualGridRenderer) DrawSmallOnScreen(screen *ebiten.Image, xPos, yPos float64, textureIndex int) {
+func (g *DualGridRenderer) DrawSmallOnScreen(screen *ebiten.Image, xPos, yPos float64, textureIndex int32) {
     g.op.ColorScale.Reset()
     g.op.GeoM.Reset()
     g.op.GeoM.Scale(g.scale, g.scale)
@@ -132,7 +136,7 @@ func (g *DualGridRenderer) DrawFilledBorder(screen *ebiten.Image, topLeft, botto
     screen.DrawImage(subImage, g.op)
 }
 
-func (g *DualGridRenderer) DrawOnBigGrid(screen *ebiten.Image, cellPos, offset geometry.Point, textureIndex int) {
+func (g *DualGridRenderer) DrawOnBigGrid(screen *ebiten.Image, cellPos, offset geometry.Point, textureIndex int32) {
     g.op.ColorScale.Reset()
     g.op.GeoM.Reset()
     g.op.GeoM.Scale(g.scale, g.scale)
@@ -141,7 +145,7 @@ func (g *DualGridRenderer) DrawOnBigGrid(screen *ebiten.Image, cellPos, offset g
     screen.DrawImage(ExtractSubImageFromAtlas(textureIndex, g.bigGridSize, g.bigGridSize, g.bigAtlas), g.op)
 }
 
-func (g *DualGridRenderer) DrawBigOnScreen(screen *ebiten.Image, xPos, yPos float64, textureIndex int) {
+func (g *DualGridRenderer) DrawBigOnScreen(screen *ebiten.Image, xPos, yPos float64, textureIndex int32) {
     g.op.ColorScale.Reset()
     g.op.GeoM.Reset()
     g.op.GeoM.Scale(g.scale, g.scale)
@@ -149,13 +153,15 @@ func (g *DualGridRenderer) DrawBigOnScreen(screen *ebiten.Image, xPos, yPos floa
     screen.DrawImage(ExtractSubImageFromAtlas(textureIndex, g.bigGridSize, g.bigGridSize, g.bigAtlas), g.op)
 }
 
-func (g *DualGridRenderer) DrawBigOnScreenWithAtlasAndTint(screen *ebiten.Image, xPos, yPos float64, atlas *ebiten.Image, textureIndex int, tintColor color.Color) {
+func (g *DualGridRenderer) DrawBigOnScreenWithAtlasAndTint(screen *ebiten.Image, xPos, yPos float64, atlas *ebiten.Image, textureIndex int32, tintColor color.Color) {
     g.op.ColorScale.Reset()
     g.op.ColorScale.ScaleWithColor(tintColor)
     g.op.GeoM.Reset()
     g.op.GeoM.Scale(g.scale, g.scale)
     g.op.GeoM.Translate(xPos, yPos)
-    screen.DrawImage(ExtractSubImageFromAtlas(textureIndex, g.bigGridSize, g.bigGridSize, atlas), g.op)
+
+    subImageFromAtlas := ExtractSubImageFromAtlas(textureIndex, g.bigGridSize, g.bigGridSize, atlas)
+    screen.DrawImage(subImageFromAtlas, g.op)
 }
 
 func (g *DualGridRenderer) GetSmallGridScreenSize() geometry.Point {
@@ -175,11 +181,11 @@ func (g *DualGridRenderer) AutoPositionText(text []string) (geometry.Point, geom
     return topLeft, bottomRight
 }
 
-func ExtractSubImageFromAtlas(textureIndex int, tileSizeX int, tileSizeY int, textureAtlas *ebiten.Image) *ebiten.Image {
-    atlasItemCountX := textureAtlas.Bounds().Size().X / tileSizeX
+func ExtractSubImageFromAtlas(textureIndex int32, tileSizeX int, tileSizeY int, textureAtlas *ebiten.Image) *ebiten.Image {
+    atlasItemCountX := int32(textureAtlas.Bounds().Size().X / tileSizeX)
     textureRectTopLeft := image.Point{
-        X: (textureIndex % atlasItemCountX) * tileSizeX,
-        Y: (textureIndex / atlasItemCountX) * tileSizeY,
+        X: int((textureIndex % atlasItemCountX) * int32(tileSizeX)),
+        Y: int((textureIndex / atlasItemCountX) * int32(tileSizeY)),
     }
     textureRect := image.Rectangle{
         Min: textureRectTopLeft,
@@ -193,9 +199,12 @@ func ExtractSubImageFromAtlas(textureIndex int, tileSizeX int, tileSizeY int, te
     return tileImage
 }
 
-func AutoLayoutText(inputText []string, width int) []string {
-    tokens := strings.Split(strings.Join(inputText, " "), " ")
+func AutoLayoutArray(inputText []string, width int) []string {
+    return AutoLayout(strings.Join(inputText, " "), width)
+}
 
+func AutoLayout(inputText string, width int) []string {
+    tokens := strings.Split(inputText, " ")
     var lines []string
     currentLine := ""
     for i, token := range tokens {

@@ -21,6 +21,17 @@ type ScrollableTextWindow struct {
     title       string
 }
 
+func (r *ScrollableTextWindow) OnMouseClicked(x int, y int) bool {
+    if x < r.topLeft.X || x >= r.bottomRight.X {
+        return false
+    }
+    if y < r.topLeft.Y || y >= r.bottomRight.Y {
+        return false
+    }
+    r.ActionConfirm()
+    return true
+}
+
 func (r *ScrollableTextWindow) ShouldClose() bool {
     return r.shouldClose
 }
@@ -40,7 +51,10 @@ func maxLen(text []string) int {
 }
 
 func NewAutoTextWindow(gridRenderer *DualGridRenderer, text []string) *ScrollableTextWindow {
-    text = AutoLayoutText(text, min(maxLen(text), 34))
+    screenSize := gridRenderer.GetSmallGridScreenSize()
+    borderNeeded := 4 * 2
+    widthAvailable := screenSize.X - borderNeeded
+    text = AutoLayoutArray(text, min(maxLen(text), widthAvailable))
     topLeft, bottomRight := gridRenderer.AutoPositionText(text)
     modal := NewScrollableTextWindow(gridRenderer, topLeft, bottomRight)
     modal.SetText(text)
@@ -78,8 +92,8 @@ func (r *ScrollableTextWindow) ActionUp() {
 
 func (r *ScrollableTextWindow) ActionDown() {
     r.scrollOffset++
-    if r.scrollOffset > len(r.text)-(r.bottomRight.Y-r.topLeft.Y)+2 {
-        r.scrollOffset = len(r.text) - (r.bottomRight.Y - r.topLeft.Y) + 2
+    if r.scrollOffset > len(r.text)-(r.bottomRight.Y-r.topLeft.Y)+4 {
+        r.scrollOffset = len(r.text) - (r.bottomRight.Y - r.topLeft.Y) + 4
     }
 }
 func (r *ScrollableTextWindow) Draw(screen *ebiten.Image) {
@@ -96,4 +110,8 @@ func (r *ScrollableTextWindow) Draw(screen *ebiten.Image) {
             r.gridRenderer.DrawColoredChar(screen, x, y, currentChar, r.textColor)
         }
     }
+}
+
+func (r *ScrollableTextWindow) SetTitle(name string) {
+    r.title = name
 }

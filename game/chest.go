@@ -1,6 +1,8 @@
 package game
 
 import (
+    "Legacy/geometry"
+    "Legacy/recfile"
     "Legacy/renderer"
     "image/color"
 )
@@ -49,7 +51,13 @@ func (s *Chest) TintColor() color.Color {
 }
 
 func (s *Chest) Name() string {
-    return "chest"
+    if s.needsKey != "" {
+        return "a locked chest"
+    } else if s.IsEmpty() {
+        return "a chest (empty)"
+    } else {
+        return "a chest"
+    }
 }
 
 func NewChest(lootLevel int, lootType []Loot) *Chest {
@@ -71,6 +79,53 @@ func NewFixedChest(contents []Item) *Chest {
     }
 }
 
+func NewChestFromRecord(record recfile.Record) *Chest {
+    chest := NewChest(0, []Loot{})
+    for _, field := range record {
+        switch field.Name {
+        case "name":
+            chest.name = field.Value
+        case "isHidden":
+            chest.isHidden = field.AsBool()
+        case "icon":
+            chest.icon = field.AsInt32()
+        case "position":
+            chest.SetPos(geometry.MustDecodePoint(field.Value))
+        case "needsKey":
+            chest.needsKey = field.Value
+        case "lootLevel":
+            chest.lootLevel = field.AsInt()
+        case "hasCreatedLoot":
+            chest.hasCreatedLoot = field.AsBool()
+        case "lootType":
+            chest.lootType = append(chest.lootType, Loot(field.Value))
+        case "item":
+            chest.items = append(chest.items, NewItemFromString(field.Value))
+        }
+    }
+    return chest
+}
+func (s *Chest) ToRecordAndType() (recfile.Record, string) {
+    var record recfile.Record
+    record = recfile.Record{
+        {Name: "name", Value: s.name},
+        {Name: "isHidden", Value: recfile.BoolStr(s.isHidden)},
+        {Name: "icon", Value: recfile.Int32Str(s.icon)},
+        {Name: "position", Value: s.Pos().Encode()},
+        {"needsKey", s.needsKey},
+        {"lootLevel", recfile.IntStr(s.lootLevel)},
+        {"hasCreatedLoot", recfile.BoolStr(s.hasCreatedLoot)},
+    }
+    for _, lootType := range s.lootType {
+        record = append(record, recfile.Field{Name: "lootType", Value: string(lootType)})
+    }
+    for _, item := range s.items {
+        record = append(record, recfile.Field{Name: "item", Value: item.Encode()})
+    }
+
+    return record, "chest"
+}
+
 func (s *Chest) Description() []string {
     if s.needsKey != "" {
         return []string{
@@ -85,7 +140,10 @@ func (s *Chest) Description() []string {
     }
 }
 
-func (s *Chest) Icon(uint64) int {
+func (s *Chest) Icon(uint64) int32 {
+    if s.IsEmpty() {
+        return 204
+    }
     return s.icon
 }
 func (s *Chest) IsWalkable(person *Actor) bool {
@@ -125,4 +183,11 @@ func (s *Chest) SetLockedWithKey(key string) {
 func (s *Chest) SetFixedLoot(loot []Item) {
     s.items = loot
     s.hasCreatedLoot = true
+}
+
+func (s *Chest) IsEmpty() bool {
+    if s.hasCreatedLoot {
+        return len(s.items) == 0
+    }
+    return false
 }

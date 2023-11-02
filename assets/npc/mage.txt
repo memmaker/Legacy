@@ -1,0 +1,29 @@
+%rec: Details
+
+Name: Tim
+Health: 10
+Torso: armor(chainmail, torso, 4)
+Head: armor(mail coif, head, 2)
+Description: The nice guy from the tower of magic.
+
+%rec: Inventory
+
+Item: potion()
+Item: noitem(gold, 10)
+Item: noitem(food, 1)
+
+%rec: Conversation
+
+Key: _first_time
+Text: "Cool, you are here. \
+Can I =join= you?"
+
+Key: name
+Text: "My name is Tim."
+
+Key: job
+Text: "I am a mage."
+
+Key: join
+Effect: joins
+Text: "Sure, I will join you."

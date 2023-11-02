@@ -2,16 +2,15 @@ package game
 
 import (
     "Legacy/ega"
+    "Legacy/recfile"
     "Legacy/renderer"
-    "fmt"
     "image/color"
-    "regexp"
     "strconv"
 )
 
 type Key struct {
     BaseItem
-    icon       int
+    icon       int32
     key        string
     importance int
 }
@@ -28,26 +27,19 @@ func (k *Key) GetContextActions(engine Engine) []renderer.MenuItem {
     return inventoryItemActions(k, engine)
 }
 
-func (k *Key) Icon(uint64) int {
+func (k *Key) Icon(uint64) int32 {
     return k.icon
 }
 func (k *Key) Encode() string {
     // encode name, key, and importance
-    return fmt.Sprintf("%s, %s, %d", k.name, k.key, k.importance)
+    return recfile.ToPredicate("key", k.name, k.key, strconv.Itoa(k.importance))
 }
-
-func NewKeyFromString(encoded string) *Key {
-    paramRegex := regexp.MustCompile(`^([^,]+), ?([^,]+), ?(\d+)$`)
-    // extract name, key, and importance
-    var name, key string
-    var importance int
-    if matches := paramRegex.FindStringSubmatch(encoded); matches != nil {
-        name = matches[1]
-        key = matches[2]
-        importance, _ = strconv.Atoi(matches[3])
-        return NewKeyFromImportance(name, key, importance)
-    }
-    return NewKeyFromImportance("Invalid Key", "invalid_key", 1)
+func NewKeyFromPredicate(encoded recfile.StringPredicate) *Key {
+    return NewKeyFromImportance(
+        encoded.GetString(0),
+        encoded.GetString(1),
+        encoded.GetInt(2),
+    )
 }
 func NewKeyFromImportance(name, key string, importance int) *Key {
     return &Key{

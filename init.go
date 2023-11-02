@@ -25,11 +25,16 @@ func (g *GridEngine) Init() {
         BackgroundTextureIndex:     32,
     })
 
-    g.combatManager = NewCombatManager(g)
+    g.combatManager = NewCombatState(g)
+    g.rules = game.NewRules()
 
     g.ldtkMapProject, _ = ldtk_go.Open("assets/Legacy.ldtk")
 
     g.loadUIOverlay()
+
+    smallScreenSize := g.gridRenderer.GetSmallGridScreenSize()
+    g.foodButton = geometry.Point{X: 1, Y: smallScreenSize.Y - 2}
+    g.goldButton = geometry.Point{X: smallScreenSize.X - 2, Y: smallScreenSize.Y - 2}
 
     g.avatar = game.NewActor("Avatar", 7)
     g.playerParty = game.NewParty(g.avatar)
@@ -47,7 +52,7 @@ func (g *GridEngine) loadUIOverlay() {
     for _, tile := range uiLayer.Tiles {
         cellX, cellY := uiLayer.ToGridPosition(tile.Position[0], tile.Position[1])
         cellIndex := cellY*screenW + cellX
-        g.uiOverlay[cellIndex] = tile.ID
+        g.uiOverlay[cellIndex] = int32(tile.ID)
     }
 }
 
@@ -99,7 +104,8 @@ func (g *GridEngine) getFontIndex() map[rune]uint16 {
             {StartIndex: 3, Characters: []rune{'█'}},  // grey block
             {StartIndex: 45, Characters: []rune{'—'}},
             {StartIndex: 39, Characters: []rune{'\''}},
-            {StartIndex: 131, Characters: []rune{'🍗', '🪙'}}, // food/gold
+            {StartIndex: 131, Characters: []rune{'🍗', '🪙'}},           // food/gold
+            {StartIndex: 147, Characters: []rune{'Ⅰ', 'Ⅱ', 'Ⅲ', 'Ⅳ'}}, // roman numerals 1-4
         },
     })
 }
@@ -129,7 +135,7 @@ func (g *GridEngine) loadMap(mapName string) *gridmap.GridMap[*game.Actor, game.
         enums := worldTileset.EnumsForTile(tile.ID)
         loadedMap.SetCell(pos, gridmap.MapCell[*game.Actor, game.Item, game.Object]{
             TileType: gridmap.Tile{
-                DefinedIcon:   tile.ID,
+                DefinedIcon:   int32(tile.ID),
                 IsWalkable:    !enums.Contains("IsBlockingMovement"),
                 IsTransparent: !enums.Contains("IsBlockingView"),
             },
@@ -183,13 +189,13 @@ func (g *GridEngine) loadMap(mapName string) *gridmap.GridMap[*game.Actor, game.
         }
         var npc *game.Actor
         if doesFileExist(npcFilename) {
-            npc = game.NewActorFromFile(mustOpen(npcFilename), textureIndex)
+            npc = game.NewActorFromFile(mustOpen(npcFilename), int32(textureIndex))
         } else {
-            npc = game.NewActor(name, textureIndex)
+            npc = game.NewActor(name, int32(textureIndex))
         }
         npc.SetIconFrames(iconFrames)
         npc.SetInternalName(name)
-        npc.SetHidden(isHidden, discoveryMessage)
+        npc.SetDiscoveryMessage(isHidden, discoveryMessage)
         loadedMap.AddActor(npc, pos)
     }
 
@@ -265,9 +271,15 @@ func (g *GridEngine) PlaceParty(startPos geometry.Point) {
         }
     }
 
-    g.onPartyMoved()
+    g.onViewedActorMoved(startPos)
 }
-
+func (g *GridEngine) PlacePartyBackOnCurrentMap() {
+    g.playerParty.SetGridMap(g.currentMap)
+    for _, member := range g.playerParty.GetMembers() {
+        g.currentMap.AddActor(member, member.Pos())
+    }
+    g.onViewedActorMoved(g.playerParty.GetMember(0).Pos())
+}
 func (g *GridEngine) getItemFromEntity(entity *ldtk_go.Entity) game.Item {
     switch entity.Identifier {
     case "Scroll":
@@ -317,14 +329,24 @@ func (g *GridEngine) getLockedDoorFromEntity(entity *ldtk_go.Entity) game.Object
     if !entity.PropertyByIdentifier("OnBreakEvent").IsNull() {
         onBreakEvent = entity.PropertyByIdentifier("OnBreakEvent").AsString()
     }
+    var onListenText []string
+    if !entity.PropertyByIdentifier("OnListenText").IsNull() {
+        onListenText = strings.Split(entity.PropertyByIdentifier("OnListenText").AsString(), "\n")
+    }
     door := game.NewLockedDoor(key, strength)
     door.SetBreakEvent(onBreakEvent)
+    door.SetListenText(onListenText)
     return door
 }
 
 func (g *GridEngine) getMagicallyLockedDoorFromEntity(entity *ldtk_go.Entity) game.Object {
+    var onListenText []string
+    if !entity.PropertyByIdentifier("OnListenText").IsNull() {
+        onListenText = strings.Split(entity.PropertyByIdentifier("OnListenText").AsString(), "\n")
+    }
     strength := entity.PropertyByIdentifier("Strength").AsFloat64()
     door := game.NewMagicallyLockedDoor(strength)
+    door.SetListenText(onListenText)
     return door
 }
 func (g *GridEngine) getScrollFromEntity(entity *ldtk_go.Entity) game.Item {
@@ -339,7 +361,7 @@ func (g *GridEngine) getScrollFromEntity(entity *ldtk_go.Entity) game.Item {
 
     bookPath := path.Join("assets", "scrolls", filename)
     scroll := game.NewScroll(title, bookPath)
-    scroll.SetHidden(isHidden, discoveryMessage)
+    scroll.SetDiscoveryMessage(isHidden, discoveryMessage)
     if spellName != "" {
         spell := game.NewSpellFromName(spellName)
         if spell != nil {
@@ -361,7 +383,7 @@ func (g *GridEngine) getKeyFromEntity(entity *ldtk_go.Entity) game.Item {
     }
 
     newKey := game.NewKeyFromImportance(name, key, importance)
-    newKey.SetHidden(isHidden, discoveryMessage)
+    newKey.SetDiscoveryMessage(isHidden, discoveryMessage)
     return newKey
 }
 
@@ -401,7 +423,7 @@ func (g *GridEngine) getChestFromEntity(entity *ldtk_go.Entity) game.Object {
     }
     chest := game.NewChest(lootLevel, lootList)
     chest.SetLockedWithKey(needsKey)
-    chest.SetHidden(isHidden, discoveryMessage)
+    chest.SetDiscoveryMessage(isHidden, discoveryMessage)
     if len(fixedLoot) > 0 {
         chest.SetFixedLoot(fixedLoot)
     }

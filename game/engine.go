@@ -1,6 +1,7 @@
 package game
 
 import (
+    "Legacy/geometry"
     "Legacy/renderer"
     "image/color"
 )
@@ -10,9 +11,17 @@ type ItemContainer interface {
     RemoveItem(item Item)
 }
 
+type Wearable interface {
+    Item
+    GetWearer() ItemWearer
+    SetWearer(wearer ItemWearer)
+    Unequip()
+    IsEquipped() bool
+}
+
 type Engine interface {
     StartConversation(a *Actor)
-    ShowColoredText(text []string, textcolor color.Color, autolayout bool)
+    ShowColoredText(text []string, textcolor color.Color, autolayout bool) *renderer.ScrollableTextWindow
     GetTextFile(filename string) []string
     PickUpItem(item Item)
     DropItem(item Item)
@@ -38,9 +47,14 @@ type Engine interface {
     GetMapName() string
     CurrentTick() uint64
     TicksToSeconds(ticks uint64) float64
-    ShowMultipleChoiceDialogue(icon int, text []string, choices []renderer.MenuItem)
+    ShowMultipleChoiceDialogue(icon int32, text []string, choices []renderer.MenuItem)
     RemoveItem(item Item)
     GetPartyMembers() []*Actor
-    ShowEquipMenu(a *Armor)
+    ShowEquipMenu(a Wearable)
     StartCombat(opponents *Actor)
+    GetAoECircle(pos geometry.Point, radius int) []geometry.Point
+    HitAnimation(pos geometry.Point, icon int32, whenDone func())
+    SpellDamageAt(caster *Actor, pos geometry.Point, amount int)
+    GetPartyEquipment() []Item
+    GetRules() *Rules
 }

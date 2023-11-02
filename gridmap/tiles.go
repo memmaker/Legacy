@@ -1,79 +1,64 @@
 package gridmap
 
 import (
+    "encoding/binary"
     "fmt"
+    "io"
 )
 
 type SpecialTileType uint64
 
-func (t SpecialTileType) ToString() string {
-    switch t {
-    case SpecialTileDefaultFloor:
-        return "defaultFloor"
-    case SpecialTileToilet:
-        return "toilet"
-    case SpecialTilePlayerSpawn:
-        return "playerSpawn"
-    case SpecialTilePlayerExit:
-        return "playerExit"
-    case SpecialTileTreeLike:
-        return "treeLike"
-    case SpecialTileTypeFood:
-        return "food"
-    case SpecialTileTypePowerOutlet:
-        return "powerOutlet"
-    case SpecialTileLethal:
-        return "lethal"
-    default:
-        return "none"
-    }
-}
-
-func NewSpecialTileTypeFromString(text string) SpecialTileType {
-    switch text {
-    case "defaultFloor":
-        return SpecialTileDefaultFloor
-    case "toilet":
-        return SpecialTileToilet
-    case "playerSpawn":
-        return SpecialTilePlayerSpawn
-    case "playerExit":
-        return SpecialTilePlayerExit
-    case "treeLike":
-        return SpecialTileTreeLike
-    case "food":
-        return SpecialTileTypeFood
-    case "powerOutlet":
-        return SpecialTileTypePowerOutlet
-    case "lethal":
-        return SpecialTileLethal
-    default:
-        return SpecialTileNone
-    }
-}
-
 // These are markers, so we can identify special types of tiles programmatically.
 const (
     SpecialTileNone SpecialTileType = iota
-    SpecialTileDefaultFloor
-    SpecialTileToilet
-    SpecialTilePlayerSpawn
-    SpecialTilePlayerExit
-    SpecialTileTreeLike
-    SpecialTileTypeFood
-    SpecialTileTypePowerOutlet
     SpecialTileLethal
+    SpecialTileBreakable
+    SpecialTileTrap
 )
 
 type Tile struct {
-    DefinedIcon        int
+    DefinedIcon        int32 // we need this
     DefinedDescription string
-    IsWalkable         bool
-    IsTransparent      bool
-    Special            SpecialTileType
+    IsWalkable         bool            // this
+    IsTransparent      bool            // this
+    Special            SpecialTileType // and this
 }
 
-func (t Tile) Icon() int {
+func (t Tile) ToBinary(out io.Writer) {
+    // we want to serialize the tile
+    // icon, iswalkable, istransparent, special
+
+    must(binary.Write(out, binary.LittleEndian, t.DefinedIcon))
+    must(binary.Write(out, binary.LittleEndian, t.IsWalkable))
+    must(binary.Write(out, binary.LittleEndian, t.IsTransparent))
+    must(binary.Write(out, binary.LittleEndian, t.Special))
+}
+
+func NewTileFromBinary(in io.Reader) Tile {
+    var icon int32
+    var isWalkable bool
+    var isTransparent bool
+    var special SpecialTileType
+
+    must(binary.Read(in, binary.LittleEndian, &icon))
+    must(binary.Read(in, binary.LittleEndian, &isWalkable))
+    must(binary.Read(in, binary.LittleEndian, &isTransparent))
+    must(binary.Read(in, binary.LittleEndian, &special))
+
+    return Tile{
+        DefinedIcon:   icon,
+        IsWalkable:    isWalkable,
+        IsTransparent: isTransparent,
+        Special:       special,
+    }
+}
+
+func must(err error) {
+    if err != nil {
+        panic(err)
+    }
+}
+func (t Tile) Icon() int32 {
     return t.DefinedIcon
 }
 
@@ -85,23 +70,12 @@ func (t Tile) EncodeAsString() string {
     return fmt.Sprintf("%c: %s", t.DefinedIcon, t.DefinedDescription)
 }
 
-func (t Tile) IsLethal() bool {
-    return t.Special == SpecialTileLethal
-}
-
-func (t Tile) ToString() string {
-    if t.Special != SpecialTileNone {
-        return fmt.Sprintf("%s (%s)", t.DefinedDescription, t.Special.ToString())
-    }
-    return t.DefinedDescription
-}
-
 func (t Tile) WithIsWalkable(isWalkable bool) Tile {
     t.IsWalkable = isWalkable
     return t
 }
 
-func (t Tile) WithIcon(icon int) Tile {
+func (t Tile) WithIcon(icon int32) Tile {
     t.DefinedIcon = icon
     return t
 }

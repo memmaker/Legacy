@@ -2,11 +2,11 @@ package main
 
 import (
     "Legacy/game"
-    "Legacy/geometry"
     "Legacy/renderer"
     "fmt"
     "github.com/hajimehoshi/ebiten/v2"
     "image/color"
+    "os"
 )
 
 func (g *GridEngine) openContextMenu() {
@@ -42,19 +42,24 @@ func (g *GridEngine) openSpellMenu() {
     }
     for _, s := range spells {
         spell := s
+        if !g.GetAvatar().HasMana(spell.ManaCost()) {
+            continue
+        }
         label := fmt.Sprintf("%s (%d)", spell.Name(), spell.ManaCost())
         menuItems = append(menuItems, renderer.MenuItem{
             Text: label,
             Action: func() {
                 if spell.IsTargeted() {
-                    g.chooseTarget(func(target geometry.Point) {
-                        spell.CastOnTarget(g, g.GetAvatar(), target)
-                    })
+                    g.combatManager.PlayerStartsOffensiveSpell(spell)
                 } else {
                     spell.Cast(g, g.GetAvatar())
                 }
             },
         })
+    }
+    if len(menuItems) == 0 {
+        g.ShowText([]string{"You don't have enough mana to cast any spells."})
+        return
     }
     g.openMenu(menuItems)
 }
@@ -93,19 +98,20 @@ func (g *GridEngine) OpenPickpocketMenu(victim *game.Actor) {
     g.openMenu(itemList)
 }
 
-func (g *GridEngine) ShowEquipMenu(a *game.Armor) {
+func (g *GridEngine) ShowEquipMenu(a game.Wearable) {
     if g.IsPlayerControlled(a.GetHolder()) {
         if len(g.GetPartyMembers()) == 1 {
-            g.EquipArmor(g.GetAvatar(), a)
+            g.EquipItem(g.GetAvatar(), a)
             return
         }
         var equipMenuItems []renderer.MenuItem
-        for _, partyMember := range g.GetPartyMembers() {
+        for _, m := range g.GetPartyMembers() {
+            partyMember := m
             if partyMember.CanEquip(a) {
                 equipMenuItems = append(equipMenuItems, renderer.MenuItem{
                     Text: partyMember.Name(),
                     Action: func() {
-                        g.EquipArmor(partyMember, a)
+                        g.EquipItem(partyMember, a)
                     },
                 })
             }
@@ -129,7 +135,21 @@ func (g *GridEngine) openDebugMenu() {
                 g.playerParty.AddFood(100)
                 g.playerParty.AddGold(100)
                 g.playerParty.AddLockpicks(100)
+                g.avatar.SetHealth(1000)
+                g.avatar.SetMana(1000)
                 g.Print("DEBUG(impulse 9): Added 100 food, gold and lockpicks")
+            },
+        },
+        {
+            Text: "Save Game",
+            Action: func() {
+                g.saveGameToDirectory("./saves/test01")
+            },
+        },
+        {
+            Text: "Load Game",
+            Action: func() {
+                g.loadGameFromDirectory("./saves/test01")
             },
         },
         {
@@ -152,7 +172,41 @@ func (g *GridEngine) openDebugMenu() {
                 g.ShowColoredText(g.flags.GetDebugInfo(), color.White, false)
             },
         },
+        {
+            Text: "Show XP Table",
+            Action: func() {
+                g.ShowColoredText(g.rules.GetXPTable(2, 30), color.White, false)
+            },
+        },
     })
+}
+
+func (g *GridEngine) saveGameToDirectory(directory string) {
+    var _ = os.MkdirAll(directory, 0755) // remove party from the map, so we don't save it twice
+    g.RemovePartyFromMap(g.currentMap)
+
+    savePartyState(g.playerParty, directory) // current map is saved in party state
+    saveExtendedState(g.flags, g.playerKnowledge, directory)
+    saveAllMaps(g.getAllLoadedMaps(), directory)
+
+    g.PlacePartyBackOnCurrentMap()
+}
+
+func (g *GridEngine) loadGameFromDirectory(directory string) {
+    party, currentMapName := loadPartyState(directory)
+    g.avatar = party.GetMember(0)
+    g.playerParty = party
+
+    g.flags, g.playerKnowledge = loadExtendedState(directory) //TODO
+    g.mapsInMemory = loadAllMaps(directory)
+
+    // set the current map
+    // place the party on the map
+    g.currentMap = g.mapsInMemory[currentMapName]
+
+    g.initMapWindow(g.currentMap.MapWidth, g.currentMap.MapHeight)
+
+    g.PlacePartyBackOnCurrentMap()
 }
 
 type Modal interface {
@@ -161,14 +215,17 @@ type Modal interface {
     ActionDown()
     ActionConfirm()
     ShouldClose() bool
+    OnMouseClicked(x int, y int) bool
 }
 
 type UIWidget interface {
     Draw(screen *ebiten.Image)
     ActionUp()
     ActionDown()
+    ActionLeft()
+    ActionRight()
     ActionConfirm()
-    OnMouseClicked(x int, y int)
+    OnMouseClicked(x int, y int) bool
     OnMouseMoved(x int, y int)
     ShouldClose() bool
 }

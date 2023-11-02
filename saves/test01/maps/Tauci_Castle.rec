@@ -1,0 +1,535 @@
+%rec: actors
+name: Chancellor Tauci
+internalName: ruler
+position: (31,6)
+icon: 43
+iconFrames: 2
+isHuman: true
+health: 10
+maxhealth: 10
+xp: 0
+level: 1
+mana: 0
+baseArmor: 0
+baseMelee: 0
+baseRanged: 0
+
+name: tauci_throne_guard_left
+internalName: tauci_throne_guard_left
+position: (28,8)
+icon: 29
+iconFrames: 2
+isHuman: true
+health: 23
+maxhealth: 23
+xp: 0
+level: 1
+mana: 0
+baseArmor: 0
+baseMelee: 0
+baseRanged: 0
+
+name: tauci_throne_guard_right
+internalName: tauci_throne_guard_right
+position: (35,8)
+icon: 29
+iconFrames: 2
+isHuman: true
+health: 23
+maxhealth: 23
+xp: 0
+level: 1
+mana: 0
+baseArmor: 0
+baseMelee: 0
+baseRanged: 0
+
+name: tauci_food
+internalName: tauci_food
+position: (30,27)
+icon: 31
+iconFrames: 2
+isHuman: true
+health: 23
+maxhealth: 23
+xp: 0
+level: 1
+mana: 0
+baseArmor: 0
+baseMelee: 0
+baseRanged: 0
+
+name: Foodie Marcus
+internalName: tauci_healer
+position: (26,27)
+icon: 31
+iconFrames: 2
+isHuman: true
+health: 10
+maxhealth: 10
+xp: 0
+level: 1
+mana: 0
+baseArmor: 0
+baseMelee: 0
+baseRanged: 0
+
+name: grugtar
+internalName: grugtar
+position: (39,28)
+icon: 77
+iconFrames: 4
+isHuman: true
+health: 23
+maxhealth: 23
+xp: 0
+level: 1
+mana: 0
+baseArmor: 0
+baseMelee: 0
+baseRanged: 0
+
+name: Guard Gregor
+internalName: tauci_front_guard
+position: (24,39)
+icon: 29
+iconFrames: 2
+isHuman: true
+health: 10
+maxhealth: 10
+xp: 0
+level: 1
+mana: 0
+baseArmor: 0
+baseMelee: 0
+baseRanged: 0
+
+name: Ghost of a Tauci
+internalName: tauci_ghost
+position: (46,6)
+icon: 69
+iconFrames: 4
+isHuman: true
+health: 10
+maxhealth: 10
+xp: 0
+level: 1
+mana: 0
+baseArmor: 0
+baseMelee: 0
+baseRanged: 0
+
+name: tauci_potions
+internalName: tauci_potions
+position: (45,24)
+icon: 174
+iconFrames: 1
+isHuman: true
+health: 23
+maxhealth: 23
+xp: 0
+level: 1
+mana: 0
+baseArmor: 0
+baseMelee: 0
+baseRanged: 0
+
+name: Inconspicuous Person
+internalName: tauci_thief
+position: (46,87)
+icon: 31
+iconFrames: 1
+isHuman: true
+health: 10
+maxhealth: 10
+xp: 0
+level: 1
+mana: 0
+baseArmor: 0
+baseMelee: 0
+baseRanged: 0
+
+name: Georg
+internalName: knight
+position: (30,43)
+icon: 173
+iconFrames: 1
+isHuman: true
+health: 10
+maxhealth: 10
+xp: 0
+level: 1
+mana: 0
+baseArmor: 0
+baseMelee: 0
+baseRanged: 0
+
+name: tauci_bank_teller
+internalName: tauci_bank_teller
+position: (14,71)
+icon: 31
+iconFrames: 2
+isHuman: true
+health: 23
+maxhealth: 23
+xp: 0
+level: 1
+mana: 0
+baseArmor: 0
+baseMelee: 0
+baseRanged: 0
+
+%rec: downedActors
+%rec: fireplace
+name: 
+icon: 187
+pos: (32,26)
+isHidden: false
+foodCount: 8
+
+name: 
+icon: 187
+pos: (32,25)
+isHidden: false
+foodCount: 2
+
+name: 
+icon: 187
+pos: (8,25)
+isHidden: false
+foodCount: 4
+
+%rec: chest
+name: 
+isHidden: false
+icon: 25
+position: (27,25)
+needsKey: 
+lootLevel: 1
+hasCreatedLoot: false
+lootType: healer
+
+name: 
+isHidden: true
+icon: 25
+position: (22,20)
+needsKey: tauci_chest
+lootLevel: 3
+hasCreatedLoot: false
+lootType: armor
+
+name: 
+isHidden: true
+icon: 25
+position: (52,72)
+needsKey: 
+lootLevel: 3
+hasCreatedLoot: false
+lootType: common
+lootType: lockpicks
+
+name: 
+isHidden: false
+icon: 25
+position: (8,10)
+needsKey: tauci_front_guard_key
+lootLevel: 1
+hasCreatedLoot: false
+lootType: common
+
+name: 
+isHidden: false
+icon: 25
+position: (8,13)
+needsKey: tauci_ruler_left_guard_key
+lootLevel: 1
+hasCreatedLoot: false
+lootType: common
+
+name: 
+isHidden: false
+icon: 25
+position: (8,16)
+needsKey: tauci_ruler_right_guard_key
+lootLevel: 1
+hasCreatedLoot: false
+lootType: common
+
+name: 
+isHidden: true
+icon: 25
+position: (8,22)
+needsKey: 
+lootLevel: 1
+hasCreatedLoot: true
+lootType: common
+item: key(small key, tauci_cellar,0)
+
+name: 
+isHidden: false
+icon: 25
+position: (23,47)
+needsKey: 
+lootLevel: 1
+hasCreatedLoot: true
+lootType: armor
+lootType: weapon
+
+name: 
+isHidden: false
+icon: 25
+position: (25,47)
+needsKey: 
+lootLevel: 3
+hasCreatedLoot: true
+lootType: weapon
+lootType: armor
+
+name: 
+isHidden: false
+icon: 25
+position: (28,47)
+needsKey: 
+lootLevel: 5
+hasCreatedLoot: true
+lootType: armor
+lootType: weapon
+
+%rec: door
+name: 
+icon: 183
+pos: (25,38)
+isHidden: false
+key: 
+isLocked: false
+isMagicallyLocked: false
+lockStrength: 0
+frameStrength: 0
+isBroken: false
+knockEvent: 
+breakEvent: 
+
+name: 
+icon: 183
+pos: (23,35)
+isHidden: false
+key: 
+isLocked: false
+isMagicallyLocked: false
+lockStrength: 0
+frameStrength: 0
+isBroken: false
+knockEvent: 
+breakEvent: 
+
+name: 
+icon: 183
+pos: (23,30)
+isHidden: false
+key: 
+isLocked: false
+isMagicallyLocked: false
+lockStrength: 0
+frameStrength: 0
+isBroken: false
+knockEvent: 
+breakEvent: 
+
+name: 
+icon: 183
+pos: (23,22)
+isHidden: false
+key: 
+isLocked: false
+isMagicallyLocked: false
+lockStrength: 0
+frameStrength: 0
+isBroken: false
+knockEvent: 
+breakEvent: 
+
+name: 
+icon: 183
+pos: (25,32)
+isHidden: false
+key: 
+isLocked: false
+isMagicallyLocked: false
+lockStrength: 0
+frameStrength: 0
+isBroken: false
+knockEvent: 
+breakEvent: 
+
+name: 
+icon: 183
+pos: (30,32)
+isHidden: false
+key: 
+isLocked: false
+isMagicallyLocked: false
+lockStrength: 0
+frameStrength: 0
+isBroken: false
+knockEvent: 
+breakEvent: 
+
+name: 
+icon: 183
+pos: (35,32)
+isHidden: false
+key: 
+isLocked: false
+isMagicallyLocked: false
+lockStrength: 0
+frameStrength: 0
+isBroken: false
+knockEvent: 
+breakEvent: 
+
+name: 
+icon: 183
+pos: (42,30)
+isHidden: false
+key: 
+isLocked: false
+isMagicallyLocked: false
+lockStrength: 0
+frameStrength: 0
+isBroken: false
+knockEvent: 
+breakEvent: 
+
+name: 
+icon: 184
+pos: (17,30)
+isHidden: false
+key: tauci_cellar
+isLocked: true
+isMagicallyLocked: false
+lockStrength: 0.5
+frameStrength: 0
+isBroken: false
+knockEvent: 
+breakEvent: break_tauci_cellar_door
+
+name: 
+icon: 184
+pos: (14,27)
+isHidden: false
+key: tauci_cellar
+isLocked: true
+isMagicallyLocked: false
+lockStrength: 0.5
+frameStrength: 0
+isBroken: false
+knockEvent: 
+breakEvent: break_tauci_cellar_door
+
+name: 
+icon: 183
+pos: (14,21)
+isHidden: false
+key: 
+isLocked: false
+isMagicallyLocked: false
+lockStrength: 0
+frameStrength: 0
+isBroken: false
+knockEvent: 
+breakEvent: 
+
+name: 
+icon: 183
+pos: (17,24)
+isHidden: false
+key: 
+isLocked: false
+isMagicallyLocked: false
+lockStrength: 0
+frameStrength: 0
+isBroken: false
+knockEvent: 
+breakEvent: 
+
+name: 
+icon: 183
+pos: (21,83)
+isHidden: false
+key: 
+isLocked: false
+isMagicallyLocked: false
+lockStrength: 0
+frameStrength: 0
+isBroken: false
+knockEvent: 
+breakEvent: 
+
+%rec: shrine
+name: Shrine of Loyalty
+icon: 186
+pos: (48,11)
+isHidden: false
+principle: Loyalty
+
+name: Tauci Shrine
+icon: 186
+pos: (20,35)
+isHidden: false
+principle: Wealth
+
+%rec: coreInfo
+mapName: Tauci_Castle
+width: 67
+height: 94
+
+%rec: items
+item: key(small key,tauci_chest,4)
+position: (20,20)
+
+item: candle()
+position: (49,29)
+
+item: candle()
+position: (36,6)
+
+item: candle()
+position: (27,6)
+
+item: potion()
+position: (48,22)
+
+item: potion()
+position: (49,22)
+
+item: potion()
+position: (42,22)
+
+item: potion()
+position: (41,22)
+
+item: potion()
+position: (43,22)
+
+item: potion()
+position: (49,23)
+
+item: scroll(Burn' em,assets/scrolls/great_ball_of_fire.txt,Fireball)
+position: (23,43)
+
+%rec: transitions
+pos: (25,45)
+targetMap: WorldMap
+targetPos: (45,27)
+
+pos: (14,30)
+targetMap: Tauci_Prison_Level_1
+targetPos: (29,22)
+
+pos: (2,43)
+targetMap: Tauci_Prison_Level_1
+targetPos: (14,40)
+
+%rec: secretDoors
+pos: (23,19)
+

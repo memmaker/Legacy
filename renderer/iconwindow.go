@@ -6,14 +6,33 @@ import (
     "image/color"
 )
 
+type OneCellButton struct {
+    icon   int32
+    action func(currentText []string)
+}
+
 type MultiPageWindow struct {
     window         *IconWindow
     onLastPage     func()
     lastPageCalled bool
-    pages          [][]string
+    pages          []string
     currentPage    int
 
     shouldClose bool
+}
+
+func (m *MultiPageWindow) OnMouseClicked(x int, y int) bool {
+    if m.window.OnMouseClicked(x, y) {
+        return true
+    }
+    if x < m.window.topLeft.X || x >= m.window.bottomRight.X {
+        return false
+    }
+    if y < m.window.topLeft.Y || y >= m.window.bottomRight.Y {
+        return false
+    }
+    m.ActionConfirm()
+    return true
 }
 
 func (m *MultiPageWindow) ShouldClose() bool {
@@ -31,8 +50,7 @@ func (m *MultiPageWindow) ActionDown() {
     m.ActionConfirm()
 }
 
-func NewMultiPageWindow(dualGrid *DualGridRenderer, yOffset int, icon int, text []string, onLastPageDisplayed func()) *MultiPageWindow {
-    pages := splitIntoPages(text)
+func NewMultiPageWindow(dualGrid *DualGridRenderer, yOffset int, icon int32, pages []string, onLastPageDisplayed func()) *MultiPageWindow {
     lastPageCalled := false
     if len(pages) < 2 {
         onLastPageDisplayed()
@@ -56,10 +74,18 @@ func (m *MultiPageWindow) ActionConfirm() {
             m.shouldClose = true
         }
     }
-    m.window.text = m.pages[m.currentPage]
+    m.window.SetText(m.pages[m.currentPage])
 }
 func (m *MultiPageWindow) Draw(screen *ebiten.Image) {
     m.window.Draw(screen)
+}
+
+func (m *MultiPageWindow) AddButton(icon int32, callback func(text []string)) {
+    m.window.AddButton(icon, callback)
+}
+
+func (m *MultiPageWindow) SetTitle(name string) {
+    m.window.title = name
 }
 
 func splitIntoPages(text []string) [][]string {
@@ -83,7 +109,7 @@ type IconWindow struct {
     topLeft     geometry.Point
     bottomRight geometry.Point
 
-    iconTextureIndex int
+    iconTextureIndex int32
     text             []string
 
     textColor  color.Color
@@ -91,6 +117,7 @@ type IconWindow struct {
 
     gridRenderer *DualGridRenderer
     title        string
+    buttons      map[geometry.Point]OneCellButton
 }
 
 func (i *IconWindow) ActionUp() {
@@ -101,14 +128,13 @@ func (i *IconWindow) ActionDown() {
 
 }
 
-func NewIconWindow(dualGrid *DualGridRenderer, yOffset int, icon int, text []string) *IconWindow {
-
+func NewIconWindow(dualGrid *DualGridRenderer, yOffset int, icon int32, inputText string) *IconWindow {
     screenSize := dualGrid.GetSmallGridScreenSize()
     topLeft := geometry.Point{X: 3, Y: yOffset}
     bottomRight := geometry.Point{X: screenSize.X - 3, Y: yOffset + 9}
     maxLineLength := bottomRight.X - topLeft.X - 7
     maxLines := bottomRight.Y - topLeft.Y - 4
-    text = AutoLayoutText(text, maxLineLength)
+    text := AutoLayout(inputText, maxLineLength)
 
     for i, line := range text {
         if i >= maxLines {
@@ -128,6 +154,17 @@ func NewIconWindow(dualGrid *DualGridRenderer, yOffset int, icon int, text []str
         iconOffset:       geometry.Point{X: 2, Y: 2},
         gridRenderer:     dualGrid,
         textColor:        color.White,
+        buttons:          make(map[geometry.Point]OneCellButton),
+    }
+}
+
+func (i *IconWindow) AddButton(icon int32, action func(currentText []string)) {
+    startPosX := i.bottomRight.X - 3
+    yPos := i.topLeft.Y
+    iconPos := geometry.Point{X: startPosX, Y: yPos}
+    i.buttons[iconPos] = OneCellButton{
+        icon:   icon,
+        action: action,
     }
 }
 
@@ -140,9 +177,31 @@ func (i *IconWindow) Draw(screen *ebiten.Image) {
 
     i.gridRenderer.DrawFilledBorder(screen, i.topLeft, i.bottomRight, i.title)
 
+    for pos, button := range i.buttons {
+        i.gridRenderer.DrawOnSmallGrid(screen, pos.X, pos.Y, button.icon)
+    }
+
     i.gridRenderer.DrawBigOnScreen(screen, iconScreenX, iconScreenY, i.iconTextureIndex)
 
     for y, line := range i.text {
         i.gridRenderer.DrawColoredString(screen, i.topLeft.X+5, i.topLeft.Y+2+y, line, i.textColor)
     }
+}
+
+func (i *IconWindow) OnMouseClicked(x int, y int) bool {
+    for pos, button := range i.buttons {
+        if pos.X == x && pos.Y == y {
+            button.action(i.text)
+            return true
+        }
+    }
+    return false
+}
+
+func (i *IconWindow) SetText(inputText string) {
+    i.text = AutoLayout(inputText, i.maxLineLength())
+}
+
+func (i *IconWindow) maxLineLength() int {
+    return i.bottomRight.X - i.topLeft.X - 7
 }

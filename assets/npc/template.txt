@@ -1,0 +1,35 @@
+%rec: Details
+
+Name: {name}
+Health: 10
+#--
+Description: {text}
+
+%rec: Inventory
+
+Item: armor(nothing, torso, 0)
+
+%rec: Conversation
+
+Key: _first_time
+Text: "{text}"
++ \
+"{text}"
+
+Key: name
+Effect: {quits | joins | sells}
+NeedsFlag: {flagname}
+SetsFlag: {flagname}
+GivesItem: {itemstring}
+NeedsItem: {itemname}
+NeedsSkill: {skillname}({level})
+Text: "{text}"
+
+Key: job
+Text: ""
+#
+Option: {targetKey}: {text}
+#
+OptionNeedsFlag: {flagname}
+OptionNeedsSkill: {skillname}({level})
+Option: {targetKey}: {text}

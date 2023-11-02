@@ -35,7 +35,7 @@ func (b *Potion) GetContextActions(engine Engine) []renderer.MenuItem {
     return actions
 }
 
-func (b *Potion) Icon(uint64) int {
+func (b *Potion) Icon(uint64) int32 {
     return 191
 }
 
@@ -49,7 +49,12 @@ func (b *Potion) IsEmpty() bool {
 func NewPotion() *Potion {
     return &Potion{
         BaseItem: BaseItem{
-            name: "magic potion",
+            name:      "magic potion",
+            baseValue: 250,
         },
     }
+}
+
+func (b *Potion) Encode() string {
+    return "potion()"
 }

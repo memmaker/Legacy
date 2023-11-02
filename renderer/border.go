@@ -3,14 +3,14 @@ package renderer
 import "Legacy/geometry"
 
 type GridBorderDefinition struct {
-    HorizontalLineTextureIndex int
-    VerticalLineTextureIndex   int
-    CornerTextureIndex         int
-    BackgroundTextureIndex     int
+    HorizontalLineTextureIndex int32
+    VerticalLineTextureIndex   int32
+    CornerTextureIndex         int32
+    BackgroundTextureIndex     int32
 }
 
-func NewBorderMap(topLeft, bottomRight geometry.Point, borderDef GridBorderDefinition) map[geometry.Point]int {
-    result := make(map[geometry.Point]int)
+func NewBorderMap(topLeft, bottomRight geometry.Point, borderDef GridBorderDefinition) map[geometry.Point]int32 {
+    result := make(map[geometry.Point]int32)
     for y := topLeft.Y; y < bottomRight.Y; y++ {
         for x := topLeft.X; x < bottomRight.X; x++ {
             // corner
@@ -31,7 +31,7 @@ func NewBorderMap(topLeft, bottomRight geometry.Point, borderDef GridBorderDefin
 
 type BorderCase int
 
-func (c BorderCase) GetIndex(def GridBorderDefinition) int {
+func (c BorderCase) GetIndex(def GridBorderDefinition) int32 {
     switch c {
     case Corner:
         return def.CornerTextureIndex

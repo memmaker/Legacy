@@ -1,55 +1,38 @@
+%rec: Details
+
 Name: A hungry small creature
 Health: 10
+#--
+Description: This worm-like creature is hungry and wants something to eat.
 
-# Description
+%rec: Inventory
 
-This worm-like creature is
-hungry and wants something
-to eat.
+Item: armor(0): nothing
 
-# Inventory
+%rec: Conversation
 
- - armor(0): nothing
+Key: _first_time
+Text: "I recognize you. You are the one who is coming from that strange place with human problems."
++ \
+"And now you are here at our place of human problems."
 
-# Conversation
-;
-# _first_time
-"I recognize you. You are
-the one who
-is coming from that
-strange place with
-human problems."
+Key: name
+Text: "I am just =hungry=."
 
-"And now
-you are here
-at our place of human
-problems."
+Key: job
+Text: "My job is eating."
 
-# name
-"I am just =hungry=."
+Key: hungry
+Text: "I am always hungry. =Food= is good."
+ConditionForText: Flag(asked_about_food)
+ConditionalText: "I am not sure if I can eat your kind of food."
 
-# job
-"My job is eating."
+Key: Food
+Text: "I cannot eat your kind of food. Actually, I follow a strict diet."
++ \
+"It depends on the day of the week. Let me see... Today is =Monday=."
 
-# hungry
-"I am always hungry.
-=Food= is good."
-
-# Food
-"I cannot eat your kind of
-food.
-Actually, I follow a
-strict diet."
-
-"It depends on the day of
-the week.
-Let me see... Today is
-=Monday=."
-
-# Monday
-"On Mondays I eat... I
-eat...
-I cannot remember. I am
-too hungry to think."
-
+Key: Monday
+Text: "On Mondays I eat... I eat... I cannot remember. I am too hungry to think."
++ \
 "Oh, please, help me!"

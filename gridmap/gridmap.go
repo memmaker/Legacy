@@ -5,6 +5,7 @@ import (
     "bytes"
     "encoding/gob"
     "fmt"
+    "io"
     "math"
     "math/rand"
     "os"
@@ -19,7 +20,7 @@ type Transition struct {
 }
 type MapObject interface {
     Pos() geometry.Point
-    Icon(tick uint64) int
+    Icon(tick uint64) int32
     SetPos(geometry.Point)
 }
 
@@ -843,6 +844,16 @@ func (m *GridMap[ActorType, ItemType, ObjectType]) FindNearestItem(pos geometry.
     return nearestItem
 }
 
+func (m *GridMap[ActorType, ItemType, ObjectType]) FindAllNearbyActors(source geometry.Point, maxDist int, keep func(actor ActorType) bool) []ActorType {
+    results := make([]ActorType, 0)
+    for _, actor := range m.AllActors {
+        if keep(actor) && geometry.DistanceManhattan(actor.Pos(), source) <= maxDist {
+            results = append(results, actor)
+        }
+    }
+    return results
+}
+
 func (m *GridMap[ActorType, ItemType, ObjectType]) IsNamedLocationAt(positionInWorld geometry.Point) bool {
     for _, loc := range m.NamedLocations {
         if loc == positionInWorld {
@@ -933,16 +944,160 @@ func (m *GridMap[ActorType, ItemType, ObjectType]) IsPassableForProjectile(p geo
     }
     return isTileWalkable && !isActorOnTile && !isObjectBlocking
 }
-func (m *GridMap[ActorType, ItemType, ObjectType]) IsPathPassableForProjectile(source geometry.Point, target geometry.Point) bool {
-    los := m.LineOfSight(source, target)
-    return los[len(los)-1] == target
-}
-
 func (m *GridMap[ActorType, ItemType, ObjectType]) LineOfSight(source geometry.Point, target geometry.Point) []geometry.Point {
-    los := geometry.LineOfSight(source, target, func(p geometry.Point) bool {
-        return p == source || p == target || m.IsPassableForProjectile(p)
+    var los []geometry.Point
+    m.Bresenheim(source, target, func(x, y int) bool {
+        visited := geometry.Point{X: x, Y: y}
+        if visited == source {
+            return true
+        }
+        los = append(los, visited)
+        return m.IsPassableForProjectile(visited)
     })
     return los
+}
+func (m *GridMap[ActorType, ItemType, ObjectType]) Bresenheim(source geometry.Point, target geometry.Point, visitor func(x, y int) bool) {
+    var dx, dy, e, slope int
+    x1, y1 := target.X, target.Y
+    x2, y2 := source.X, source.Y
+    // Because drawing p1 -> p2 is equivalent to draw p2 -> p1,
+    // I sort points in x-axis order to handle only half of possible cases.
+    if x1 > x2 {
+        x1, y1, x2, y2 = x2, y2, x1, y1
+    }
+
+    dx, dy = x2-x1, y2-y1
+    // Because point is x-axis ordered, dx cannot be negative
+    if dy < 0 {
+        dy = -dy
+    }
+
+    switch {
+
+    // Is line a point ?
+    case x1 == x2 && y1 == y2:
+        visitor(x1, y1)
+
+    // Is line an horizontal ?
+    case y1 == y2:
+        for ; dx != 0; dx-- {
+            if !visitor(x1, y1) {
+                return
+            }
+            x1++
+        }
+        if !visitor(x1, y1) {
+            return
+        }
+
+    // Is line a vertical ?
+    case x1 == x2:
+        if y1 > y2 {
+            y1, y2 = y2, y1
+        }
+        for ; dy != 0; dy-- {
+            if !visitor(x1, y1) {
+                return
+            }
+            y1++
+        }
+        if !visitor(x1, y1) {
+            return
+        }
+
+    // Is line a diagonal ?
+    case dx == dy:
+        if y1 < y2 {
+            for ; dx != 0; dx-- {
+                if !visitor(x1, y1) {
+                    return
+                }
+                x1++
+                y1++
+            }
+        } else {
+            for ; dx != 0; dx-- {
+                if !visitor(x1, y1) {
+                    return
+                }
+                x1++
+                y1--
+            }
+        }
+        if !visitor(x1, y1) {
+            return
+        }
+
+    // wider than high ?
+    case dx > dy:
+        if y1 < y2 {
+            // BresenhamDxXRYD(img, x1, y1, x2, y2, col)
+            dy, e, slope = 2*dy, dx, 2*dx
+            for ; dx != 0; dx-- {
+                if !visitor(x1, y1) {
+                    return
+                }
+                x1++
+                e -= dy
+                if e < 0 {
+                    y1++
+                    e += slope
+                }
+            }
+        } else {
+            // BresenhamDxXRYU(img, x1, y1, x2, y2, col)
+            dy, e, slope = 2*dy, dx, 2*dx
+            for ; dx != 0; dx-- {
+                if !visitor(x1, y1) {
+                    return
+                }
+                x1++
+                e -= dy
+                if e < 0 {
+                    y1--
+                    e += slope
+                }
+            }
+        }
+        if !visitor(x2, y2) {
+            return
+        }
+
+    // higher than wide.
+    default:
+        if y1 < y2 {
+            // BresenhamDyXRYD(img, x1, y1, x2, y2, col)
+            dx, e, slope = 2*dx, dy, 2*dy
+            for ; dy != 0; dy-- {
+                if !visitor(x1, y1) {
+                    return
+                }
+                y1++
+                e -= dx
+                if e < 0 {
+                    x1++
+                    e += slope
+                }
+            }
+        } else {
+            // BresenhamDyXRYU(img, x1, y1, x2, y2, col)
+            dx, e, slope = 2*dx, dy, 2*dy
+            for ; dy != 0; dy-- {
+                if !visitor(x1, y1) {
+                    return
+                }
+                y1--
+                e -= dx
+                if e < 0 {
+                    x1++
+                    e += slope
+                }
+            }
+        }
+        if !visitor(x2, y2) {
+            return
+        }
+    }
 }
 
 func (m *GridMap[ActorType, ItemType, ObjectType]) SetAllExplored() {
@@ -1122,4 +1277,24 @@ func (m *GridMap[ActorType, ItemType, ObjectType]) GetTransitionAt(pos geometry.
 
 func (m *GridMap[ActorType, ItemType, ObjectType]) GetName() string {
     return m.name
+}
+
+func (m *GridMap[ActorType, ItemType, ObjectType]) WriteTiles(out io.Writer) {
+    for _, cell := range m.Cells {
+        cell.TileType.ToBinary(out)
+    }
+}
+
+func (m *GridMap[ActorType, ItemType, ObjectType]) ReadTiles(in io.Reader) {
+    for i, _ := range m.Cells {
+        m.Cells[i].TileType = NewTileFromBinary(in)
+    }
+}
+
+func (m *GridMap[ActorType, ItemType, ObjectType]) Transitions() map[geometry.Point]Transition {
+    return m.transitionMap
+}
+
+func (m *GridMap[ActorType, ItemType, ObjectType]) SecretDoors() map[geometry.Point]bool {
+    return m.secretDoors
 }

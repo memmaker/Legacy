@@ -1,0 +1,61 @@
+%rec: party
+food: 3
+gold: 1000
+lockpicks: 0
+currentMap: Tauci_Castle
+item: weapon(diamond hammer,32)
+item: weapon(diamond spear,27)
+item: weapon(steel spear,19)
+item: weapon(diamond spear,27)
+item: armor(mythical armor,torso,17)
+item: armor(chain armor,torso,11)
+item: weapon(wooden sword,7)
+item: weapon(wooden spear,9)
+item: armor(cloth armor,torso,5)
+
+%rec: chars
+name: Avatar
+internalName: 
+position: (21,39)
+icon: 7
+iconFrames: 1
+isHuman: true
+health: 23
+maxhealth: 23
+xp: 0
+level: 1
+mana: 0
+baseArmor: 0
+baseMelee: 0
+baseRanged: 0
+
+name: Roy
+internalName: ranger
+position: (20,39)
+icon: 177
+iconFrames: 1
+isHuman: true
+health: 10
+maxhealth: 10
+xp: 0
+level: 1
+mana: 0
+baseArmor: 0
+baseMelee: 0
+baseRanged: 0
+
+name: Tim
+internalName: mage
+position: (19,39)
+icon: 178
+iconFrames: 1
+isHuman: true
+health: 10
+maxhealth: 10
+xp: 0
+level: 1
+mana: 0
+baseArmor: 0
+baseMelee: 0
+baseRanged: 0
+

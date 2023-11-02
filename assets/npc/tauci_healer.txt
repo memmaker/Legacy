@@ -1,0 +1,36 @@
+%rec: Details
+
+Name: Foodie Marcus
+Health: 10
+Torso: armor(chainmail, torso, 4)
+Head: armor(mail coif, head, 2)
+Description: This sympathetic looking \
+guard is standing in front \
+of the castle entrance.
++ \
+He looks like he's been \
+standing there for a while \
+and is waiting for a \
+chance to leave.
+
+%rec: Inventory
+
+Item: potion()
+Item: potion()
+Item: potion()
+Item: potion()
+Item: potion()
+Item: noitem(gold, 10)
+Item: noitem(food, 1)
+
+%rec: Conversation
+
+Key: _first_time
+Text: "Look at my fine =wares=! I have the best potions in the whole country!"
+
+Key: wares
+Effect: sells
+NeedsFlag: nice_guy
+SetsFlag: buyer_of_wares
+NeedsSkill: barter(1)
+Text: "Would you like to buy some of my fine magical potions?"

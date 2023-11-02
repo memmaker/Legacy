@@ -1,0 +1,63 @@
+%rec: actors
+name: wanderer
+internalName: wanderer
+position: (22,34)
+icon: 178
+iconFrames: 1
+isHuman: true
+health: 23
+maxhealth: 23
+xp: 0
+level: 1
+mana: 0
+baseArmor: 0
+baseMelee: 0
+baseRanged: 0
+
+name: amalthea
+internalName: amalthea
+position: (67,12)
+icon: 8
+iconFrames: 2
+isHuman: true
+health: 23
+maxhealth: 23
+xp: 0
+level: 1
+mana: 0
+baseArmor: 0
+baseMelee: 0
+baseRanged: 0
+
+name: A hungry small creature
+internalName: hungry_caterpillar
+position: (62,41)
+icon: 117
+iconFrames: 4
+isHuman: true
+health: 10
+maxhealth: 10
+xp: 0
+level: 1
+mana: 0
+baseArmor: 0
+baseMelee: 0
+baseRanged: 0
+
+%rec: downedActors
+%rec: items
+%rec: transitions
+pos: (21,19)
+targetMap: Edge_Town
+targetPos: (25,9)
+
+pos: (62,38)
+targetMap: Tauci_Castle
+targetPos: (25,45)
+
+%rec: secretDoors
+%rec: coreInfo
+mapName: WorldMap
+width: 99
+height: 104
+

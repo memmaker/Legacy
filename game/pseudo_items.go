@@ -1,9 +1,9 @@
 package game
 
 import (
+    "Legacy/recfile"
     "Legacy/renderer"
     "fmt"
-    "regexp"
     "strconv"
 )
 
@@ -21,7 +21,7 @@ type PseudoItem struct {
     amount   int
 }
 
-func (p *PseudoItem) Icon(u uint64) int {
+func (p *PseudoItem) Icon(u uint64) int32 {
     return 0
 }
 
@@ -82,25 +82,25 @@ func NewPseudoItemFromTypeAndAmount(itemType PseudoItemType, amount int) *Pseudo
     }
 }
 
-func NewPseudoItemFromString(encoded string) *PseudoItem {
-    paramRegex := regexp.MustCompile(`^([^,]+), ?([^,]+), ?(\d+)$`)
-    nameLessParamRegex := regexp.MustCompile(`^([^,]+), ?(\d+)$`)
-    var name string
-    var itemType PseudoItemType
-    var amount int
-    if matches := paramRegex.FindStringSubmatch(encoded); matches != nil && len(matches) == 4 {
-        name = matches[1]
-        itemType = PseudoItemType(matches[2])
-        amount, _ = strconv.Atoi(matches[3])
-        return NewPseudoItem(name, itemType, amount)
-    } else if matches = nameLessParamRegex.FindStringSubmatch(encoded); matches != nil && len(matches) == 3 {
-        itemType = PseudoItemType(matches[1])
-        amount, _ = strconv.Atoi(matches[2])
-        return NewPseudoItem(nameFromTypeAndAmount(itemType, amount), itemType, amount)
+func NewPseudoItemFromPredicate(encoded recfile.StringPredicate) *PseudoItem {
+    if encoded.ParamCount() == 3 {
+        return NewPseudoItem(
+            encoded.GetString(0),
+            PseudoItemType(encoded.GetString(1)),
+            encoded.GetInt(2),
+        )
     }
-    return NewPseudoItem("Invalid PseudoItem", PseudoItemTypeGold, 0)
-}
+    itemType := PseudoItemType(encoded.GetString(0))
+    amount := encoded.GetInt(1)
+    return NewPseudoItemFromTypeAndAmount(itemType, amount)
 
+}
+func (p *PseudoItem) Encode() string {
+    if p.name == "" {
+        return recfile.ToPredicateSep("noitem", string(p.itemType), strconv.Itoa(p.amount))
+    }
+    return recfile.ToPredicate("noitem", p.name, string(p.itemType), strconv.Itoa(p.amount))
+}
 func nameFromTypeAndAmount(itemType PseudoItemType, amount int) string {
     if amount == 1 {
         switch itemType {

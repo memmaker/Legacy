@@ -1,3 +1,29 @@
+# Opening
+
+You step out of the portal and find yourself in an unknown world.
+A hooded figure approaches you and speaks in your native language.
+"Welcome to our lands, it will be essential for you to learn our language.
+I can offer you two options:
+
+You can either learn our language by reading this book.
+It will take you probably about three days and the same number of food rations
+to get through it. Food is expensive and hard to come by around here.
+
+There is also the much quicker option of using a magic potion to boost your learning.
+It will take you only a few minutes and the potions can be bought at the market
+for a reasonable price.
+
+What do you want to do?"
+
+This is too much on the nose..
+
+# The Book
+# The Magic Potion
+# I'm not interested in learning your language
+# Attack the hooded figure
+# Run away
+
+
 Plot, Character & Lore
 -> Focus on characters
 
@@ -8,6 +34,10 @@ Plot (needs at least one)
 
 Characters
  - Who are they?
+   - The architect and his messenger
+   - The chancellor and the kings of rats and cats
+   - The wanderer
+   - Lady Thea
  - What do they want?
  - What do they fear?
  - What do they love?
@@ -57,13 +87,47 @@ That's because it's basically a dystopian future, where the world is already doo
    - Mighty Warrior
    - Vampire
    - Necromancer
+ - Clever feeling of alternate routes
+   - Finding that hidden backdoor
+   - Double-crossing that evil bastard
+   - Activating those turret defenses
+   - Payoff for investing in a skill
 
 NOTE: Don't put key information in just one place.
+
+
+# Setup
+Someone brought you to this world.
+Obvious questions:
+
+ - MAIN QUEST: How do I get back to my world?
+ - OPTIONAL  : Who brought you to this world?
+ - OPTIONAL  : Why did they bring you to this world?
+
+# Central conflict: Magic vs. Nature
+
+There comes immense power with magic.
+Questions:
+ - What is the source of magic?
+ - Who controls this power?
+ - Who watches the watchmen?
+ - What is the price we pay for its use?
+ - Is it worth it?
+ - Is there a way to live without it?
+ - Is there a way to live in balance with it?
 
 # Mother Nature
  - She starts with 1000 HP, she drains 1 hp per hour and every time the player uses magic
  - Each MP the player spends is 1 damage to her
  - When the player uses magic to open her prison door, she will scream in pain because it will need a big amount of power
+
+# Big Power always comes with a price
+
+# Power is not always a sword
+# The words of power are not magical
+# They are spoken by the people
+# And their leaders
+
 
 # First small but complete Quest..
  - Gain access to the Tauci Prison Level 1
@@ -81,6 +145,7 @@ RPG Design
 Why is the quest giver not doing anything himself?
 Why doesn't he care if I do nothing?
 Why does no one else care about the problem?
+Why is the antagonist just waiting for me to come and kill him?
 
 
 # Problems

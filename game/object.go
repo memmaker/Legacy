@@ -2,18 +2,19 @@ package game
 
 import (
     "Legacy/geometry"
+    "Legacy/recfile"
     "Legacy/renderer"
     "image/color"
 )
 
 type BaseObject struct {
     GameObject
-    icon        int
+    icon        int32
     name        string
     description []string
 }
 
-func (a *BaseObject) Icon(uint64) int {
+func (a *BaseObject) Icon(uint64) int32 {
     return a.icon
 }
 
@@ -50,7 +51,7 @@ func (a *BaseObject) Description() []string {
 
 type Object interface {
     Pos() geometry.Point
-    Icon(uint64) int
+    Icon(uint64) int32
     TintColor() color.Color
     SetPos(geometry.Point)
     Name() string
@@ -60,6 +61,20 @@ type Object interface {
     IsPassableForProjectile() bool
     Description() []string
     IsHidden() bool
-    SetHidden(hidden bool, discoveryMessage []string)
     Discover() []string
+    ToRecordAndType() (recfile.Record, string)
+}
+
+func NewObjectFromRecord(record recfile.Record, objectTypeName string) Object {
+    switch objectTypeName {
+    case "chest":
+        return NewChestFromRecord(record)
+    case "door":
+        return NewDoorFromRecord(record)
+    case "shrine":
+        return NewShrineFromRecord(record)
+    case "fireplace":
+        return NewFireplaceFromRecord(record)
+    }
+    panic("unknown object type")
 }

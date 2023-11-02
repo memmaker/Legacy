@@ -56,7 +56,7 @@ func (e *EncounterBreakTauciCellarDoor) guardsArrive() {
     text := []string{
         "The guards arrive and ask you what you are doing here.",
     }
-    guardIcon := 132
+    guardIcon := int32(132)
     choices := []renderer.MenuItem{
         {
             Text: "I am a friend of the owner.",

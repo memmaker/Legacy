@@ -24,6 +24,9 @@ type GridEngine struct {
     wantsToQuit bool
     WorldTicks  uint64
 
+    // Rules
+    rules *game.Rules
+
     // Game State & Bookkeeping
     avatar           *game.Actor
     splitControlled  *game.Actor
@@ -51,7 +54,9 @@ type GridEngine struct {
     internalHeight     int
     modalElement       Modal
     inputElement       UIWidget
-    uiOverlay          map[int]int
+    uiOverlay          map[int]int32
+    foodButton         geometry.Point
+    goldButton         geometry.Point
     gridRenderer       *renderer.DualGridRenderer
     mapRenderer        *renderer.MapRenderer
     mapWindow          *renderer.MapWindow
@@ -70,8 +75,46 @@ type GridEngine struct {
     ticksForPrint int
 }
 
+func (g *GridEngine) GetRules() *game.Rules {
+    return g.rules
+}
+
+func (g *GridEngine) GetPartyEquipment() []game.Item {
+    return g.playerParty.GetFlatInventory()
+}
+
+func (g *GridEngine) GetAoECircle(source geometry.Point, radius int) []geometry.Point {
+    current := source
+    var result []geometry.Point
+    for x := -radius; x <= radius; x++ {
+        for y := -radius; y <= radius; y++ {
+            if x*x+y*y <= radius*radius {
+                result = append(result, current.Add(geometry.Point{X: x, Y: y}))
+            }
+        }
+    }
+    return result
+}
+
+func (g *GridEngine) HitAnimation(pos geometry.Point, icon int32, whenDone func()) {
+    g.combatManager.addHitAnimation(pos, icon, whenDone)
+}
+
+func (g *GridEngine) SpellDamageAt(caster *game.Actor, pos geometry.Point, amount int) {
+    if g.currentMap.IsActorAt(pos) {
+        actor := g.currentMap.ActorAt(pos)
+        g.DeliverSpellDamage(caster, actor, amount)
+        if !actor.IsAlive() {
+            g.actorDied(actor)
+            g.combatManager.findAlliesOfOpponent(actor)
+        } else if !g.IsPlayerControlled(actor) {
+            g.combatManager.addOpponent(actor)
+        }
+    }
+}
+
 func (g *GridEngine) StartCombat(opponents *game.Actor) {
-    g.combatManager.PlayerStartsCombat(g.GetAvatar(), opponents)
+    g.combatManager.PlayerStartsMeleeAttack(g.GetAvatar(), opponents)
 }
 
 func main() {
@@ -102,16 +145,17 @@ func main() {
         tileScale:        tileScaleFactor,
         internalWidth:    internalScreenWidth,
         internalHeight:   internalScreenHeight,
-        worldTiles:       ebiten.NewImageFromImage(mustLoadImage("assets/MergedWorld.png")),
+        worldTiles:       ebiten.NewImageFromImage(mustLoadImage("assets/world.png")),
         entityTiles:      ebiten.NewImageFromImage(mustLoadImage("assets/entities.png")),
-        uiTiles:          ebiten.NewImageFromImage(mustLoadImage("assets/charset-out.png")),
-        uiOverlay:        make(map[int]int),
+        uiTiles:          ebiten.NewImageFromImage(mustLoadImage("assets/charset.png")),
+        uiOverlay:        make(map[int]int32),
         mapsInMemory:     make(map[string]*gridmap.GridMap[*game.Actor, game.Item, game.Object]),
         animationRoutine: gocoro.NewCoroutine(),
     }
     ebiten.SetWindowTitle(gameTitle)
     ebiten.SetWindowSize(scaledScreenWidth, scaledScreenHeight)
     ebiten.SetScreenClearedEveryFrame(true)
+
     gridEngine.Init()
     if err := ebiten.RunGameWithOptions(gridEngine, &ebiten.RunGameOptions{
         GraphicsLibrary: ebiten.GraphicsLibraryOpenGL,
@@ -144,8 +188,13 @@ func (g *GridEngine) onMouseClick(x int, y int) {
     screenSize := g.gridRenderer.GetSmallGridScreenSize()
     oneFourth := screenSize.X / 4
 
-    // if it's the last line, we want to open ui
-    if y == screenSize.Y-1 {
+    if y == screenSize.Y-2 {
+        if x == g.foodButton.X {
+            g.TryRestParty()
+        } else if x == g.goldButton.X {
+            g.openFinanceOverview()
+        }
+    } else if y == screenSize.Y-1 {
         // each 1/4 of the screen is a different UI
         if x < oneFourth {
             g.openCharDetails(0)
@@ -156,28 +205,26 @@ func (g *GridEngine) onMouseClick(x int, y int) {
         } else {
             g.openCharDetails(3)
         }
-    } else if g.inputElement != nil {
-        g.inputElement.OnMouseClicked(x, y)
+    } else if g.inputElement != nil && g.inputElement.OnMouseClicked(x, y) {
+        return
     } else if g.modalElement != nil {
-        g.modalElement.ActionConfirm()
+        g.modalElement.OnMouseClicked(x, y)
     }
 }
 
-func (g *GridEngine) onPartyMoved() {
-    g.mapWindow.CenterOn(g.playerParty.Pos())
+func (g *GridEngine) onViewedActorMoved(newPosition geometry.Point) {
+    g.mapWindow.CenterOn(newPosition)
     g.updateContextActions()
-    g.currentMap.UpdateFieldOfView(g.playerParty.GetFoV(), g.playerParty.Pos())
+    g.currentMap.UpdateFieldOfView(g.playerParty.GetFoV(), newPosition)
 }
 
-func (g *GridEngine) onAvatarMovedAlone() {
-    g.mapWindow.CenterOn(g.GetAvatar().Pos())
-    g.updateContextActions()
-    g.currentMap.UpdateFieldOfView(g.playerParty.GetFoV(), g.GetAvatar().Pos())
-}
-
-func (g *GridEngine) drawPrintMessage(screen *ebiten.Image) {
+func (g *GridEngine) drawPrintMessage(screen *ebiten.Image, upper bool) {
     screenSize := g.gridRenderer.GetSmallGridScreenSize()
-    yPos := screenSize.Y - 1
+    offsetY := 1
+    if upper {
+        offsetY = 2
+    }
+    yPos := screenSize.Y - offsetY
     width := screenSize.X
     textLen := len(g.textToPrint)
     xOffsetForCenter := (width - textLen) / 2
@@ -230,11 +277,6 @@ func (g *GridEngine) growBloodAt(pos geometry.Point) {
         g.currentMap.SetTile(pos, bloodTile)
     }
 }
-
-func (g *GridEngine) chooseTarget(onTargetChose func(target geometry.Point)) {
-    // TODO
-}
-
 func (g *GridEngine) TryPickpocketItem(item game.Item, victim *game.Actor) {
     g.flags.IncrementFlag("pickpocket_attempts")
     chanceOfSuccess := 1.0
@@ -265,7 +307,15 @@ func (g *GridEngine) createArmor(level, amount int) []game.Item {
     return armor
 }
 
-func (g *GridEngine) EquipArmor(actor *game.Actor, a *game.Armor) {
+func (g *GridEngine) createWeapons(level int, amount int) []game.Item {
+    var weapons []game.Item
+    for i := 0; i < amount; i++ {
+        weapons = append(weapons, game.NewRandomWeapon(level))
+    }
+    return weapons
+}
+
+func (g *GridEngine) EquipItem(actor *game.Actor, a game.Wearable) {
     g.playerParty.RemoveItem(a)
     actor.Equip(a)
     g.playerParty.AddItem(a)
@@ -278,11 +328,17 @@ func (g *GridEngine) RunAnimationScript(script func(exe *gocoro.Execution)) erro
 func (g *GridEngine) actorDied(actor *game.Actor) {
     g.growBloodAt(actor.Pos())
     g.dropActorInventory(actor)
-    g.currentMap.SetActorToDowned(actor)
+    if !g.IsPlayerControlled(actor) {
+        g.currentMap.SetActorToDowned(actor) // IS THIS A GOOD IDEA?
+    }
 }
 
 func (g *GridEngine) dropActorInventory(actor *game.Actor) {
-    chest := game.NewFixedChest(actor.DropInventory())
+    droppedItems := actor.DropInventory()
+    if len(droppedItems) == 0 {
+        return
+    }
+    chest := game.NewFixedChest(droppedItems)
     dest := actor.Pos()
 
     freeNeighbor := g.currentMap.GetFreeCellsForDistribution(actor.Pos(), 1, func(p geometry.Point) bool {
@@ -297,6 +353,125 @@ func (g *GridEngine) dropActorInventory(actor *game.Actor) {
 
 func (g *GridEngine) showGameOver() {
     g.ShowText([]string{"Game Over"})
+}
+
+func (g *GridEngine) IsWindowOpen() bool {
+    return g.modalElement != nil || g.inputElement != nil
+}
+
+func (g *GridEngine) addToJournal(npc *game.Actor, text []string) {
+    g.Print("Added to journal.")
+    g.playerKnowledge.AddJournalEntry(npc.Name(), text, g.CurrentTick())
+    println(fmt.Sprintf("Adding to journal: %s", npc.Name()))
+    for _, line := range text {
+        println(line)
+    }
+}
+
+func (g *GridEngine) openJournal() {
+    if g.playerKnowledge.IsJournalEmpty() {
+        g.ShowText([]string{"You don't have any journal entries."})
+        return
+    }
+    g.openMenu([]renderer.MenuItem{
+        {
+            Text: "Chronological",
+            Action: func() {
+                g.ShowFixedFormatText(g.playerKnowledge.GetChronologicalJournal())
+            },
+        },
+        {
+            Text: "By Source",
+            Action: func() {
+                sources := g.playerKnowledge.GetJournalSources()
+                g.openMenu(g.toJournalMenu(sources))
+            },
+        },
+    })
+
+}
+
+func (g *GridEngine) toJournalMenu(sources []string) []renderer.MenuItem {
+    var items []renderer.MenuItem
+    for _, s := range sources {
+        source := s
+        items = append(items, renderer.MenuItem{
+            Text: source,
+            Action: func() {
+                g.ShowFixedFormatText(g.playerKnowledge.GetJournalBySource(source))
+            },
+        })
+    }
+    return items
+}
+
+func (g *GridEngine) ScreenToMap(screenX int, screenY int) geometry.Point {
+    bigGrid := g.gridRenderer.GetScaledBigGridSize()
+    smallGrid := g.gridRenderer.GetScaledSmallGridSize()
+    screenGridPos := geometry.Point{X: (screenX - smallGrid) / bigGrid, Y: (screenY - smallGrid) / bigGrid}
+    return g.mapWindow.GetMapGridPositionFromScreenGridPosition(screenGridPos)
+}
+
+func (g *GridEngine) openPartyOverView() {
+    g.ShowFixedFormatText(g.playerParty.GetPartyOverview())
+}
+
+func (g *GridEngine) DeliverCombatDamage(attacker *game.Actor, victim *game.Actor) {
+    baseMeleeDamage := attacker.GetMeleeDamage()
+    victimArmor := victim.GetTotalArmor()
+    damage := baseMeleeDamage - victimArmor
+    if damage > 0 {
+        victim.Damage(damage)
+        g.Print(fmt.Sprintf("%d dmg. to '%s'", damage, victim.Name()))
+    } else {
+        g.Print(fmt.Sprintf("No dmg. to '%s'", victim.Name()))
+    }
+
+}
+
+func (g *GridEngine) DeliverSpellDamage(attacker *game.Actor, victim *game.Actor, amount int) {
+    baseSpellDamage := amount
+    victimDefense := victim.GetMagicDefense()
+    damage := baseSpellDamage - victimDefense
+    if damage > 0 {
+        victim.Damage(damage)
+        g.Print(fmt.Sprintf("%d dmg. to '%s'", damage, victim.Name()))
+    } else {
+        g.Print(fmt.Sprintf("No dmg. to '%s'", victim.Name()))
+    }
+}
+
+func (g *GridEngine) openDismissMenu() {
+    var menuItems []renderer.MenuItem
+    for _, m := range g.playerParty.GetMembers() {
+        if m == g.avatar {
+            continue
+        }
+        member := m
+        menuItems = append(menuItems, renderer.MenuItem{
+            Text: member.Name(),
+            Action: func() {
+                if g.IsPlayerControlled(member) {
+                    if g.GetAvatar() == member {
+                        g.SwitchAvatarTo(g.avatar)
+                    }
+                    g.playerParty.RemoveMember(member)
+                    g.Print(fmt.Sprintf("'%s' left the party.", member.Name()))
+                }
+            },
+        })
+    }
+    g.openMenu(menuItems)
+}
+
+func (g *GridEngine) openFinanceOverview() {
+    g.ShowFixedFormatText(g.playerParty.GetFinanceOverview(g))
+}
+
+func (g *GridEngine) getAllLoadedMaps() map[string]*gridmap.GridMap[*game.Actor, game.Item, game.Object] {
+    mapsInMemory := g.mapsInMemory
+    mapsInMemory[g.currentMap.GetName()] = g.currentMap
+    return mapsInMemory
 }
 
 func secondsToTicks(seconds float64) int {
