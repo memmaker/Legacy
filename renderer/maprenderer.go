@@ -14,8 +14,9 @@ type MapView interface {
 }
 
 type MapRenderer struct {
-    input        MapView
-    gridRenderer *DualGridRenderer
+    input              MapView
+    gridRenderer       *DualGridRenderer
+    disableFieldOfView bool
 }
 
 func NewRenderer(gridRenderer *DualGridRenderer, input MapView) *MapRenderer {
@@ -41,10 +42,14 @@ func (r *MapRenderer) Draw(fov *geometry.FOV, screen *ebiten.Image, tick uint64)
             if textureIndex == -1 {
                 continue
             }
-            if !fov.Visible(geometry.Point{X: mapX, Y: mapY}) {
+            if !fov.Visible(geometry.Point{X: mapX, Y: mapY}) && !r.disableFieldOfView {
                 tintColor = color.Black
             }
             r.gridRenderer.DrawBigOnScreenWithAtlasAndTint(screen, float64(x), float64(y), textureAtlas, textureIndex, tintColor)
         }
     }
+}
+
+func (r *MapRenderer) SetDisableFieldOfView(disable bool) {
+    r.disableFieldOfView = disable
 }

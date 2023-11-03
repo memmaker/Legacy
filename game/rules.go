@@ -28,7 +28,7 @@ func (r *Rules) NeededXpForLevel(level int) int {
 func (r *Rules) CanLevelUp(level, xp int) (bool, int) {
     xpForNext := r.NeededXpForLevel(level + 1)
     canLevel := xp >= xpForNext
-    xpMissing := min(0, xpForNext-xp)
+    xpMissing := max(0, xpForNext-xp)
     return canLevel, xpMissing
 }
 

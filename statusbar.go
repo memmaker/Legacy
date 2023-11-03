@@ -7,7 +7,7 @@ import (
 )
 
 func (g *GridEngine) drawLowerStatusBar(screen *ebiten.Image) {
-    status := g.playerParty.Status()
+    status := g.playerParty.Status(g)
     screenSize := g.gridRenderer.GetSmallGridScreenSize()
     y := screenSize.Y - 1
     x := 0
@@ -53,4 +53,15 @@ func (g *GridEngine) drawUpperStatusBar(screen *ebiten.Image) {
         g.gridRenderer.DrawColoredString(screen, xPosGold, yPos, goldString, color.White)
         g.gridRenderer.DrawOnSmallGrid(screen, xPosGold+len(goldString), yPos, goldIcon)
     }
+
+    if g.playerParty.HasDefenseBuffs() {
+        shieldIcon := int32(151)
+        g.gridRenderer.DrawOnSmallGrid(screen, g.defenseBuffsButton.X, g.defenseBuffsButton.Y, shieldIcon)
+    }
+
+    if g.playerParty.HasOffenseBuffs() {
+        swordIcon := int32(152)
+        g.gridRenderer.DrawOnSmallGrid(screen, g.offenseBuffsButton.X, g.offenseBuffsButton.Y, swordIcon)
+    }
+
 }

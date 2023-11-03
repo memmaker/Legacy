@@ -22,7 +22,7 @@ type Wearable interface {
 type Engine interface {
     StartConversation(a *Actor)
     ShowColoredText(text []string, textcolor color.Color, autolayout bool) *renderer.ScrollableTextWindow
-    GetTextFile(filename string) []string
+    GetScrollFile(filename string) []string
     PickUpItem(item Item)
     DropItem(item Item)
     GetAvatar() *Actor
@@ -53,8 +53,10 @@ type Engine interface {
     ShowEquipMenu(a Wearable)
     StartCombat(opponents *Actor)
     GetAoECircle(pos geometry.Point, radius int) []geometry.Point
-    HitAnimation(pos geometry.Point, icon int32, whenDone func())
+    HitAnimation(pos geometry.Point, atlasName renderer.AtlasName, icon int32, tintColor color.Color, whenDone func())
     SpellDamageAt(caster *Actor, pos geometry.Point, amount int)
     GetPartyEquipment() []Item
     GetRules() *Rules
+    CanLevelUp(member *Actor) (bool, int)
+    FreezeActorAt(pos geometry.Point, turns int)
 }

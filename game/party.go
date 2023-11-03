@@ -91,12 +91,15 @@ type MemberStatus struct {
     StatusColor color.Color
 }
 
-func (p *Party) Status() []MemberStatus {
+func (p *Party) Status(engine Engine) []MemberStatus {
     var result []MemberStatus
     for _, member := range p.members {
         nameColor := ega.BrightWhite
+        canLevelUp, _ := engine.CanLevelUp(member)
         if !member.IsAlive() {
             nameColor = ega.BrightRed
+        } else if canLevelUp {
+            nameColor = ega.BrightMagenta
         }
         result = append(result, MemberStatus{
             Name:        member.Name(),
@@ -381,6 +384,54 @@ func (p *Party) SetLockpicks(amount int) {
 
 func (p *Party) GetCurrentMapName() string {
     return p.gridMap.GetName()
+}
+
+func (p *Party) AddXPForEveryone(xp int) {
+    for _, member := range p.members {
+        member.AddXP(xp)
+    }
+}
+
+func (p *Party) GetDefenseBuffs() []string {
+    var result []string
+    for _, member := range p.members {
+        if !member.HasDefenseBuffs() {
+            continue
+        }
+        result = append(result, member.Name())
+        result = append(result, member.GetDefenseBuffs()...)
+    }
+    return result
+}
+
+func (p *Party) GetOffenseBuffs() []string {
+    var result []string
+    for _, member := range p.members {
+        if !member.HasOffenseBuffs() {
+            continue
+        }
+        result = append(result, member.Name())
+        result = append(result, member.GetOffenseBuffs()...)
+    }
+    return result
+}
+
+func (p *Party) HasOffenseBuffs() bool {
+    for _, member := range p.members {
+        if member.HasOffenseBuffs() {
+            return true
+        }
+    }
+    return false
+}
+
+func (p *Party) HasDefenseBuffs() bool {
+    for _, member := range p.members {
+        if member.HasDefenseBuffs() {
+            return true
+        }
+    }
+    return false
 }
 
 func moneyFormat(value int) string {

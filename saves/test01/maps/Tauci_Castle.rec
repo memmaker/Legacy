@@ -1,4 +1,75 @@
+%rec: items
+
+item: key(small key,tauci_chest,4)
+name: small key
+position: (20,20)
+isHidden: true
+value: 0
+
+item: candle()
+name: lit candle
+position: (49,29)
+isHidden: false
+value: 0
+
+item: candle()
+name: lit candle
+position: (36,6)
+isHidden: false
+value: 0
+
+item: candle()
+name: lit candle
+position: (27,6)
+isHidden: false
+value: 0
+
+item: potion()
+name: magic potion
+position: (48,22)
+isHidden: false
+value: 250
+
+item: potion()
+name: magic potion
+position: (49,22)
+isHidden: false
+value: 250
+
+item: potion()
+name: magic potion
+position: (42,22)
+isHidden: false
+value: 250
+
+item: potion()
+name: magic potion
+position: (41,22)
+isHidden: false
+value: 250
+
+item: potion()
+name: magic potion
+position: (43,22)
+isHidden: false
+value: 250
+
+item: potion()
+name: magic potion
+position: (49,23)
+isHidden: false
+value: 250
+
+item: scroll(Burn' em,great_ball_of_fire,Fireball)
+name: Burn' em
+position: (23,43)
+isHidden: false
+value: 100
+
+%rec: downedActors
+
 %rec: actors
+
 name: Chancellor Tauci
 internalName: ruler
 position: (31,6)
@@ -13,6 +84,7 @@ mana: 0
 baseArmor: 0
 baseMelee: 0
 baseRanged: 0
+description: The chancellor of Prucol. He is dressed in a fancy purple robe.
 
 name: tauci_throne_guard_left
 internalName: tauci_throne_guard_left
@@ -28,6 +100,7 @@ mana: 0
 baseArmor: 0
 baseMelee: 0
 baseRanged: 0
+description: 
 
 name: tauci_throne_guard_right
 internalName: tauci_throne_guard_right
@@ -43,6 +116,7 @@ mana: 0
 baseArmor: 0
 baseMelee: 0
 baseRanged: 0
+description: 
 
 name: tauci_food
 internalName: tauci_food
@@ -58,6 +132,7 @@ mana: 0
 baseArmor: 0
 baseMelee: 0
 baseRanged: 0
+description: 
 
 name: Foodie Marcus
 internalName: tauci_healer
@@ -73,6 +148,8 @@ mana: 0
 baseArmor: 0
 baseMelee: 0
 baseRanged: 0
+description: This sympathetic looking guard is standing in front of the castle entrance.
++ He looks like he's been standing there for a while and is waiting for a chance to leave.
 
 name: grugtar
 internalName: grugtar
@@ -88,6 +165,7 @@ mana: 0
 baseArmor: 0
 baseMelee: 0
 baseRanged: 0
+description: 
 
 name: Guard Gregor
 internalName: tauci_front_guard
@@ -103,6 +181,8 @@ mana: 0
 baseArmor: 0
 baseMelee: 0
 baseRanged: 0
+description: This sympathetic looking guard is standing in front of the castle entrance.
++ He looks like he's been standing there for a while and is waiting for a chance to leave.
 
 name: Ghost of a Tauci
 internalName: tauci_ghost
@@ -118,6 +198,7 @@ mana: 0
 baseArmor: 0
 baseMelee: 0
 baseRanged: 0
+description: The ghost of a Tauci. It is a very weak apparition.
 
 name: tauci_potions
 internalName: tauci_potions
@@ -133,6 +214,7 @@ mana: 0
 baseArmor: 0
 baseMelee: 0
 baseRanged: 0
+description: 
 
 name: Inconspicuous Person
 internalName: tauci_thief
@@ -148,6 +230,23 @@ mana: 0
 baseArmor: 0
 baseMelee: 0
 baseRanged: 0
+description: This person is trying to blend in with the crowd.
+
+name: Roy
+internalName: ranger
+position: (28,43)
+icon: 177
+iconFrames: 1
+isHuman: true
+health: 10
+maxhealth: 10
+xp: 0
+level: 1
+mana: 0
+baseArmor: 0
+baseMelee: 0
+baseRanged: 0
+description: The nice guy from the woods.
 
 name: Georg
 internalName: knight
@@ -163,6 +262,23 @@ mana: 0
 baseArmor: 0
 baseMelee: 0
 baseRanged: 0
+description: The nice guy from the village.
+
+name: Tim
+internalName: mage
+position: (32,43)
+icon: 178
+iconFrames: 1
+isHuman: true
+health: 10
+maxhealth: 10
+xp: 0
+level: 1
+mana: 0
+baseArmor: 0
+baseMelee: 0
+baseRanged: 0
+description: The nice guy from the tower of magic.
 
 name: tauci_bank_teller
 internalName: tauci_bank_teller
@@ -178,124 +294,28 @@ mana: 0
 baseArmor: 0
 baseMelee: 0
 baseRanged: 0
+description: 
 
-%rec: downedActors
-%rec: fireplace
-name: 
-icon: 187
-pos: (32,26)
-isHidden: false
-foodCount: 8
+%rec: transitions
 
-name: 
-icon: 187
-pos: (32,25)
-isHidden: false
-foodCount: 2
+pos: (25,45)
+targetMap: WorldMap
+targetPos: (45,27)
 
-name: 
-icon: 187
-pos: (8,25)
-isHidden: false
-foodCount: 4
+pos: (14,30)
+targetMap: Tauci_Prison_Level_1
+targetPos: (29,22)
 
-%rec: chest
-name: 
-isHidden: false
-icon: 25
-position: (27,25)
-needsKey: 
-lootLevel: 1
-hasCreatedLoot: false
-lootType: healer
+pos: (2,43)
+targetMap: Tauci_Prison_Level_1
+targetPos: (14,40)
 
-name: 
-isHidden: true
-icon: 25
-position: (22,20)
-needsKey: tauci_chest
-lootLevel: 3
-hasCreatedLoot: false
-lootType: armor
+%rec: secretDoors
 
-name: 
-isHidden: true
-icon: 25
-position: (52,72)
-needsKey: 
-lootLevel: 3
-hasCreatedLoot: false
-lootType: common
-lootType: lockpicks
-
-name: 
-isHidden: false
-icon: 25
-position: (8,10)
-needsKey: tauci_front_guard_key
-lootLevel: 1
-hasCreatedLoot: false
-lootType: common
-
-name: 
-isHidden: false
-icon: 25
-position: (8,13)
-needsKey: tauci_ruler_left_guard_key
-lootLevel: 1
-hasCreatedLoot: false
-lootType: common
-
-name: 
-isHidden: false
-icon: 25
-position: (8,16)
-needsKey: tauci_ruler_right_guard_key
-lootLevel: 1
-hasCreatedLoot: false
-lootType: common
-
-name: 
-isHidden: true
-icon: 25
-position: (8,22)
-needsKey: 
-lootLevel: 1
-hasCreatedLoot: true
-lootType: common
-item: key(small key, tauci_cellar,0)
-
-name: 
-isHidden: false
-icon: 25
-position: (23,47)
-needsKey: 
-lootLevel: 1
-hasCreatedLoot: true
-lootType: armor
-lootType: weapon
-
-name: 
-isHidden: false
-icon: 25
-position: (25,47)
-needsKey: 
-lootLevel: 3
-hasCreatedLoot: true
-lootType: weapon
-lootType: armor
-
-name: 
-isHidden: false
-icon: 25
-position: (28,47)
-needsKey: 
-lootLevel: 5
-hasCreatedLoot: true
-lootType: armor
-lootType: weapon
+pos: (23,19)
 
 %rec: door
+
 name: 
 icon: 183
 pos: (25,38)
@@ -466,6 +486,7 @@ knockEvent:
 breakEvent: 
 
 %rec: shrine
+
 name: Shrine of Loyalty
 icon: 186
 pos: (48,11)
@@ -478,58 +499,126 @@ pos: (20,35)
 isHidden: false
 principle: Wealth
 
+%rec: fireplace
+
+name: 
+icon: 187
+pos: (32,26)
+isHidden: false
+foodCount: 8
+
+name: 
+icon: 187
+pos: (32,25)
+isHidden: false
+foodCount: 2
+
+name: 
+icon: 187
+pos: (8,25)
+isHidden: false
+foodCount: 4
+
+%rec: chest
+
+name: 
+isHidden: false
+icon: 25
+position: (27,25)
+needsKey: 
+lootLevel: 1
+hasCreatedLoot: false
+lootType: healer
+
+name: 
+isHidden: true
+icon: 25
+position: (22,20)
+needsKey: tauci_chest
+lootLevel: 3
+hasCreatedLoot: false
+lootType: armor
+
+name: 
+isHidden: true
+icon: 25
+position: (52,72)
+needsKey: 
+lootLevel: 3
+hasCreatedLoot: false
+lootType: common
+lootType: lockpicks
+
+name: 
+isHidden: false
+icon: 25
+position: (8,10)
+needsKey: tauci_front_guard_key
+lootLevel: 1
+hasCreatedLoot: false
+lootType: common
+
+name: 
+isHidden: false
+icon: 25
+position: (8,13)
+needsKey: tauci_ruler_left_guard_key
+lootLevel: 1
+hasCreatedLoot: false
+lootType: common
+
+name: 
+isHidden: false
+icon: 25
+position: (8,16)
+needsKey: tauci_ruler_right_guard_key
+lootLevel: 1
+hasCreatedLoot: false
+lootType: common
+
+name: 
+isHidden: true
+icon: 25
+position: (8,22)
+needsKey: 
+lootLevel: 1
+hasCreatedLoot: true
+lootType: common
+item: key(small key, tauci_cellar,0)
+
+name: 
+isHidden: false
+icon: 25
+position: (23,47)
+needsKey: 
+lootLevel: 1
+hasCreatedLoot: false
+lootType: armor
+lootType: weapon
+
+name: 
+isHidden: false
+icon: 25
+position: (25,47)
+needsKey: 
+lootLevel: 3
+hasCreatedLoot: false
+lootType: weapon
+lootType: armor
+
+name: 
+isHidden: false
+icon: 25
+position: (28,47)
+needsKey: 
+lootLevel: 5
+hasCreatedLoot: false
+lootType: armor
+lootType: weapon
+
 %rec: coreInfo
+
 mapName: Tauci_Castle
 width: 67
 height: 94
-
-%rec: items
-item: key(small key,tauci_chest,4)
-position: (20,20)
-
-item: candle()
-position: (49,29)
-
-item: candle()
-position: (36,6)
-
-item: candle()
-position: (27,6)
-
-item: potion()
-position: (48,22)
-
-item: potion()
-position: (49,22)
-
-item: potion()
-position: (42,22)
-
-item: potion()
-position: (41,22)
-
-item: potion()
-position: (43,22)
-
-item: potion()
-position: (49,23)
-
-item: scroll(Burn' em,assets/scrolls/great_ball_of_fire.txt,Fireball)
-position: (23,43)
-
-%rec: transitions
-pos: (25,45)
-targetMap: WorldMap
-targetPos: (45,27)
-
-pos: (14,30)
-targetMap: Tauci_Prison_Level_1
-targetPos: (29,22)
-
-pos: (2,43)
-targetMap: Tauci_Prison_Level_1
-targetPos: (14,40)
-
-%rec: secretDoors
-pos: (23,19)
 

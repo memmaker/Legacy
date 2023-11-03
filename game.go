@@ -39,6 +39,10 @@ func (g *GridEngine) openPartyMenu() {
             Text:   "Journal",
             Action: g.openJournal,
         },
+        {
+            Text:   "Message log",
+            Action: g.openPrintLog,
+        },
     }
     if g.playerParty.HasFollowers() {
         partyRanged := renderer.MenuItem{
@@ -73,7 +77,7 @@ func (g *GridEngine) openPartyMenu() {
 func (g *GridEngine) openCharDetails(partyIndex int) {
     actor := g.playerParty.GetMember(partyIndex)
     if actor != nil {
-        window := g.ShowFixedFormatText(actor.GetDetails())
+        window := g.ShowFixedFormatText(actor.GetDetails(g))
         window.SetTitle(actor.Name())
     }
 }
@@ -145,20 +149,17 @@ func (g *GridEngine) ShowColoredText(text []string, textcolor color.Color, autol
 func (g *GridEngine) PickPocketItem(item game.Item, owner *game.Actor) {
     owner.RemoveItem(item)
     g.takeItem(item)
-    g.Print(fmt.Sprintf("Stolen \"%s\"", item.Name()))
     g.updateContextActions()
 }
 
 func (g *GridEngine) PickUpItem(item game.Item) {
     g.currentMap.RemoveItem(item)
     g.takeItem(item)
-    g.Print(fmt.Sprintf("Taken \"%s\"", item.Name()))
     g.updateContextActions()
 }
 func (g *GridEngine) moveItemToParty(item game.Item, container game.ItemContainer) {
     container.RemoveItem(item)
     g.takeItem(item)
-    g.Print(fmt.Sprintf("Taken \"%s\"", item.Name()))
     g.updateContextActions()
 }
 
@@ -166,7 +167,7 @@ func (g *GridEngine) takeItem(item game.Item) {
     if pseudoItem, ok := item.(*game.PseudoItem); ok {
         pseudoItem.Take(g)
     } else {
-        g.playerParty.AddItem(item)
+        g.AddItem(item)
     }
 }
 func (g *GridEngine) DropItem(item game.Item) {
@@ -238,7 +239,7 @@ func (g *GridEngine) openVendorMenu(npc *game.Actor) {
         return
     }
 
-    labelWidth, colWidth := getLineLengthInfo(itemsToSell)
+    labelWidth, colWidth := getLineLengthInfoItems(itemsToSell)
     var menuItems []renderer.MenuItem
     for _, i := range itemsToSell {
         offer := i
@@ -254,7 +255,46 @@ func (g *GridEngine) openVendorMenu(npc *game.Actor) {
     g.openMenuForVendor(menuItems)
 }
 
-func getLineLengthInfo(sell []game.SalesOffer) (int, int) {
+func (g *GridEngine) openTrainerMenu(npc *game.Actor, maxLevel int) {
+    // we want to offer all the party members who currently can level up
+    // to the given max level
+
+    var eligibleMembers []*game.Actor
+
+    for _, m := range g.playerParty.GetMembers() {
+        if m.GetLevel() >= maxLevel {
+            continue
+        }
+        canLevel, _ := g.rules.CanLevelUp(m.GetLevel(), m.GetXP())
+        if !canLevel {
+            continue
+        }
+        eligibleMembers = append(eligibleMembers, m)
+    }
+
+    if len(eligibleMembers) == 0 {
+        g.openIconWindow(npc.Icon(0), []string{"Unfortunately, no member of your party can be trained here."}, func() {})
+        return
+    }
+
+    labelWidth, colWidth := getLineLengthInfoActors(eligibleMembers)
+    var menuItems []renderer.MenuItem
+    for _, i := range eligibleMembers {
+        member := i
+        itemLine := util.TableLine(labelWidth, colWidth, member.Name(), fmt.Sprintf("(%d)", member.GetLevel()))
+        //itemLine := fmt.Sprintf("%s (%d)", member.Item.Name(), member.Price)
+        menuItems = append(menuItems, renderer.MenuItem{
+            Text: itemLine,
+            Action: func() {
+                member.LevelUp(g.flags)
+                g.openTrainerMenu(npc, maxLevel)
+            },
+        })
+    }
+    g.openMenuForVendor(menuItems)
+}
+
+func getLineLengthInfoItems(sell []game.SalesOffer) (int, int) {
     var longestItemNameLength, longestPriceLength int
     for _, i := range sell {
         if len(i.Item.Name()) > longestItemNameLength {
@@ -266,6 +306,19 @@ func getLineLengthInfo(sell []game.SalesOffer) (int, int) {
     }
     return longestItemNameLength, longestPriceLength
 }
+func getLineLengthInfoActors(actors []*game.Actor) (int, int) {
+    var longestItemNameLength, longestLevelLength int
+    for _, i := range actors {
+        if len(i.Name()) > longestItemNameLength {
+            longestItemNameLength = len(i.Name())
+        }
+        levelColWidth := len(strconv.Itoa(i.GetLevel())) + 2
+        if levelColWidth > longestLevelLength {
+            longestLevelLength = levelColWidth
+        }
+    }
+    return longestItemNameLength, longestLevelLength
+}
 
 func (g *GridEngine) TryBuyItem(npc *game.Actor, offer game.SalesOffer) {
     if g.playerParty.GetGold() < offer.Price {
@@ -276,7 +329,7 @@ func (g *GridEngine) TryBuyItem(npc *game.Actor, offer game.SalesOffer) {
     npc.AddGold(offer.Price)
 
     g.playerParty.RemoveGold(offer.Price)
-    g.playerParty.AddItem(offer.Item)
+    g.AddItem(offer.Item)
     g.openIconWindow(npc.Icon(0), []string{"Thank you for your business."}, func() {})
 }
 
@@ -303,7 +356,7 @@ func (g *GridEngine) searchForHiddenObjects() {
     neighbors = append(neighbors, source)
     for _, n := range neighbors {
         neighbor := n
-        g.HitAnimation(neighbor, 195, func() {
+        g.HitAnimation(neighbor, renderer.AtlasEntities, 195, color.White, func() {
             g.revealHiddenObjectsAt(neighbor)
         })
     }
@@ -361,10 +414,20 @@ func (g *GridEngine) PartyHasKey(key string) bool {
 }
 
 func (g *GridEngine) AddFood(amount int) {
+    g.Print(fmt.Sprintf("%d food added", amount))
     g.playerParty.AddFood(amount)
 }
 
+func (g *GridEngine) AddLockpicks(amount int) {
+    g.Print(fmt.Sprintf("%d lockpicks added", amount))
+    g.playerParty.AddLockpicks(amount)
+}
+func (g *GridEngine) AddItem(item game.Item) {
+    g.Print(fmt.Sprintf("Received \"%s\"", item.Name()))
+    g.playerParty.AddItem(item)
+}
 func (g *GridEngine) AddGold(amount int) {
+    g.Print(fmt.Sprintf("%d gold added", amount))
     g.playerParty.AddGold(amount)
 }
 

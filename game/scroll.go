@@ -54,7 +54,7 @@ func (b *Scroll) GetContextActions(engine Engine) []renderer.MenuItem {
 }
 
 func (b *Scroll) read(engine Engine) {
-    text := engine.GetTextFile(b.filename)
+    text := engine.GetScrollFile(b.filename)
     engine.ShowColoredText(text, color.White, true)
 }
 

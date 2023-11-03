@@ -66,7 +66,7 @@ func (g *GridEngine) Draw(screen *ebiten.Image) {
 
     if g.inputElement != nil {
         if g.inputElement.ShouldClose() {
-            if gridMenu, ok := g.inputElement.(*renderer.GridMenu); ok {
+            if gridMenu, ok := g.inputElement.(*renderer.GridMenu); ok && !g.combatManager.IsInCombat() {
                 lastAction := gridMenu.GetLastAction()
                 g.lastSelectedAction = lastAction
             }
@@ -198,7 +198,7 @@ func (g *GridEngine) updateContextActions() {
 
     for _, relative := range twoRangeCardinalRelative {
         neighbor := loc.Add(relative)
-        if g.currentMap.Contains(neighbor) && g.currentMap.IsActorAt(neighbor) {
+        if g.currentMap.Contains(neighbor) && g.currentMap.IsActorAt(neighbor) && g.playerParty.GetFoV().Visible(neighbor) {
             actor := g.currentMap.GetActor(neighbor)
             if !actor.IsHidden() && !g.IsPlayerControlled(actor) {
                 actorsNearby = append(actorsNearby, actor)
@@ -247,4 +247,20 @@ func (g *GridEngine) updateContextActions() {
         })
     }
 
+    // worldmap interactions
+    if g.currentMap.IsSpecialAt(loc, gridmap.SpecialTileForest) {
+        g.contextActions = append(g.contextActions, renderer.MenuItem{
+            Text: "Hunt game",
+            Action: func() {
+                g.AddFood(1)
+            },
+        })
+
+        g.contextActions = append(g.contextActions, renderer.MenuItem{
+            Text: "Gather herbs",
+            Action: func() {
+                g.AddFood(2)
+            },
+        })
+    }
 }

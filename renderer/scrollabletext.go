@@ -7,6 +7,7 @@ import (
 )
 
 type ScrollableTextWindow struct {
+    ButtonHolder
     topLeft     geometry.Point
     bottomRight geometry.Point
 
@@ -19,6 +20,9 @@ type ScrollableTextWindow struct {
 
     shouldClose bool
     title       string
+
+    upIndicator, downIndicator int32
+    upDownIndicator            int32
 }
 
 func (r *ScrollableTextWindow) OnMouseClicked(x int, y int) bool {
@@ -68,10 +72,14 @@ func NewFixedTextWindow(gridRenderer *DualGridRenderer, text []string) *Scrollab
 }
 func NewScrollableTextWindow(gridRenderer *DualGridRenderer, topLeft, bottomRight geometry.Point) *ScrollableTextWindow {
     return &ScrollableTextWindow{
-        gridRenderer: gridRenderer,
-        textColor:    color.White,
-        topLeft:      topLeft,
-        bottomRight:  bottomRight,
+        ButtonHolder:    NewButtonHolder(),
+        gridRenderer:    gridRenderer,
+        textColor:       color.White,
+        topLeft:         topLeft,
+        bottomRight:     bottomRight,
+        upDownIndicator: 4,
+        downIndicator:   5,
+        upIndicator:     6,
     }
 }
 
@@ -96,8 +104,16 @@ func (r *ScrollableTextWindow) ActionDown() {
         r.scrollOffset = len(r.text) - (r.bottomRight.Y - r.topLeft.Y) + 4
     }
 }
+
+func (r *ScrollableTextWindow) CanScroll() bool {
+    return len(r.text) > (r.bottomRight.Y-r.topLeft.Y)-4
+}
 func (r *ScrollableTextWindow) Draw(screen *ebiten.Image) {
-    r.gridRenderer.DrawFilledBorder(screen, r.topLeft, r.bottomRight, r.title)
+    brForBorder := r.bottomRight
+    if r.CanScroll() {
+        brForBorder.X += 1
+    }
+    r.gridRenderer.DrawFilledBorder(screen, r.topLeft, brForBorder, r.title)
     for y := r.topLeft.Y + 2; y < r.bottomRight.Y-2; y++ {
         for x := r.topLeft.X + 2; x < r.bottomRight.X-2; x++ {
             currentLine := r.text[y-r.topLeft.Y-2+r.scrollOffset]
@@ -108,6 +124,14 @@ func (r *ScrollableTextWindow) Draw(screen *ebiten.Image) {
             }
             currentChar := asRunes[horizontalIndex]
             r.gridRenderer.DrawColoredChar(screen, x, y, currentChar, r.textColor)
+        }
+    }
+    if r.CanScroll() {
+        if r.scrollOffset > 0 {
+            r.gridRenderer.DrawOnSmallGrid(screen, r.bottomRight.X-1, r.topLeft.Y+2, r.upIndicator)
+        }
+        if r.scrollOffset < len(r.text)-(r.bottomRight.Y-r.topLeft.Y)+4 {
+            r.gridRenderer.DrawOnSmallGrid(screen, r.bottomRight.X-1, r.bottomRight.Y-3, r.downIndicator)
         }
     }
 }

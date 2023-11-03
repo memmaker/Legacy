@@ -16,7 +16,15 @@ import (
 func (g *GridEngine) Init() {
     g.deviceDPIScale = ebiten.DeviceScaleFactor()
 
-    g.gridRenderer = renderer.NewDualGridRenderer(g.uiTiles, g.entityTiles, g.TotalScale(), g.getFontIndex())
+    g.gridRenderer = renderer.NewDualGridRenderer(g.TotalScale(), g.getFontIndex())
+    g.gridRenderer.SetAtlasMap(
+        map[renderer.AtlasName]*ebiten.Image{
+            renderer.AtlasCharacters:        g.uiTiles,
+            renderer.AtlasWorld:             g.worldTiles,
+            renderer.AtlasEntities:          g.entityTiles,
+            renderer.AtlasEntitiesGrayscale: g.grayScaleEntityTiles,
+        },
+    )
 
     g.gridRenderer.SetBorderDefinition(renderer.GridBorderDefinition{
         HorizontalLineTextureIndex: 13,
@@ -35,6 +43,8 @@ func (g *GridEngine) Init() {
     smallScreenSize := g.gridRenderer.GetSmallGridScreenSize()
     g.foodButton = geometry.Point{X: 1, Y: smallScreenSize.Y - 2}
     g.goldButton = geometry.Point{X: smallScreenSize.X - 2, Y: smallScreenSize.Y - 2}
+    g.defenseBuffsButton = geometry.Point{X: 15, Y: 0}
+    g.offenseBuffsButton = geometry.Point{X: 24, Y: 0}
 
     g.avatar = game.NewActor("Avatar", 7)
     g.playerParty = game.NewParty(g.avatar)
@@ -133,11 +143,24 @@ func (g *GridEngine) loadMap(mapName string) *gridmap.GridMap[*game.Actor, game.
         posX, posY := environmentLayer.ToGridPosition(tile.Position[0], tile.Position[1])
         pos := geometry.Point{X: posX, Y: posY}
         enums := worldTileset.EnumsForTile(tile.ID)
+        specialTile := gridmap.SpecialTileNone
+        if enums.Contains("IsForest") && mapName == "WorldMap" {
+            specialTile = gridmap.SpecialTileForest
+        } else if enums.Contains("IsMountain") && mapName == "WorldMap" {
+            specialTile = gridmap.SpecialTileMountain
+        } else if enums.Contains("IsSwamp") && mapName == "WorldMap" {
+            specialTile = gridmap.SpecialTileSwamp
+        } else if enums.Contains("IsWater") {
+            specialTile = gridmap.SpecialTileWater
+        } else if enums.Contains("IsBreakable") {
+            specialTile = gridmap.SpecialTileBreakable
+        }
         loadedMap.SetCell(pos, gridmap.MapCell[*game.Actor, game.Item, game.Object]{
             TileType: gridmap.Tile{
                 DefinedIcon:   int32(tile.ID),
                 IsWalkable:    !enums.Contains("IsBlockingMovement"),
                 IsTransparent: !enums.Contains("IsBlockingView"),
+                Special:       specialTile,
             },
         })
     }
@@ -359,8 +382,7 @@ func (g *GridEngine) getScrollFromEntity(entity *ldtk_go.Entity) game.Item {
         discoveryMessage = strings.Split(entity.PropertyByIdentifier("OnDiscovery").AsString(), "\n")
     }
 
-    bookPath := path.Join("assets", "scrolls", filename)
-    scroll := game.NewScroll(title, bookPath)
+    scroll := game.NewScroll(title, filename)
     scroll.SetDiscoveryMessage(isHidden, discoveryMessage)
     if spellName != "" {
         spell := game.NewSpellFromName(spellName)

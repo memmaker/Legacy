@@ -10,13 +10,26 @@
  - Encounters need a definition in text files, like conversations
  - It's not possible to have a conversation with your followers
  - How to handle items without icons when dropping them?
- - Repeat last action will continue attacking dead enemies
  - Dialogue options will only depend on the skills of the Avatar, not the whole party
- - Scrolling windows (eg. skill window) could be a big higher and show an indicator when scrolling is enabled
- - Scrolls should not store the full path to their files
- - Save/Load of Objects fails
- - Hidden Items not hidden after loading
  - Dialogue missing from NPCs after loading
+ - No tooltips for Weapons, Armor, Spells and Menu Options in general
+ - Vendors have no stacked inventory
+ - Combat has a bug where the whole game can get locked
+   -> Last triggered by having Roy in my party and doing manual combat
+   -> Roy died and I killed everyone left and moved on
+   -> Apparently Georg was left as an opponent even though he was dead
+   -> He was either not removed or added twice
+ - Combat will magically end, when block a doorway with a party member
+ - Skill checks in dialogues are a bit rough, only works for the first option, if at all
+ - Cannot look at stats during combat
+
+# Next Steps
+ - Leveling System
+   - Award XP for combat & non-combat
+   - Trainers for Level up in general and for skills
+ - Vendors
+ - Bank
+ - Encounters
 
 # Character customization
  - Name & Pro-noun

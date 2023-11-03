@@ -61,20 +61,20 @@ func (p StringPredicate) ParamCount() int {
 }
 
 func (p StringPredicate) GetString(index int) string {
-    return p[index+1]
+    return strings.TrimSpace(p[index+1])
 }
 
 func (p StringPredicate) GetInt(index int) int {
-    atoi, _ := strconv.Atoi(p[index+1])
+    atoi, _ := strconv.Atoi(strings.TrimSpace(p[index+1]))
     return atoi
 }
 
 func (p StringPredicate) GetBool(index int) bool {
-    return StrBool(p[index+1])
+    return StrBool(strings.TrimSpace(p[index+1]))
 }
 
 func (p StringPredicate) GetFloat(index int) float64 {
-    atof, _ := strconv.ParseFloat(p[index+1], 64)
+    atof, _ := strconv.ParseFloat(strings.TrimSpace(p[index+1]), 64)
     return atof
 }
 func FloatStr(value float64) string {

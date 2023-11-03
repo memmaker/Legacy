@@ -1,6 +1,11 @@
 package game
 
-import "Legacy/geometry"
+import (
+    "Legacy/ega"
+    "Legacy/geometry"
+    "Legacy/renderer"
+    "image/color"
+)
 
 func NewSpellFromName(name string) *Spell {
     switch name {
@@ -9,19 +14,38 @@ func NewSpellFromName(name string) *Spell {
             engine.AddFood(10)
         })
     case "Fireball":
-        return NewTargetedSpell(name, 10, func(engine Engine, caster *Actor, pos geometry.Point) {
+        fireball := NewTargetedSpell(name, 10, func(engine Engine, caster *Actor, pos geometry.Point) {
             radius := 3
             explosionIcon := int32(28)
-            fireballDamagePerTile := 10
+            fireballDamagePerTile := 10 * caster.GetLevel()
             hitPositions := engine.GetAoECircle(pos, radius)
             for _, p := range hitPositions {
                 hitPos := p
-                engine.HitAnimation(hitPos, explosionIcon, func() {
+                engine.HitAnimation(hitPos, renderer.AtlasEntitiesGrayscale, explosionIcon, ega.BrightRed, func() {
                     engine.SpellDamageAt(caster, hitPos, fireballDamagePerTile)
                 })
             }
         })
+        fireball.SetSpellColor(ega.BrightRed)
+        return fireball
+    case "Icebolt":
+        icebolt := NewTargetedSpell(name, 10, func(engine Engine, caster *Actor, pos geometry.Point) {
+            radius := 3
+            explosionIcon := int32(28)
+            iceboltDamage := 1 * caster.GetLevel()
+            hitPositions := engine.GetAoECircle(pos, radius)
+            for _, p := range hitPositions {
+                hitPos := p
+                engine.HitAnimation(hitPos, renderer.AtlasEntitiesGrayscale, explosionIcon, ega.BrightBlue, func() {
+                    engine.SpellDamageAt(caster, hitPos, iceboltDamage)
+                    engine.FreezeActorAt(hitPos, 3)
+                })
+            }
+        })
+        icebolt.SetSpellColor(ega.BrightBlue)
+        return icebolt
     }
+
     return nil
 }
 
@@ -30,6 +54,11 @@ type Spell struct {
     effect         func(engine Engine, caster *Actor)
     targetedEffect func(engine Engine, caster *Actor, pos geometry.Point)
     name           string
+    color          color.Color
+}
+
+func (s *Spell) SetSpellColor(c color.Color) {
+    s.color = c
 }
 
 func NewSpell(name string, cost int, effect func(engine Engine, caster *Actor)) *Spell {
@@ -82,4 +111,8 @@ func (s *Spell) Name() string {
 
 func (s *Spell) GetValue() int {
     return s.manaCost * 10
+}
+
+func (s *Spell) Color() color.Color {
+    return s.color
 }

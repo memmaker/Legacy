@@ -1,0 +1,63 @@
+%rec: Details
+
+Name: Local Giver
+Health: 10
+Description: He looks strong and mighty and magical.
+
+%rec: Inventory
+
+Item: armor(a cloak, torso, 1)
+
+%rec: Conversation
+
+Key: _first_time
+Text:
++ "You want to have some =nice= =food=, or =gold=?
++ I can also offer =XP=, or give you a =skill=. Maybe you need some =lockpicks=?
++ Or how a about a cool =weapon=? I can also provide =buffs=.
++ Or maybe you just want to set a =flag=, you =sneaky= person you.
+
+Key: food
+Effect: giveFood(10)
+Text: "Here you go, enjoy!"
+
+Key: gold
+Effect: giveGold(10)
+Text: "Here you go, enjoy!"
+
+Key: XP
+Effect: giveXP(10)
+Text: "Here you go, enjoy!"
+
+Key: skill
+Effect: giveSkill(Sneak)
+Text: "Here you go, enjoy!"
+
+Key: sneaky
+NeedsSkill: Sneak(1)
+Text: "Ah, a beginner. You should get a better sneak skill."
+
+Key: sneaky
+NeedsSkill: Sneak(2)
+Text: "Ah, you are already sneaky enough."
+
+Key: lockpicks
+Effect: giveLockpicks(10)
+Text: "Here you go, enjoy!"
+
+Key: weapon
+GiveItem: weapon(a sword, 1)
+Text: "Here you go, enjoy!"
+
+Key: buffs
+Effect: giveBuff(offense, Holy Bonus, 10)
+Effect: giveBuff(defense, Blessing, 10)
+Text: "Here you go, enjoy!"
+
+Key: flag
+SetsFlag: trainer_flag
+Text: "What a =nice= flag you have there!"
+
+Key: nice
+NeedsFlag: trainer_flag
+Text: "Ah, I see you have the nice flag. Good for you!"

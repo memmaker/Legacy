@@ -8,9 +8,17 @@ import (
     "strings"
 )
 
+type AtlasName int
+
+const (
+    AtlasCharacters AtlasName = iota
+    AtlasWorld
+    AtlasEntities
+    AtlasEntitiesGrayscale
+)
+
 type DualGridRenderer struct {
-    smallAtlas          *ebiten.Image
-    bigAtlas            *ebiten.Image
+    atlasMap            map[AtlasName]*ebiten.Image
     smallGridSize       int
     bigGridSize         int
     scale               float64
@@ -20,10 +28,9 @@ type DualGridRenderer struct {
     borderDef           GridBorderDefinition
 }
 
-func NewDualGridRenderer(smallAtlas *ebiten.Image, bigAtlas *ebiten.Image, scale float64, fontMap map[rune]uint16) *DualGridRenderer {
+func NewDualGridRenderer(scale float64, fontMap map[rune]uint16) *DualGridRenderer {
     return &DualGridRenderer{
-        smallAtlas:          smallAtlas,
-        bigAtlas:            bigAtlas,
+        atlasMap:            make(map[AtlasName]*ebiten.Image),
         scale:               scale,
         fontMap:             fontMap,
         smallGridSize:       8,
@@ -31,6 +38,12 @@ func NewDualGridRenderer(smallAtlas *ebiten.Image, bigAtlas *ebiten.Image, scale
         smallGridScreenSize: geometry.Point{X: 40, Y: 25},
         op:                  &ebiten.DrawImageOptions{},
     }
+}
+func (g *DualGridRenderer) SetAtlasMap(atlasMap map[AtlasName]*ebiten.Image) {
+    g.atlasMap = atlasMap
+}
+func (g *DualGridRenderer) getCharAtlas() *ebiten.Image {
+    return g.atlasMap[AtlasCharacters]
 }
 func (g *DualGridRenderer) GetScaledBigGridSize() int {
     return int(float64(g.bigGridSize) * g.scale)
@@ -62,7 +75,7 @@ func (g *DualGridRenderer) DrawOnSmallGrid(screen *ebiten.Image, cellX, cellY in
     g.op.GeoM.Reset()
     g.op.GeoM.Scale(g.scale, g.scale)
     g.op.GeoM.Translate(g.SmallCellToScreen(cellX, cellY))
-    screen.DrawImage(ExtractSubImageFromAtlas(textureIndex, g.smallGridSize, g.smallGridSize, g.smallAtlas), g.op)
+    screen.DrawImage(ExtractSubImageFromAtlas(textureIndex, g.smallGridSize, g.smallGridSize, g.getCharAtlas()), g.op)
 }
 
 func (g *DualGridRenderer) DrawMappingOnSmallGrid(screen *ebiten.Image, gridMapping map[geometry.Point]int32) {
@@ -81,7 +94,7 @@ func (g *DualGridRenderer) DrawColoredChar(screen *ebiten.Image, cellX, cellY in
     g.op.GeoM.Reset()
     g.op.GeoM.Scale(g.scale, g.scale)
     g.op.GeoM.Translate(g.SmallCellToScreen(cellX, cellY))
-    screen.DrawImage(ExtractSubImageFromAtlas(int32(textureIndex), g.smallGridSize, g.smallGridSize, g.smallAtlas), g.op)
+    screen.DrawImage(ExtractSubImageFromAtlas(int32(textureIndex), g.smallGridSize, g.smallGridSize, g.getCharAtlas()), g.op)
 }
 
 func (g *DualGridRenderer) DrawColoredString(screen *ebiten.Image, cellX, cellY int, text string, textColor color.Color) {
@@ -91,32 +104,16 @@ func (g *DualGridRenderer) DrawColoredString(screen *ebiten.Image, cellX, cellY 
     }
 }
 
-func (g *DualGridRenderer) DrawSmallOnScreen(screen *ebiten.Image, xPos, yPos float64, textureIndex int32) {
-    g.op.ColorScale.Reset()
-    g.op.GeoM.Reset()
-    g.op.GeoM.Scale(g.scale, g.scale)
-    g.op.GeoM.Translate(xPos, yPos)
-    screen.DrawImage(ExtractSubImageFromAtlas(textureIndex, g.smallGridSize, g.smallGridSize, g.smallAtlas), g.op)
-}
-
 func (g *DualGridRenderer) DrawFilledBorder(screen *ebiten.Image, topLeft, bottomRight geometry.Point, title string) {
     centeredTitleXStart := (bottomRight.X - topLeft.X - len(title)) / 2
     centeredTitleXEnd := centeredTitleXStart + len(title)
 
-    var borderFunc func(p geometry.Point, borderType BorderCase)
-    if len(title) > 0 {
-        borderFunc = func(p geometry.Point, borderType BorderCase) {
-            textureIndex := borderType.GetIndex(g.borderDef)
-            relativeX := p.X - topLeft.X
-            if relativeX >= centeredTitleXStart && relativeX < centeredTitleXEnd && p.Y == topLeft.Y {
-                g.DrawColoredChar(screen, p.X, p.Y, rune(title[relativeX-centeredTitleXStart]), color.White)
-            } else {
-                g.DrawOnSmallGrid(screen, p.X, p.Y, textureIndex)
-            }
-        }
-    } else {
-        borderFunc = func(p geometry.Point, borderType BorderCase) {
-            textureIndex := borderType.GetIndex(g.borderDef)
+    borderFunc := func(p geometry.Point, borderType BorderCase) {
+        textureIndex := borderType.GetIndex(g.borderDef)
+        relativeX := p.X - topLeft.X
+        if len(title) > 0 && relativeX >= centeredTitleXStart && relativeX < centeredTitleXEnd && p.Y == topLeft.Y {
+            g.DrawColoredChar(screen, p.X, p.Y, rune(title[relativeX-centeredTitleXStart]), color.White)
+        } else {
             g.DrawOnSmallGrid(screen, p.X, p.Y, textureIndex)
         }
     }
@@ -127,7 +124,7 @@ func (g *DualGridRenderer) DrawFilledBorder(screen *ebiten.Image, topLeft, botto
 
     backgroundIndex := g.borderDef.BackgroundTextureIndex
 
-    subImage := ExtractSubImageFromAtlas(backgroundIndex, g.smallGridSize, g.smallGridSize, g.smallAtlas)
+    subImage := ExtractSubImageFromAtlas(backgroundIndex, g.smallGridSize, g.smallGridSize, g.getCharAtlas())
 
     g.op.ColorScale.Reset()
     g.op.GeoM.Reset()
@@ -136,21 +133,38 @@ func (g *DualGridRenderer) DrawFilledBorder(screen *ebiten.Image, topLeft, botto
     screen.DrawImage(subImage, g.op)
 }
 
-func (g *DualGridRenderer) DrawOnBigGrid(screen *ebiten.Image, cellPos, offset geometry.Point, textureIndex int32) {
+func (g *DualGridRenderer) DrawSmallOnScreen(screen *ebiten.Image, xPos, yPos float64, textureIndex int32) {
+    g.op.ColorScale.Reset()
+    g.op.GeoM.Reset()
+    g.op.GeoM.Scale(g.scale, g.scale)
+    g.op.GeoM.Translate(xPos, yPos)
+    screen.DrawImage(ExtractSubImageFromAtlas(textureIndex, g.smallGridSize, g.smallGridSize, g.getCharAtlas()), g.op)
+}
+func (g *DualGridRenderer) DrawEntityOnScreen(screen *ebiten.Image, xPos, yPos float64, textureIndex int32) {
+    g.op.ColorScale.Reset()
+    g.op.GeoM.Reset()
+    g.op.GeoM.Scale(g.scale, g.scale)
+    g.op.GeoM.Translate(xPos, yPos)
+    screen.DrawImage(ExtractSubImageFromAtlas(textureIndex, g.bigGridSize, g.bigGridSize, g.atlasMap[AtlasEntities]), g.op)
+}
+
+func (g *DualGridRenderer) DrawOnBigGrid(screen *ebiten.Image, cellPos, offset geometry.Point, atlasName AtlasName, textureIndex int32) {
     g.op.ColorScale.Reset()
     g.op.GeoM.Reset()
     g.op.GeoM.Scale(g.scale, g.scale)
     g.op.GeoM.Translate(float64(offset.X), float64(offset.Y))
     g.op.GeoM.Translate(g.BigCellToScreen(cellPos.X, cellPos.Y))
-    screen.DrawImage(ExtractSubImageFromAtlas(textureIndex, g.bigGridSize, g.bigGridSize, g.bigAtlas), g.op)
+    screen.DrawImage(ExtractSubImageFromAtlas(textureIndex, g.bigGridSize, g.bigGridSize, g.atlasMap[atlasName]), g.op)
 }
 
-func (g *DualGridRenderer) DrawBigOnScreen(screen *ebiten.Image, xPos, yPos float64, textureIndex int32) {
+func (g *DualGridRenderer) DrawOnBigGridWithColor(screen *ebiten.Image, cellPos, offset geometry.Point, atlasName AtlasName, textureIndex int32, color color.Color) {
     g.op.ColorScale.Reset()
+    g.op.ColorScale.ScaleWithColor(color)
     g.op.GeoM.Reset()
     g.op.GeoM.Scale(g.scale, g.scale)
-    g.op.GeoM.Translate(xPos, yPos)
-    screen.DrawImage(ExtractSubImageFromAtlas(textureIndex, g.bigGridSize, g.bigGridSize, g.bigAtlas), g.op)
+    g.op.GeoM.Translate(float64(offset.X), float64(offset.Y))
+    g.op.GeoM.Translate(g.BigCellToScreen(cellPos.X, cellPos.Y))
+    screen.DrawImage(ExtractSubImageFromAtlas(textureIndex, g.bigGridSize, g.bigGridSize, g.atlasMap[atlasName]), g.op)
 }
 
 func (g *DualGridRenderer) DrawBigOnScreenWithAtlasAndTint(screen *ebiten.Image, xPos, yPos float64, atlas *ebiten.Image, textureIndex int32, tintColor color.Color) {
@@ -173,7 +187,7 @@ func (g *DualGridRenderer) GetScale() float64 {
 }
 
 func (g *DualGridRenderer) AutoPositionText(text []string) (geometry.Point, geometry.Point) {
-    height := min(len(text)+4, 15)
+    height := min(len(text)+4, 18)
     width := min(maxLen(text)+4, 36)
     screenSize := g.GetSmallGridScreenSize()
     topLeft := geometry.Point{X: (screenSize.X - width) / 2, Y: (screenSize.Y - height) / 2}

@@ -25,10 +25,13 @@ func (f Field) IsEmpty() bool {
     return f.Name == "" && f.Value == ""
 }
 
+// UnEscapedValue returns the value with the sequence "\n+ " replaced with newlines.
 func (f Field) UnEscapedValue() string {
     return regexp.MustCompile(`\n\+\s`).ReplaceAllString(f.Value, "\n")
 }
 
+// EscapedValue returns the value with newlines escaped as "\n+ ".
+// This is useful for writing .rec files from a constructed Record.
 func (f Field) EscapedValue() string {
     return strings.ReplaceAll(f.Value, "\n", "\n+ ")
 }
@@ -197,7 +200,7 @@ func WriteMulti(file io.StringWriter, recordsInCategories map[string][]Record) e
         return saneFieldname
     }
     for recordCategory, records := range recordsInCategories {
-        _, catErr := file.WriteString(fmt.Sprintf("%%rec: %s\n", recordCategory))
+        _, catErr := file.WriteString(fmt.Sprintf("%%rec: %s\n\n", recordCategory))
         if catErr != nil {
             return catErr
         }

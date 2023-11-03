@@ -2,13 +2,13 @@ package game
 
 import (
     "Legacy/geometry"
-    recfile "Legacy/recfile"
+    "Legacy/recfile"
     "Legacy/renderer"
+    "Legacy/util"
     "fmt"
     "image/color"
     "io"
     "strconv"
-    "strings"
 )
 
 type EquipmentSlot string
@@ -28,7 +28,7 @@ type Actor struct {
     name           string
     party          *Party
     dialogue       *Dialogue
-    description    []string
+    description    string
 
     equippedLeftHand  Wearable
     equippedRightHand Wearable
@@ -52,19 +52,25 @@ type Actor struct {
     level            int
 
     skillset SkillSet
+    buffs    map[BuffType][]Buff
+    color    color.Color
+    isTinted bool
 }
 
 func NewActor(name string, icon int32) *Actor {
     return &Actor{
-        name:           name,
-        icon:           icon,
-        iconFrameCount: 1,
-        health:         23,
-        maxHealth:      23,
-        isHuman:        true,
-        inventory:      []Item{},
-        skillset:       NewSkillSet(),
-        level:          1,
+        name:            name,
+        icon:            icon,
+        iconFrameCount:  1,
+        health:          23,
+        maxHealth:       23,
+        isHuman:         true,
+        inventory:       []Item{},
+        skillset:        NewSkillSet(),
+        level:           1,
+        baseMeleeDamage: 5,
+        buffs:           make(map[BuffType][]Buff),
+        color:           color.White,
     }
 }
 
@@ -77,25 +83,31 @@ func NewActorFromFile(file io.ReadCloser, icon int32) *Actor {
     conversation := NewDialogueFromRecords(actorData["Conversation"])
 
     health, _ := coreRecord.GetInt("Health")
-    description := strings.Split(coreRecord["Description"], "\\n")
+    description := coreRecord["Description"]
 
     newActor := &Actor{
-        name:        coreRecord["Name"],
-        icon:        icon,
-        health:      health,
-        maxHealth:   health,
-        description: description,
-        dialogue:    conversation,
-        isHuman:     true,
-        skillset:    NewSkillSet(),
-        level:       1,
+        name:            coreRecord["Name"],
+        icon:            icon,
+        health:          health,
+        maxHealth:       health,
+        description:     description,
+        dialogue:        conversation,
+        isHuman:         true,
+        skillset:        NewSkillSet(),
+        level:           1,
+        baseMeleeDamage: 5,
+        buffs:           make(map[BuffType][]Buff),
     }
     newActor.inventory = toInventory(newActor, itemsFromStrings(inventory))
     return newActor
 }
 
 func NewActorFromRecord(record recfile.Record) *Actor {
-    a := &Actor{}
+    a := &Actor{
+        buffs:    make(map[BuffType][]Buff),
+        skillset: NewSkillSet(), // TODO
+        //dialogue:        NewDialogueFromRecords(actorData["Conversation"]),
+    }
     for _, field := range record {
         switch field.Name {
         case "name":
@@ -126,6 +138,8 @@ func NewActorFromRecord(record recfile.Record) *Actor {
             a.baseMeleeDamage = field.AsInt()
         case "baseRanged":
             a.baseRangedDamage = field.AsInt()
+        case "description":
+            a.description = field.Value
         }
     }
     return a
@@ -151,8 +165,17 @@ func (a *Actor) ToRecord() recfile.Record {
         recfile.Field{Name: "baseMelee", Value: strconv.Itoa(a.GetBaseMelee())},
         recfile.Field{Name: "baseRanged", Value: strconv.Itoa(a.GetBaseRanged())},
 
+        recfile.Field{Name: "description", Value: a.description},
         // TODO: dialogue state
 
+    }
+    if a.dialogue != nil {
+        for keyword := range a.dialogue.keyWordsGiven {
+            actorRecord = append(actorRecord, recfile.Field{Name: "d_key", Value: keyword})
+        }
+        for keyword := range a.dialogue.previouslyAsked {
+            actorRecord = append(actorRecord, recfile.Field{Name: "d_prev", Value: keyword})
+        }
     }
     return actorRecord
 }
@@ -248,7 +271,7 @@ func (a *Actor) Name() string {
     return a.name
 }
 
-func (a *Actor) GetDetails() []string {
+func (a *Actor) GetDetails(engine Engine) []string {
 
     leftHand := "nothing"
     if a.equippedLeftHand != nil {
@@ -266,24 +289,26 @@ func (a *Actor) GetDetails() []string {
     if a.equippedHelmet != nil {
         helmet = fmt.Sprintf("%s (%d)", a.equippedHelmet.Name(), a.equippedHelmet.protection)
     }
-
-    details := []string{
-        fmt.Sprintf("Health    : %d", a.health),
-        fmt.Sprintf("Mana      : %d", a.mana),
-        fmt.Sprintf("Armor     : %d", a.GetTotalArmor()),
-        fmt.Sprintf("Melee Dmg.: %d", a.GetMeleeDamage()),
-        fmt.Sprintf("Left Hand : %s", leftHand),
-        fmt.Sprintf("Right Hand: %s", rightHand),
-        fmt.Sprintf("Armor     : %s", armor),
-        fmt.Sprintf("Helmet    : %s", helmet),
+    _, xpNeeded := engine.CanLevelUp(a)
+    tableData := []util.TableRow{
+        {Label: "Level", Columns: []string{strconv.Itoa(a.level)}},
+        {Label: "XP", Columns: []string{strconv.Itoa(a.experiencePoints)}},
+        {Label: "Next Lvl.", Columns: []string{strconv.Itoa(xpNeeded)}},
+        {Label: "Health", Columns: []string{fmt.Sprintf("%d/%d", a.health, a.maxHealth)}},
+        {Label: "Mana", Columns: []string{fmt.Sprintf("%d", a.mana)}},
+        {Label: "Armor", Columns: []string{fmt.Sprintf("%d", a.GetTotalArmor())}},
+        {Label: "Melee Dmg.", Columns: []string{fmt.Sprintf("%d", a.GetMeleeDamage())}},
+        {Label: "Left Hand", Columns: []string{leftHand}},
+        {Label: "Right Hand", Columns: []string{rightHand}},
+        {Label: "Armor", Columns: []string{armor}},
+        {Label: "Helmet", Columns: []string{helmet}},
     }
-
-    return details
+    return util.TableLayout(tableData)
 }
 
 func (a *Actor) LookDescription() []string {
     healthString := "healthy"
-    description := renderer.AutoLayoutArray(a.description, 32)
+    description := renderer.AutoLayout(a.description, 32)
     // wearables
     if a.equippedArmor != nil || a.equippedHelmet != nil {
         description = append(description, "", "The person is wearing:")
@@ -596,7 +621,24 @@ func (a *Actor) GetTotalArmor() int {
     if a.equippedHelmet != nil {
         armorSum += a.equippedHelmet.protection
     }
-    return a.baseArmor + armorSum
+    buffs := a.GetDefenseBuffBonus()
+    return a.baseArmor + armorSum + buffs
+}
+
+func (a *Actor) GetMeleeDamage() int {
+    buffs := a.GetOffenseBuffBonus()
+    baseDamage := a.baseMeleeDamage + buffs
+    if a.equippedRightHand != nil {
+        if weapon, ok := a.equippedRightHand.(*Weapon); ok {
+            return weapon.GetDamage(baseDamage)
+        }
+    }
+    if a.equippedLeftHand != nil {
+        if weapon, ok := a.equippedLeftHand.(*Weapon); ok {
+            return weapon.GetDamage(baseDamage)
+        }
+    }
+    return baseDamage
 }
 
 func (a *Actor) IsAlive() bool {
@@ -610,20 +652,6 @@ func (a *Actor) DropInventory() []Item {
         item.SetHolder(nil)
     }
     return dropped
-}
-
-func (a *Actor) GetMeleeDamage() int {
-    if a.equippedRightHand != nil {
-        if weapon, ok := a.equippedRightHand.(*Weapon); ok {
-            return weapon.GetDamage(a.baseMeleeDamage)
-        }
-    }
-    if a.equippedLeftHand != nil {
-        if weapon, ok := a.equippedLeftHand.(*Weapon); ok {
-            return weapon.GetDamage(a.baseMeleeDamage)
-        }
-    }
-    return a.baseMeleeDamage
 }
 
 func (a *Actor) GetMovementAllowance() int {
@@ -748,4 +776,94 @@ func (a *Actor) GetBaseMelee() int {
 
 func (a *Actor) GetBaseRanged() int {
     return a.baseRangedDamage
+}
+
+func (a *Actor) GetXPForKilling() int {
+    return a.level * 10
+}
+
+func (a *Actor) LevelUp(flags *Flags) {
+    a.level++
+    a.maxHealth += 10
+    a.health = a.maxHealth
+    a.baseArmor += 1
+    a.baseMeleeDamage += 1
+    a.baseRangedDamage += 1
+}
+
+func (a *Actor) AddAllSkills() {
+    a.skillset.AddAll()
+}
+
+func (a *Actor) AddBuff(name string, buffType BuffType, strength int) {
+    a.buffs[buffType] = append(a.buffs[buffType], Buff{
+        Name:     name,
+        Strength: strength,
+    })
+}
+
+func (a *Actor) ClearBuffs() {
+    a.buffs = make(map[BuffType][]Buff)
+}
+
+func (a *Actor) GetDefenseBuffBonus() int {
+    bonusFromBuffs := 0
+    for _, buff := range a.buffs[BuffTypeDefense] {
+        bonusFromBuffs += buff.Strength
+    }
+    return bonusFromBuffs
+}
+
+func (a *Actor) GetOffenseBuffBonus() int {
+    bonusFromBuffs := 0
+    for _, buff := range a.buffs[BuffTypeOffense] {
+        bonusFromBuffs += buff.Strength
+    }
+    return bonusFromBuffs
+}
+
+func (a *Actor) HasOffenseBuffs() bool {
+    return len(a.buffs[BuffTypeOffense]) > 0
+}
+
+func (a *Actor) HasDefenseBuffs() bool {
+    return len(a.buffs[BuffTypeDefense]) > 0
+}
+
+func (a *Actor) GetDefenseBuffs() []string {
+    var rows []util.TableRow
+    for _, buff := range a.buffs[BuffTypeDefense] {
+        rows = append(rows, util.TableRow{
+            Label: fmt.Sprintf("+%d", buff.Strength), Columns: []string{buff.Name},
+        })
+    }
+
+    return util.TableLayout(rows)
+}
+
+func (a *Actor) GetOffenseBuffs() []string {
+    var rows []util.TableRow
+    for _, buff := range a.buffs[BuffTypeOffense] {
+        rows = append(rows, util.TableRow{
+            Label: fmt.Sprintf("+%d", buff.Strength), Columns: []string{buff.Name},
+        })
+    }
+
+    return util.TableLayout(rows)
+}
+
+func (a *Actor) TintColor() color.Color {
+    return a.color
+}
+
+func (a *Actor) SetTintColor(color color.Color) {
+    a.color = color
+}
+
+func (a *Actor) IsTinted() bool {
+    return a.isTinted
+}
+
+func (a *Actor) SetTinted(value bool) {
+    a.isTinted = value
 }

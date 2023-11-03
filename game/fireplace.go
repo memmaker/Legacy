@@ -94,7 +94,6 @@ func (s *FirePlace) GetContextActions(engine Engine) []renderer.MenuItem {
                 Text: fmt.Sprintf("Take 1 ration"),
                 Action: func() {
                     s.foodCount--
-                    engine.Print("You take 1 ration from the fire.")
                     engine.AddFood(1)
                 },
             })
@@ -103,7 +102,6 @@ func (s *FirePlace) GetContextActions(engine Engine) []renderer.MenuItem {
                 renderer.MenuItem{
                     Text: fmt.Sprintf("Take enough rations for the party"),
                     Action: func() {
-                        engine.Print(fmt.Sprintf("You take %d rations from the fire.", partySize))
                         engine.AddFood(partySize)
                         s.foodCount -= partySize
                     },
@@ -114,7 +112,6 @@ func (s *FirePlace) GetContextActions(engine Engine) []renderer.MenuItem {
                     Text: fmt.Sprintf("Take half of the rations"),
                     Action: func() {
                         amount := s.foodCount / 2
-                        engine.Print(fmt.Sprintf("You take %d rations from the fire.", amount))
                         engine.AddFood(amount)
                         s.foodCount -= amount
                     },
@@ -124,7 +121,6 @@ func (s *FirePlace) GetContextActions(engine Engine) []renderer.MenuItem {
             renderer.MenuItem{
                 Text: fmt.Sprintf("Take all of the rations"),
                 Action: func() {
-                    engine.Print("You take all rations from the fire.")
                     engine.AddFood(s.foodCount)
                     s.foodCount = 0
                 },

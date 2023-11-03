@@ -6,11 +6,6 @@ import (
     "image/color"
 )
 
-type OneCellButton struct {
-    icon   int32
-    action func(currentText []string)
-}
-
 type MultiPageWindow struct {
     window         *IconWindow
     onLastPage     func()
@@ -80,12 +75,12 @@ func (m *MultiPageWindow) Draw(screen *ebiten.Image) {
     m.window.Draw(screen)
 }
 
-func (m *MultiPageWindow) AddButton(icon int32, callback func(text []string)) {
-    m.window.AddButton(icon, callback)
-}
-
 func (m *MultiPageWindow) SetTitle(name string) {
     m.window.title = name
+}
+
+func (m *MultiPageWindow) AddTextActionButton(icon int32, callback func(text []string)) {
+    m.window.AddTextActionButton(icon, callback)
 }
 
 func splitIntoPages(text []string) [][]string {
@@ -106,6 +101,7 @@ func splitIntoPages(text []string) [][]string {
 }
 
 type IconWindow struct {
+    ButtonHolder
     topLeft     geometry.Point
     bottomRight geometry.Point
 
@@ -117,7 +113,6 @@ type IconWindow struct {
 
     gridRenderer *DualGridRenderer
     title        string
-    buttons      map[geometry.Point]OneCellButton
 }
 
 func (i *IconWindow) ActionUp() {
@@ -147,6 +142,7 @@ func NewIconWindow(dualGrid *DualGridRenderer, yOffset int, icon int32, inputTex
         }
     }
     return &IconWindow{
+        ButtonHolder:     NewButtonHolder(),
         topLeft:          topLeft,
         bottomRight:      bottomRight,
         iconTextureIndex: icon,
@@ -154,18 +150,16 @@ func NewIconWindow(dualGrid *DualGridRenderer, yOffset int, icon int32, inputTex
         iconOffset:       geometry.Point{X: 2, Y: 2},
         gridRenderer:     dualGrid,
         textColor:        color.White,
-        buttons:          make(map[geometry.Point]OneCellButton),
     }
 }
 
-func (i *IconWindow) AddButton(icon int32, action func(currentText []string)) {
+func (i *IconWindow) AddTextActionButton(icon int32, action func(currentText []string)) {
     startPosX := i.bottomRight.X - 3
     yPos := i.topLeft.Y
     iconPos := geometry.Point{X: startPosX, Y: yPos}
-    i.buttons[iconPos] = OneCellButton{
-        icon:   icon,
-        action: action,
-    }
+    i.AddButton(iconPos, icon, func() {
+        action(i.text)
+    })
 }
 
 func (i *IconWindow) Draw(screen *ebiten.Image) {
@@ -177,11 +171,9 @@ func (i *IconWindow) Draw(screen *ebiten.Image) {
 
     i.gridRenderer.DrawFilledBorder(screen, i.topLeft, i.bottomRight, i.title)
 
-    for pos, button := range i.buttons {
-        i.gridRenderer.DrawOnSmallGrid(screen, pos.X, pos.Y, button.icon)
-    }
+    i.ButtonHolder.Draw(i.gridRenderer, screen)
 
-    i.gridRenderer.DrawBigOnScreen(screen, iconScreenX, iconScreenY, i.iconTextureIndex)
+    i.gridRenderer.DrawEntityOnScreen(screen, iconScreenX, iconScreenY, i.iconTextureIndex)
 
     for y, line := range i.text {
         i.gridRenderer.DrawColoredString(screen, i.topLeft.X+5, i.topLeft.Y+2+y, line, i.textColor)
@@ -189,13 +181,7 @@ func (i *IconWindow) Draw(screen *ebiten.Image) {
 }
 
 func (i *IconWindow) OnMouseClicked(x int, y int) bool {
-    for pos, button := range i.buttons {
-        if pos.X == x && pos.Y == y {
-            button.action(i.text)
-            return true
-        }
-    }
-    return false
+    return i.ButtonHolder.OnMouseClicked(x, y)
 }
 
 func (i *IconWindow) SetText(inputText string) {

@@ -12,6 +12,9 @@ func (g *GridEngine) mapLookup(x, y int, tick uint64) (*ebiten.Image, int32, col
     if g.currentMap.IsActorAt(location) {
         actorAt := g.currentMap.GetActor(location)
         if !actorAt.IsHidden() {
+            if actorAt.IsTinted() {
+                return g.grayScaleEntityTiles, actorAt.Icon(tick), actorAt.TintColor()
+            }
             return g.entityTiles, actorAt.Icon(tick), color.White
         }
     }

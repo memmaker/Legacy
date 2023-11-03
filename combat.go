@@ -7,6 +7,7 @@ import (
     "Legacy/renderer"
     "github.com/hajimehoshi/ebiten/v2"
     "github.com/hajimehoshi/ebiten/v2/inpututil"
+    "image/color"
     "time"
 )
 
@@ -36,7 +37,9 @@ type HitAnimation struct {
     TicksLeft     int
     TicksForReset int
     Icon          int32
+    UseTiles      renderer.AtlasName
     WhenDone      func()
+    TintColor     color.Color
 }
 
 func (h HitAnimation) Position() geometry.Point {
@@ -133,14 +136,14 @@ func (c *CombatState) Draw(screen *ebiten.Image) {
     offsetPoint := geometry.Point{X: offset, Y: offset}
     for _, hitAnim := range c.hitAnimations {
         screenPos := c.engine.MapToScreenCoordinates(hitAnim.Position())
-        c.engine.gridRenderer.DrawOnBigGrid(screen, screenPos, offsetPoint, hitAnim.Icon)
+        c.engine.gridRenderer.DrawOnBigGridWithColor(screen, screenPos, offsetPoint, hitAnim.UseTiles, hitAnim.Icon, hitAnim.TintColor)
     }
 
     if c.isPlayerTurn && !c.engine.IsWindowOpen() {
         avatarPos := c.engine.GetAvatar().Pos()
         screenPos := c.engine.MapToScreenCoordinates(avatarPos)
         selectionIndicator := int32(195)
-        c.engine.gridRenderer.DrawOnBigGrid(screen, screenPos, offsetPoint, selectionIndicator)
+        c.engine.gridRenderer.DrawOnBigGrid(screen, screenPos, offsetPoint, renderer.AtlasEntities, selectionIndicator)
     }
 }
 
@@ -154,13 +157,14 @@ func (c *CombatState) animateMeleeHit(attacker *game.Actor, npc *game.Actor) {
         Path:      []geometry.Point{hitPos},
         TicksLeft: 35,
         Icon:      194,
+        TintColor: color.White,
         WhenDone: func() {
             c.hasUsedPrimaryAction[attacker] = true
             c.deliverDamage(attacker, npc)
         },
     })
 }
-func (c *CombatState) animateProjectile(attacker *game.Actor, target geometry.Point, icon int32, onImpact func(dest geometry.Point, actor *game.Actor) func()) {
+func (c *CombatState) animateProjectile(attacker *game.Actor, target geometry.Point, icon int32, tint color.Color, onImpact func(dest geometry.Point, actor *game.Actor) func()) {
     currentMap := c.engine.currentMap
     source := attacker.Pos()
     path := c.projectilePath(source, target)
@@ -176,6 +180,8 @@ func (c *CombatState) animateProjectile(attacker *game.Actor, target geometry.Po
         TicksLeft:     12,
         TicksForReset: 12,
         Icon:          icon,
+        TintColor:     tint,
+        UseTiles:      renderer.AtlasEntitiesGrayscale,
         WhenDone:      onImpact(finalDestination, actorHit),
     })
 }
@@ -345,7 +351,6 @@ func (c *CombatState) actorDied(actor *game.Actor) {
     if !c.engine.IsPlayerControlled(actor) {
         c.removeOpponent(actor)
     }
-
     c.engine.actorDied(actor)
 }
 
@@ -353,11 +358,6 @@ func (c *CombatState) deliverDamage(attacker, victim *game.Actor) {
     c.engine.DeliverCombatDamage(attacker, victim)
     if !victim.IsAlive() {
         c.actorDied(victim)
-        if c.engine.IsPlayerControlled(victim) {
-            //c.engine.ShowColoredText([]string{fmt.Sprintf("'%s' died", victim.Name())}, ega.BrightRed, true)
-        } else {
-            c.removeOpponent(victim)
-        }
     }
 }
 
@@ -512,6 +512,7 @@ func (c *CombatState) removeOpponent(actor *game.Actor) {
 }
 
 func (c *CombatState) checkForEndOfCombat() {
+    c.removeDeadOpponents()
     if len(c.opponents) == 0 && len(c.hitAnimations) == 0 && !c.animationRoutine.Running() {
         c.isInCombat = false
         c.engine.ForceJoinParty()
@@ -547,8 +548,10 @@ func (c *CombatState) PlayerStartsOffensiveSpell(spellUsed *game.Spell) {
     c.selectSpellTarget(c.engine.GetAvatar(), spellUsed)
 }
 func (c *CombatState) selectSpellTarget(attacker *game.Actor, spell *game.Spell) {
+    spellIcon := int32(28)
+    spellColor := spell.Color()
     c.waitForTarget = func(targetPos geometry.Point) {
-        c.animateProjectile(attacker, targetPos, 28, func(pos geometry.Point, actorHit *game.Actor) func() {
+        c.animateProjectile(attacker, targetPos, spellIcon, spellColor, func(pos geometry.Point, actorHit *game.Actor) func() {
             return func() {
                 c.onSpellImpact(attacker, spell, pos, actorHit)
             }
@@ -558,7 +561,7 @@ func (c *CombatState) selectSpellTarget(attacker *game.Actor, spell *game.Spell)
 }
 func (c *CombatState) selectRangedTarget(attacker *game.Actor) {
     c.waitForTarget = func(targetPos geometry.Point) {
-        c.animateProjectile(attacker, targetPos, c.iconGenericMissile, func(pos geometry.Point, actorHit *game.Actor) func() {
+        c.animateProjectile(attacker, targetPos, c.iconGenericMissile, color.White, func(pos geometry.Point, actorHit *game.Actor) func() {
             return func() {
                 c.onRangedHit(attacker, actorHit)
             }
@@ -569,7 +572,7 @@ func (c *CombatState) selectRangedTarget(attacker *game.Actor) {
 func (c *CombatState) selectOrchestratedRangedTarget() {
     c.waitForTarget = func(targetPos geometry.Point) {
         for _, partyMember := range c.engine.GetPartyMembers() {
-            c.animateProjectile(partyMember, targetPos, c.iconGenericMissile, func(pos geometry.Point, actorHit *game.Actor) func() {
+            c.animateProjectile(partyMember, targetPos, c.iconGenericMissile, color.White, func(pos geometry.Point, actorHit *game.Actor) func() {
                 return func() {
                     c.onRangedHit(partyMember, actorHit)
                 }
@@ -613,16 +616,20 @@ func (c *CombatState) addOpponent(opponent *game.Actor) {
     if !c.didAlertNearbyActors {
         c.findAlliesOfOpponent(opponent)
     }
-    c.opponents[opponent] = true
+    if opponent.IsAlive() {
+        c.opponents[opponent] = true
+    }
 }
 
-func (c *CombatState) addHitAnimation(pos geometry.Point, icon int32, done func()) {
+func (c *CombatState) addHitAnimation(pos geometry.Point, atlas renderer.AtlasName, icon int32, tintColor color.Color, done func()) {
     c.hitAnimations = append(c.hitAnimations, HitAnimation{
         Path:          []geometry.Point{pos},
         TicksLeft:     20,
         TicksForReset: 20,
         Icon:          icon,
         WhenDone:      done,
+        UseTiles:      atlas,
+        TintColor:     tintColor,
     })
 }
 
@@ -632,4 +639,12 @@ func (c *CombatState) listOfEnemies() []*game.Actor {
         enemies = append(enemies, enemy)
     }
     return enemies
+}
+
+func (c *CombatState) removeDeadOpponents() {
+    for opponent, _ := range c.opponents {
+        if !opponent.IsAlive() {
+            delete(c.opponents, opponent)
+        }
+    }
 }

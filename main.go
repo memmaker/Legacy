@@ -1,6 +1,7 @@
 package main
 
 import (
+    "Legacy/ega"
     "Legacy/game"
     "Legacy/geometry"
     "Legacy/gocoro"
@@ -48,15 +49,19 @@ type GridEngine struct {
     animationRoutine gocoro.Coroutine
 
     // UI
-    deviceDPIScale     float64
-    tileScale          float64
-    internalWidth      int
-    internalHeight     int
-    modalElement       Modal
-    inputElement       UIWidget
-    uiOverlay          map[int]int32
+    deviceDPIScale float64
+    tileScale      float64
+    internalWidth  int
+    internalHeight int
+    modalElement   Modal
+    inputElement   UIWidget
+    uiOverlay      map[int]int32
+
     foodButton         geometry.Point
     goldButton         geometry.Point
+    defenseBuffsButton geometry.Point
+    offenseBuffsButton geometry.Point
+
     gridRenderer       *renderer.DualGridRenderer
     mapRenderer        *renderer.MapRenderer
     mapWindow          *renderer.MapWindow
@@ -71,8 +76,26 @@ type GridEngine struct {
     entityTiles *ebiten.Image
     uiTiles     *ebiten.Image
 
-    textToPrint   string
-    ticksForPrint int
+    textToPrint          string
+    ticksForPrint        int
+    printLog             []string
+    grayScaleEntityTiles *ebiten.Image
+}
+
+func (g *GridEngine) FreezeActorAt(pos geometry.Point, turns int) {
+    if !g.currentMap.IsActorAt(pos) {
+        return
+    }
+
+    actor := g.currentMap.ActorAt(pos)
+    actor.SetTintColor(ega.BrightBlue)
+    actor.SetTinted(true)
+
+    // TODO, actually freeze them..
+}
+
+func (g *GridEngine) CanLevelUp(member *game.Actor) (bool, int) {
+    return g.rules.CanLevelUp(member.GetLevel(), member.GetXP())
 }
 
 func (g *GridEngine) GetRules() *game.Rules {
@@ -96,8 +119,8 @@ func (g *GridEngine) GetAoECircle(source geometry.Point, radius int) []geometry.
     return result
 }
 
-func (g *GridEngine) HitAnimation(pos geometry.Point, icon int32, whenDone func()) {
-    g.combatManager.addHitAnimation(pos, icon, whenDone)
+func (g *GridEngine) HitAnimation(pos geometry.Point, atlasName renderer.AtlasName, icon int32, tintColor color.Color, whenDone func()) {
+    g.combatManager.addHitAnimation(pos, atlasName, icon, tintColor, whenDone)
 }
 
 func (g *GridEngine) SpellDamageAt(caster *game.Actor, pos geometry.Point, amount int) {
@@ -142,15 +165,16 @@ func main() {
     scaledScreenHeight := int(math.Floor(float64(internalScreenHeight) * totalScale))
 
     gridEngine := &GridEngine{
-        tileScale:        tileScaleFactor,
-        internalWidth:    internalScreenWidth,
-        internalHeight:   internalScreenHeight,
-        worldTiles:       ebiten.NewImageFromImage(mustLoadImage("assets/world.png")),
-        entityTiles:      ebiten.NewImageFromImage(mustLoadImage("assets/entities.png")),
-        uiTiles:          ebiten.NewImageFromImage(mustLoadImage("assets/charset.png")),
-        uiOverlay:        make(map[int]int32),
-        mapsInMemory:     make(map[string]*gridmap.GridMap[*game.Actor, game.Item, game.Object]),
-        animationRoutine: gocoro.NewCoroutine(),
+        tileScale:            tileScaleFactor,
+        internalWidth:        internalScreenWidth,
+        internalHeight:       internalScreenHeight,
+        worldTiles:           ebiten.NewImageFromImage(mustLoadImage("assets/world.png")),
+        entityTiles:          ebiten.NewImageFromImage(mustLoadImage("assets/entities.png")),
+        grayScaleEntityTiles: ebiten.NewImageFromImage(mustLoadImage("assets/entities_gs.png")),
+        uiTiles:              ebiten.NewImageFromImage(mustLoadImage("assets/charset.png")),
+        uiOverlay:            make(map[int]int32),
+        mapsInMemory:         make(map[string]*gridmap.GridMap[*game.Actor, game.Item, game.Object]),
+        animationRoutine:     gocoro.NewCoroutine(),
     }
     ebiten.SetWindowTitle(gameTitle)
     ebiten.SetWindowSize(scaledScreenWidth, scaledScreenHeight)
@@ -187,6 +211,22 @@ func (g *GridEngine) MapToScreenCoordinates(pos geometry.Point) geometry.Point {
 func (g *GridEngine) onMouseClick(x int, y int) {
     screenSize := g.gridRenderer.GetSmallGridScreenSize()
     oneFourth := screenSize.X / 4
+
+    if x == g.offenseBuffsButton.X && y == g.offenseBuffsButton.Y {
+        offBuffs := g.playerParty.GetOffenseBuffs()
+        if len(offBuffs) > 0 {
+            g.ShowFixedFormatText(offBuffs)
+        }
+        return
+    }
+
+    if x == g.defenseBuffsButton.X && y == g.defenseBuffsButton.Y {
+        defBuffs := g.playerParty.GetDefenseBuffs()
+        if len(defBuffs) > 0 {
+            g.ShowFixedFormatText(defBuffs)
+        }
+        return
+    }
 
     if y == screenSize.Y-2 {
         if x == g.foodButton.X {
@@ -330,7 +370,15 @@ func (g *GridEngine) actorDied(actor *game.Actor) {
     g.dropActorInventory(actor)
     if !g.IsPlayerControlled(actor) {
         g.currentMap.SetActorToDowned(actor) // IS THIS A GOOD IDEA?
+        g.Print(fmt.Sprintf("'%s' died", actor.Name()))
+        // award xp for the kill
+        g.AddXP(actor.GetXPForKilling())
     }
+}
+
+func (g *GridEngine) AddXP(xp int) {
+    g.playerParty.AddXPForEveryone(xp)
+    g.Print(fmt.Sprintf("%d XP awarded", xp))
 }
 
 func (g *GridEngine) dropActorInventory(actor *game.Actor) {
@@ -362,10 +410,6 @@ func (g *GridEngine) IsWindowOpen() bool {
 func (g *GridEngine) addToJournal(npc *game.Actor, text []string) {
     g.Print("Added to journal.")
     g.playerKnowledge.AddJournalEntry(npc.Name(), text, g.CurrentTick())
-    println(fmt.Sprintf("Adding to journal: %s", npc.Name()))
-    for _, line := range text {
-        println(line)
-    }
 }
 
 func (g *GridEngine) openJournal() {
@@ -472,6 +516,20 @@ func (g *GridEngine) getAllLoadedMaps() map[string]*gridmap.GridMap[*game.Actor,
     mapsInMemory := g.mapsInMemory
     mapsInMemory[g.currentMap.GetName()] = g.currentMap
     return mapsInMemory
+}
+
+func (g *GridEngine) openPrintLog() {
+    g.ShowFixedFormatText(g.printLog)
+}
+
+func (g *GridEngine) AddSkill(avatar *game.Actor, skill string) {
+    avatar.GetSkills().IncrementSkill(game.SkillName(skill))
+    g.Print(fmt.Sprintf("'%s' learned '%s'", avatar.Name(), skill))
+}
+
+func (g *GridEngine) AddBuff(actor *game.Actor, name string, buffType game.BuffType, strength int) {
+    actor.AddBuff(name, buffType, strength)
+    g.Print(fmt.Sprintf("%s received %s+%d", actor.Name(), buffType, strength))
 }
 
 func secondsToTicks(seconds float64) int {

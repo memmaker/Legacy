@@ -1,4 +1,13 @@
+%rec: secretDoors
+
+%rec: coreInfo
+
+mapName: WorldMap
+width: 99
+height: 104
+
 %rec: actors
+
 name: wanderer
 internalName: wanderer
 position: (22,34)
@@ -13,6 +22,7 @@ mana: 0
 baseArmor: 0
 baseMelee: 0
 baseRanged: 0
+description: 
 
 name: amalthea
 internalName: amalthea
@@ -28,6 +38,7 @@ mana: 0
 baseArmor: 0
 baseMelee: 0
 baseRanged: 0
+description: 
 
 name: A hungry small creature
 internalName: hungry_caterpillar
@@ -43,10 +54,14 @@ mana: 0
 baseArmor: 0
 baseMelee: 0
 baseRanged: 0
+description: This worm-like creature is hungry and wants something to eat.
 
 %rec: downedActors
+
 %rec: items
+
 %rec: transitions
+
 pos: (21,19)
 targetMap: Edge_Town
 targetPos: (25,9)
@@ -54,10 +69,4 @@ targetPos: (25,9)
 pos: (62,38)
 targetMap: Tauci_Castle
 targetPos: (25,45)
-
-%rec: secretDoors
-%rec: coreInfo
-mapName: WorldMap
-width: 99
-height: 104
 

@@ -2,7 +2,10 @@ package main
 
 import (
     "Legacy/game"
+    "Legacy/renderer"
     "github.com/hajimehoshi/ebiten/v2"
+    "image/color"
+    "path"
 )
 
 // Interface Implementation for the Game
@@ -13,8 +16,10 @@ func (g *GridEngine) ManaSpent(caster *game.Actor, cost int) {
     g.ManaSpentInWorld(caster.Pos(), cost)
 }
 func (g *GridEngine) DamageAvatar(amount int) {
-    g.GetAvatar().Damage(amount)
-    // TODO: visual indicator?
+    bloodIcon := int32(104)
+    g.HitAnimation(g.GetAvatar().Pos(), renderer.AtlasWorld, bloodIcon, color.White, func() {
+        g.GetAvatar().Damage(amount)
+    })
 }
 
 func (g *GridEngine) TriggerEvent(event string) {
@@ -29,10 +34,6 @@ func (g *GridEngine) GetPartyMembers() []*game.Actor {
 
 func (g *GridEngine) GetMapName() string {
     return g.currentMap.GetName()
-}
-
-func (g *GridEngine) AddLockpicks(amount int) {
-    g.playerParty.AddLockpicks(amount)
 }
 
 func (g *GridEngine) PartyHasLockpick() bool {
@@ -63,8 +64,9 @@ func (g *GridEngine) IsPlayerControlled(holder game.ItemHolder) bool {
     return g.playerParty == holder
 }
 
-func (g *GridEngine) GetTextFile(filename string) []string {
-    return readLines(filename)
+func (g *GridEngine) GetScrollFile(filename string) []string {
+    bookPath := path.Join("assets", "scrolls", filename+".txt")
+    return readLines(bookPath)
 }
 
 func (g *GridEngine) GetAvatar() *game.Actor {
@@ -75,8 +77,16 @@ func (g *GridEngine) GetAvatar() *game.Actor {
 }
 
 func (g *GridEngine) Print(text string) {
+    g.prependToLog(text)
     g.textToPrint = text
     g.ticksForPrint = secondsToTicks(2)
+}
+
+func (g *GridEngine) prependToLog(text string) {
+    if len(g.printLog) > 1000 {
+        g.printLog = g.printLog[:1000]
+    }
+    g.printLog = append([]string{text}, g.printLog...)
 }
 
 func (g *GridEngine) CurrentTick() uint64 {

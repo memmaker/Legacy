@@ -5,7 +5,6 @@ import (
     "fmt"
     "regexp"
     "sort"
-    "strconv"
     "strings"
 )
 
@@ -31,11 +30,12 @@ type ConversationNode struct {
     Text         []string
     FlagsSet     []string
     AddsKeywords []string
-    Effect       string
+    Effects      []string
     ForcedChoice []DialogueChoice
     NeededFlags  []string
     NeededSkills map[string]int
     TriggerEvent string
+    AddsItems    []string
 }
 type Dialogue struct {
     triggers        map[string]ConversationNode
@@ -52,7 +52,6 @@ func NewDialogue(triggers map[string]ConversationNode) *Dialogue {
 }
 
 func NewDialogueFromRecords(records []recfile.Record) *Dialogue {
-    skillRegex := regexp.MustCompile(`([a-zA-Z]+)\(([0-9]+)\)`)
     triggers := make(map[string]ConversationNode)
     for _, record := range records {
         currentTrigger := ""
@@ -68,7 +67,9 @@ func NewDialogueFromRecords(records []recfile.Record) *Dialogue {
             case "Text":
                 currentText = strings.Split(fieldValue, "\n")
             case "Effect":
-                currentNode.Effect = fieldValue
+                currentNode.Effects = append(currentNode.Effects, fieldValue)
+            case "GiveItem":
+                currentNode.AddsItems = append(currentNode.AddsItems, fieldValue)
             case "NeedsFlag":
                 currentNode.NeededFlags = append(currentNode.NeededFlags, fieldValue)
             case "TriggerEvent":
@@ -76,30 +77,28 @@ func NewDialogueFromRecords(records []recfile.Record) *Dialogue {
             case "SetsFlag":
                 currentNode.FlagsSet = append(currentNode.FlagsSet, fieldValue)
             case "NeedsSkill":
-                matches := skillRegex.FindStringSubmatch(fieldValue)
-                if len(matches) == 3 {
-                    skillName := matches[1]
-                    skillLevel := matches[2]
+                pred := recfile.StrPredicate(fieldValue)
+                if pred != nil {
+                    skillName := pred.Name()
+                    skillLevel := pred.GetInt(0)
                     if currentNode.NeededSkills == nil {
                         currentNode.NeededSkills = make(map[string]int)
                     }
-                    level, _ := strconv.Atoi(skillLevel)
-                    currentNode.NeededSkills[skillName] = level
+                    currentNode.NeededSkills[skillName] = skillLevel
                 } else {
                     println(fmt.Sprintf("ERR: invalid skill: %s", fieldValue))
                 }
             case "OptionNeedsFlag":
                 currentOption.NeededFlags = append(currentOption.NeededFlags, fieldValue)
             case "OptionNeedsSkill":
-                matches := skillRegex.FindStringSubmatch(fieldValue)
-                if len(matches) == 3 {
-                    skillName := matches[1]
-                    skillLevel := matches[2]
+                pred := recfile.StrPredicate(fieldValue)
+                if pred != nil {
+                    skillName := pred.Name()
+                    skillLevel := pred.GetInt(0)
                     if currentOption.NeededSkills == nil {
                         currentOption.NeededSkills = make(map[string]int)
                     }
-                    level, _ := strconv.Atoi(skillLevel)
-                    currentOption.NeededSkills[skillName] = level
+                    currentOption.NeededSkills[skillName] = skillLevel
                 } else {
                     println(fmt.Sprintf("ERR: invalid skill: %s", fieldValue))
                 }
@@ -182,8 +181,19 @@ func (d *Dialogue) HasFirstTimeText() bool {
     return false
 }
 
-func (d *Dialogue) GetOpening() ConversationNode {
+func (d *Dialogue) HasOpening() bool {
+    if _, exists := d.triggers["_opening"]; exists {
+        return true
+    }
+    return false
+}
+
+func (d *Dialogue) GetFirstTimeText() ConversationNode {
     return d.triggers["_first_time"]
+}
+
+func (d *Dialogue) GetOpening() ConversationNode {
+    return d.triggers["_opening"]
 }
 
 func (d *Dialogue) HasBeenUsed(keyword string) bool {

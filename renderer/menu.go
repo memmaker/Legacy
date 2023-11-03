@@ -150,6 +150,7 @@ func (g *GridMenu) SetTitle(title string) {
     g.title = title
     g.topLeft, g.bottomRight = positionGridMenu(g.gridRenderer, g.menuItems, title)
 }
+
 func maxLenOfItems(items []MenuItem) int {
     maxLength := 0
     for _, item := range items {

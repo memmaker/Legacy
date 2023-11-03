@@ -1,6 +1,7 @@
 package main
 
 import (
+    "Legacy/ega"
     "Legacy/game"
     "Legacy/renderer"
     "fmt"
@@ -130,6 +131,13 @@ func (g *GridEngine) openDebugMenu() {
             },
         },
         {
+            Text: "Color Test",
+            Action: func() {
+                g.avatar.SetTintColor(ega.Red)
+                g.avatar.SetTinted(true)
+            },
+        },
+        {
             Text: "impulse 9",
             Action: func() {
                 g.playerParty.AddFood(100)
@@ -137,7 +145,20 @@ func (g *GridEngine) openDebugMenu() {
                 g.playerParty.AddLockpicks(100)
                 g.avatar.SetHealth(1000)
                 g.avatar.SetMana(1000)
-                g.Print("DEBUG(impulse 9): Added 100 food, gold and lockpicks")
+                g.Print("DEBUG(impulse 9)")
+            },
+        },
+        {
+            Text: "100k XP",
+            Action: func() {
+                g.playerParty.AddXPForEveryone(100000)
+                g.Print("100k XP added to everyone")
+            },
+        },
+        {
+            Text: "Get All Skills",
+            Action: func() {
+                g.avatar.AddAllSkills()
             },
         },
         {

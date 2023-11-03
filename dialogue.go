@@ -4,6 +4,7 @@ import (
     "Legacy/ega"
     "Legacy/game"
     "Legacy/geometry"
+    "Legacy/recfile"
     "Legacy/renderer"
     "fmt"
 )
@@ -13,7 +14,7 @@ func (g *GridEngine) openSpeechWindow(npc *game.Actor, text []string, onLastPage
         return
     }
     multipageWindow := renderer.NewMultiPageWindow(g.gridRenderer, 3, npc.Icon(0), text, onLastPage)
-    multipageWindow.AddButton(134, func(text []string) {
+    multipageWindow.AddTextActionButton(134, func(text []string) {
         g.addToJournal(npc, text)
     })
     multipageWindow.SetTitle(npc.Name())
@@ -33,8 +34,6 @@ func (g *GridEngine) openConversationMenu(topLeft geometry.Point, items []render
     g.inputElement.OnMouseMoved(g.lastMousePosX, g.lastMousePosY)
 }
 func (g *GridEngine) StartConversation(npc *game.Actor) {
-    startedConversationFlag := fmt.Sprintf("talked_to_%s", npc.GetInternalName())
-    g.flags.IncrementFlag(startedConversationFlag)
     // NOTE: Conversations can have a line length of 27 chars
     if !npc.HasDialogue() {
         g.Print(fmt.Sprintf("\"%s\" has nothing to say.", npc.Name()))
@@ -44,25 +43,32 @@ func (g *GridEngine) StartConversation(npc *game.Actor) {
 
     var openingLines []string
     var items []renderer.MenuItem
-
-    if !g.playerKnowledge.HasTalkedTo(npc.Name()) && loadedDialogue.HasFirstTimeText() {
-        opening := loadedDialogue.GetOpening()
-        g.playerKnowledge.AddKnowledge(opening.AddsKeywords)
-        g.playerKnowledge.AddTalkedTo(npc.Name())
-        g.flags.SetFlags(opening.FlagsSet)
-        openingLines = opening.Text
-        if len(opening.ForcedChoice) > 0 {
-            items = g.toForcedMenuItems(npc, loadedDialogue, opening.ForcedChoice)
-        }
+    var firstNode game.ConversationNode
+    if !g.playerKnowledge.HasTalkedTo(npc.GetInternalName()) && loadedDialogue.HasFirstTimeText() {
+        g.playerKnowledge.AddTalkedTo(npc.GetInternalName())
+        firstNode = loadedDialogue.GetFirstTimeText()
+    } else if loadedDialogue.HasOpening() {
+        firstNode = loadedDialogue.GetOpening()
     } else {
-        openingLines = []string{"Hi there!"} // TODO!
+        firstNode = game.ConversationNode{
+            Text: []string{"Hi there!"},
+        }
     }
 
+    g.playerKnowledge.AddKnowledge(firstNode.AddsKeywords)
+    g.flags.SetFlags(firstNode.FlagsSet)
+    openingLines = firstNode.Text
+    if len(firstNode.ForcedChoice) > 0 {
+        items = g.toForcedMenuItems(npc, loadedDialogue, firstNode.ForcedChoice)
+    }
     options := loadedDialogue.GetOptions(g.GetAvatar(), g.playerKnowledge, g.flags)
 
     if len(items) == 0 {
         items = g.toMenuItems(npc, loadedDialogue, options)
     }
+
+    startedConversationFlag := fmt.Sprintf("talked_to_%s", npc.GetInternalName())
+    g.flags.IncrementFlag(startedConversationFlag)
 
     g.openSpeechWindow(npc, openingLines, func() {
         if len(items) > 0 {
@@ -85,12 +91,13 @@ func (g *GridEngine) openMenuForDialogue(items []renderer.MenuItem) {
     g.inputElement = gridMenu
     g.inputElement.OnMouseMoved(g.lastMousePosX, g.lastMousePosY)
 }
-func (g *GridEngine) openMenuForVendor(items []renderer.MenuItem) {
+func (g *GridEngine) openMenuForVendor(items []renderer.MenuItem) *renderer.GridMenu {
     // geometry.Point{X: 3, Y: 13},
     gridMenu := renderer.NewGridMenuAtY(g.gridRenderer, items, 13)
     gridMenu.SetAutoClose()
     g.inputElement = gridMenu
     g.inputElement.OnMouseMoved(g.lastMousePosX, g.lastMousePosY)
+    return gridMenu
 }
 
 func (g *GridEngine) toMenuItems(npc *game.Actor, dialogue *game.Dialogue, options []string) []renderer.MenuItem {
@@ -134,9 +141,19 @@ func (g *GridEngine) toForcedMenuItems(npc *game.Actor, dialogue *game.Dialogue,
 
 func (g *GridEngine) handleDialogueChoice(dialogue *game.Dialogue, followUp string, npc *game.Actor) {
     response := dialogue.GetResponseAndAddKnowledge(g.playerKnowledge, followUp)
+    if len(response.AddsItems) > 0 {
+        for _, item := range response.AddsItems {
+            g.AddItem(game.NewItemFromString(item))
+        }
+    }
     g.inputElement = nil
     g.flags.SetFlags(response.FlagsSet)
-    quitsDialogue := g.handleDialogueEffect(npc, response.Effect)
+    quitsDialogue := true
+    for _, effect := range response.Effects {
+        effectDoesQuit := g.handleDialogueEffect(npc, effect)
+        quitsDialogue = quitsDialogue && effectDoesQuit
+    }
+
     if quitsDialogue {
         g.openSpeechWindow(npc, response.Text, func() { g.modalElement = nil })
     } else {
@@ -166,6 +183,35 @@ func (g *GridEngine) handleDialogueEffect(npc *game.Actor, effect string) bool {
     case "sells":
         g.openVendorMenu(npc)
         return true
+    }
+    effectPredicate := recfile.StrPredicate(effect)
+    if effectPredicate != nil {
+        switch effectPredicate.Name() {
+        case "trainsToLevel":
+            maxLevel := effectPredicate.GetInt(0)
+            g.openTrainerMenu(npc, maxLevel)
+            return true
+        case "giveFood":
+            amount := effectPredicate.GetInt(0)
+            g.AddFood(amount)
+        case "giveGold":
+            amount := effectPredicate.GetInt(0)
+            g.AddGold(amount)
+        case "giveLockpicks":
+            amount := effectPredicate.GetInt(0)
+            g.AddLockpicks(amount)
+        case "giveXP":
+            amount := effectPredicate.GetInt(0)
+            g.AddXP(amount)
+        case "giveSkill":
+            skill := effectPredicate.GetString(0)
+            g.AddSkill(g.GetAvatar(), skill)
+        case "giveBuff":
+            buffType := game.BuffType(effectPredicate.GetString(0))
+            name := effectPredicate.GetString(1)
+            strength := effectPredicate.GetInt(2)
+            g.AddBuff(g.GetAvatar(), name, buffType, strength)
+        }
     }
     return false
 }

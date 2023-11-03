@@ -14,6 +14,10 @@ const (
     SpecialTileLethal
     SpecialTileBreakable
     SpecialTileTrap
+    SpecialTileForest
+    SpecialTileMountain
+    SpecialTileWater
+    SpecialTileSwamp
 )
 
 type Tile struct {

@@ -175,6 +175,12 @@ func NewSkillSet() SkillSet {
     }
 }
 
+func (s *SkillSet) AddAll() {
+    for _, skill := range getAllSkillNames() {
+        s.skills[skill] = 10
+    }
+}
+
 func (s *SkillSet) GetSkillLevel(skill SkillName) int {
     return s.skills[skill]
 }

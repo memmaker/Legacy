@@ -12,14 +12,14 @@ func (g *GridEngine) handleInput() {
     if inpututil.IsKeyJustPressed(ebiten.KeyArrowRight) {
         if g.inputElement != nil {
             g.inputElement.ActionRight()
-        } else {
+        } else if !windowsOpen {
             g.playerMovement(geometry.Point{X: 1, Y: 0})
         }
     }
     if inpututil.IsKeyJustPressed(ebiten.KeyArrowLeft) {
         if g.inputElement != nil {
             g.inputElement.ActionLeft()
-        } else {
+        } else if !windowsOpen {
             g.playerMovement(geometry.Point{X: -1, Y: 0})
         }
     }
@@ -62,6 +62,7 @@ func (g *GridEngine) handleInput() {
     // (B)ow
     // (D)ivide party
     // (T)ry to join party
+    // (L)og
     // Space - Party menu
     // Enter - Context menu
 
@@ -83,6 +84,8 @@ func (g *GridEngine) handleInput() {
         g.openPartyInventory()
     } else if inpututil.IsKeyJustPressed(ebiten.KeyJ) {
         g.openJournal()
+    } else if inpututil.IsKeyJustPressed(ebiten.KeyL) {
+        g.openPrintLog()
     } else if inpututil.IsKeyJustPressed(ebiten.KeyM) {
         g.openSpellMenu()
     } else if inpututil.IsKeyJustPressed(ebiten.KeyS) {
