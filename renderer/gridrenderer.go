@@ -195,6 +195,16 @@ func (g *DualGridRenderer) AutoPositionText(text []string) (geometry.Point, geom
     return topLeft, bottomRight
 }
 
+func (g *DualGridRenderer) NewTextInputAtY(yPos int, prompt string, onClose func(endedWith EndAction, text string)) *TextInput {
+    cursorIcon := int32(28)
+    cursorFrameCount := 4
+    input := NewTextInput(g, geometry.Point{}, 15, cursorIcon, cursorFrameCount, onClose)
+    input.SetDrawBorder(true)
+    input.SetPrompt(prompt)
+    input.CenterHorizontallyAtY(yPos)
+    return input
+}
+
 func ExtractSubImageFromAtlas(textureIndex int32, tileSizeX int, tileSizeY int, textureAtlas *ebiten.Image) *ebiten.Image {
     atlasItemCountX := int32(textureAtlas.Bounds().Size().X / tileSizeX)
     textureRectTopLeft := image.Point{

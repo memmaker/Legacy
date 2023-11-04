@@ -11,8 +11,11 @@ Item: armor(a cloak, torso, 1)
 %rec: Conversation
 
 Key: _first_time
-Text: "You want to =train=?"
+Text: "Öffne dich für ein Training, das dich auf ein neues Level bringt."
++ "Übung macht den Meister, und ich bin ein Meister der Übung."
++ "Ältere Menschen kommen zu mir, um sich zu trainieren."
++ "Das hier ist die Straße zum Erfolg, und ich bin der Fahrlehrer."
 
 Key: train
-Effect: trainsToLevel(10)
-Text: "Who wants to train?"
+Effect: trainsToLevel(200)
+Text: "Dann sprich, wer soll mein Training genießen?"

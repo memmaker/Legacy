@@ -90,6 +90,14 @@ func (g *GridEngine) openCharSkills(partyIndex int) {
     }
 }
 
+func (g *GridEngine) openCharBuffs(partyIndex int) {
+    actor := g.playerParty.GetMember(partyIndex)
+    if actor != nil {
+        window := g.ShowFixedFormatText(actor.BuffsAsStringTable())
+        window.SetTitle(actor.Name())
+    }
+}
+
 func (g *GridEngine) openPartyInventory() {
     //header := []string{"Inventory", "---------"}
     wearerIcons := []rune{'Ⅰ', 'Ⅱ', 'Ⅲ', 'Ⅳ'}
@@ -281,13 +289,20 @@ func (g *GridEngine) openTrainerMenu(npc *game.Actor, maxLevel int) {
     var menuItems []renderer.MenuItem
     for _, i := range eligibleMembers {
         member := i
-        itemLine := util.TableLine(labelWidth, colWidth, member.Name(), fmt.Sprintf("(%d)", member.GetLevel()))
+        levelUpCost := g.rules.GetTrainerCost(member.GetLevel())
+        itemLine := util.TableLine(labelWidth, colWidth, member.Name(), fmt.Sprintf("(%d)", member.GetLevel()), fmt.Sprintf(" %dg", levelUpCost))
         //itemLine := fmt.Sprintf("%s (%d)", member.Item.Name(), member.Price)
         menuItems = append(menuItems, renderer.MenuItem{
             Text: itemLine,
             Action: func() {
-                member.LevelUp(g.flags)
-                g.openTrainerMenu(npc, maxLevel)
+                if g.playerParty.HasGold(levelUpCost) {
+                    g.playerParty.RemoveGold(levelUpCost)
+                    npc.AddGold(levelUpCost)
+                    member.LevelUp(g.flags)
+                    g.openTrainerMenu(npc, maxLevel)
+                } else {
+                    g.openIconWindow(npc.Icon(0), []string{"You don't have enough gold."}, func() {})
+                }
             },
         })
     }

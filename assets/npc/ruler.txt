@@ -1,10 +1,8 @@
 %rec: Details
 
-Name: Chancellor Tauci
+Name: Kanzler Tauci
 Health: 10
-Description: The chancellor of Prucol. \
-He is dressed in a fancy \
-purple robe.
+Description: Der Kanzler von Prucol.
 
 %rec: Inventory
 
@@ -15,8 +13,13 @@ Item: key(5, kingdom_01): a golden key
 %rec: Conversation
 
 Key: _first_time
-Text: "Oh well, it's you again.." \
-He says with a sigh.
+Text: \
+"Aha, meine Spione haben
++ mir von dir berichtet."
++
++ "Ich bin nicht sicher was du hier willst,
++ aber lass dir eines gesagt sein:
++ Wir brauchen dich nicht."
 
 Key: name
 Text: My name and face should \

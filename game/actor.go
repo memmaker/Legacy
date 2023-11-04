@@ -372,9 +372,17 @@ func (a *Actor) GetContextActions(engine Engine) []renderer.MenuItem {
                 engine.StartCombat(a)
             },
         }
+        push := renderer.MenuItem{
+            Text: "Prod",
+            Action: func() {
+                if engine.GetAvatar().IsRightNextTo(a) {
+                    engine.ProdActor(engine.GetAvatar(), a)
+                }
+            },
+        }
         items = append(items, talkTo, lookAt, attack)
         if engine.GetAvatar().IsRightNextTo(a) {
-            items = append(items, steal)
+            items = append(items, steal, push)
         }
     }
     return items
@@ -587,6 +595,7 @@ func (a *Actor) FullRest() {
     if a.health < a.maxHealth {
         a.health = a.maxHealth
     }
+    a.ClearBuffs()
 }
 
 func (a *Actor) Damage(amount int) {
@@ -784,7 +793,11 @@ func (a *Actor) GetXPForKilling() int {
 
 func (a *Actor) LevelUp(flags *Flags) {
     a.level++
-    a.maxHealth += 10
+    healthBonus := 10
+    if flags.HasFlag("gift_of_life") {
+        healthBonus += 10
+    }
+    a.maxHealth += healthBonus
     a.health = a.maxHealth
     a.baseArmor += 1
     a.baseMeleeDamage += 1
@@ -823,14 +836,32 @@ func (a *Actor) GetOffenseBuffBonus() int {
 }
 
 func (a *Actor) HasOffenseBuffs() bool {
-    return len(a.buffs[BuffTypeOffense]) > 0
+    if len(a.buffs[BuffTypeOffense]) == 0 {
+        return false
+    }
+
+    for _, buff := range a.buffs[BuffTypeOffense] {
+        if buff.Strength > 0 {
+            return true
+        }
+    }
+    return false
 }
 
 func (a *Actor) HasDefenseBuffs() bool {
-    return len(a.buffs[BuffTypeDefense]) > 0
+    if len(a.buffs[BuffTypeDefense]) == 0 {
+        return false
+    }
+
+    for _, buff := range a.buffs[BuffTypeDefense] {
+        if buff.Strength > 0 {
+            return true
+        }
+    }
+    return false
 }
 
-func (a *Actor) GetDefenseBuffs() []string {
+func (a *Actor) GetDefenseBuffsString() []string {
     var rows []util.TableRow
     for _, buff := range a.buffs[BuffTypeDefense] {
         rows = append(rows, util.TableRow{
@@ -841,7 +872,7 @@ func (a *Actor) GetDefenseBuffs() []string {
     return util.TableLayout(rows)
 }
 
-func (a *Actor) GetOffenseBuffs() []string {
+func (a *Actor) GetOffenseBuffsString() []string {
     var rows []util.TableRow
     for _, buff := range a.buffs[BuffTypeOffense] {
         rows = append(rows, util.TableRow{
@@ -851,7 +882,13 @@ func (a *Actor) GetOffenseBuffs() []string {
 
     return util.TableLayout(rows)
 }
+func (a *Actor) GetOffenseBuffs() []Buff {
+    return a.buffs[BuffTypeOffense]
+}
 
+func (a *Actor) GetDefenseBuffs() []Buff {
+    return a.buffs[BuffTypeDefense]
+}
 func (a *Actor) TintColor() color.Color {
     return a.color
 }
@@ -866,4 +903,43 @@ func (a *Actor) IsTinted() bool {
 
 func (a *Actor) SetTinted(value bool) {
     a.isTinted = value
+}
+
+func (a *Actor) HasNegativeBuffs() bool {
+    for _, buffs := range a.buffs {
+        for _, buff := range buffs {
+            if buff.Strength < 0 {
+                return true
+            }
+        }
+    }
+    return false
+}
+
+func (a *Actor) BuffsAsStringTable() []string {
+    off := a.GetOffenseBuffs()
+    def := a.GetDefenseBuffs()
+    var rows []util.TableRow
+    if len(off) != 0 {
+        rows = append(rows, util.TableRow{Label: "Offense", Columns: []string{""}})
+        rows = append(rows, util.TableRow{Label: "-------", Columns: []string{""}})
+        for _, b := range off {
+            rows = append(rows, util.TableRow{Label: b.Name, Columns: []string{strconv.Itoa(b.Strength)}})
+        }
+
+    }
+    if len(def) != 0 {
+        if len(off) != 0 {
+            rows = append(rows, util.TableRow{Label: "", Columns: []string{""}})
+        }
+        rows = append(rows, util.TableRow{Label: "Defense", Columns: []string{""}})
+        rows = append(rows, util.TableRow{Label: "-------", Columns: []string{""}})
+        for _, b := range def {
+            rows = append(rows, util.TableRow{Label: b.Name, Columns: []string{strconv.Itoa(b.Strength)}})
+        }
+    }
+    if len(rows) == 0 {
+        return []string{"No buffs"}
+    }
+    return util.TableLayout(rows)
 }

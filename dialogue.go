@@ -76,6 +76,7 @@ func (g *GridEngine) StartConversation(npc *game.Actor) {
         }
     })
 }
+
 func (g *GridEngine) ShowMultipleChoiceDialogue(icon int32, text []string, choices []renderer.MenuItem) {
     g.openIconWindow(icon, text, func() {
         if len(choices) > 0 {

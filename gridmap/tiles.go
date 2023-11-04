@@ -84,6 +84,16 @@ func (t Tile) WithIcon(icon int32) Tile {
     return t
 }
 
+func (t Tile) WithIsTransparent(value bool) Tile {
+    t.IsTransparent = value
+    return t
+}
+
+func (t Tile) WithSpecial(special SpecialTileType) Tile {
+    t.Special = special
+    return t
+}
+
 type MapCell[ActorType interface {
     comparable
     MapActor

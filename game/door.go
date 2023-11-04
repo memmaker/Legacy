@@ -4,6 +4,7 @@ import (
     "Legacy/geometry"
     "Legacy/recfile"
     "Legacy/renderer"
+    "fmt"
     "image/color"
     "math/rand"
 )
@@ -208,6 +209,25 @@ func (d *Door) GetContextActions(engine Engine) []renderer.MenuItem {
                 }
             },
         })
+        if breakingTool := engine.GetBreakingToolName(); breakingTool != "" {
+            actions = append(actions, renderer.MenuItem{
+                Text: fmt.Sprintf("Break (%s)", breakingTool),
+                Action: func() {
+                    if d.isLocked && !d.isMagicallyLocked && !d.isBroken {
+                        if rand.Float64()+0.5 > d.frameStrength {
+                            d.isBroken = true
+                            d.isLocked = false
+                            engine.Print("You broke the door.")
+                            if d.breakEvent != "" {
+                                engine.TriggerEvent(d.breakEvent)
+                            }
+                        } else {
+                            engine.Print("You failed to break the door.")
+                        }
+                    }
+                },
+            })
+        }
         if engine.PartyHasKey(d.key) {
             actions = append(actions, renderer.MenuItem{
                 Text: "Unlock",

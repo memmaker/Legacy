@@ -144,7 +144,7 @@ func (r *RecReader) ReadLine(line string) {
         r.tryCommitCurrentRecord()
         r.currentRecord = make([]Field, 0)
     } else {
-        r.currentField.Value = strings.TrimSpace(r.currentField.Value + line)
+        r.currentField.Value += strings.Trim(line, " \t")
     }
 }
 

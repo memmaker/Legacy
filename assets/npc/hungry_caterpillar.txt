@@ -12,9 +12,10 @@ Item: armor(0): nothing
 %rec: Conversation
 
 Key: _first_time
-Text: "I recognize you. You are the one who is coming from that strange place with human problems."
-+ \
-"And now you are here at our place of human problems."
+Text:
++ "I recognize you. You are the one who is coming from that strange place with human problems."
++
++ "And now you are here at our place of human problems."
 
 Key: name
 Text: "I am just =hungry=."

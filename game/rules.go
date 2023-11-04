@@ -45,3 +45,7 @@ func (r *Rules) GetXPTable(from, to int) []string {
     }
     return util.TableLayout(rows)
 }
+
+func (r *Rules) GetTrainerCost(level int) int {
+    return (level * level) * 10
+}

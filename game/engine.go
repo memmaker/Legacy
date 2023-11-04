@@ -59,4 +59,6 @@ type Engine interface {
     GetRules() *Rules
     CanLevelUp(member *Actor) (bool, int)
     FreezeActorAt(pos geometry.Point, turns int)
+    ProdActor(prodder *Actor, victim *Actor)
+    GetBreakingToolName() string
 }

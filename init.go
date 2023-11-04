@@ -114,8 +114,9 @@ func (g *GridEngine) getFontIndex() map[rune]uint16 {
             {StartIndex: 3, Characters: []rune{'█'}},  // grey block
             {StartIndex: 45, Characters: []rune{'—'}},
             {StartIndex: 39, Characters: []rune{'\''}},
-            {StartIndex: 131, Characters: []rune{'🍗', '🪙'}},           // food/gold
-            {StartIndex: 147, Characters: []rune{'Ⅰ', 'Ⅱ', 'Ⅲ', 'Ⅳ'}}, // roman numerals 1-4
+            {StartIndex: 131, Characters: []rune{'🍗', '🪙'}},                          // food/gold
+            {StartIndex: 147, Characters: []rune{'Ⅰ', 'Ⅱ', 'Ⅲ', 'Ⅳ'}},                // roman numerals 1-4
+            {StartIndex: 153, Characters: []rune{'Ä', 'Ö', 'Ü', 'ß', 'ä', 'ö', 'ü'}}, // umlaute
         },
     })
 }

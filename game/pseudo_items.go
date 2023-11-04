@@ -22,7 +22,7 @@ type PseudoItem struct {
 }
 
 func (p *PseudoItem) Icon(u uint64) int32 {
-    return 0
+    return int32(205)
 }
 
 func (p *PseudoItem) GetContextActions(engine Engine) []renderer.MenuItem {
@@ -61,7 +61,12 @@ func (p *PseudoItem) CanStackWith(other Item) bool {
         return false
     }
 }
-
+func (p *PseudoItem) Name() string {
+    if p.name == "" {
+        return nameFromTypeAndAmount(p.itemType, p.amount)
+    }
+    return p.name
+}
 func NewPseudoItem(name string, itemType PseudoItemType, amount int) *PseudoItem {
     return &PseudoItem{
         BaseItem: BaseItem{
@@ -75,7 +80,7 @@ func NewPseudoItem(name string, itemType PseudoItemType, amount int) *PseudoItem
 func NewPseudoItemFromTypeAndAmount(itemType PseudoItemType, amount int) *PseudoItem {
     return &PseudoItem{
         BaseItem: BaseItem{
-            name: nameFromTypeAndAmount(itemType, amount),
+            name: "",
         },
         itemType: itemType,
         amount:   amount,

@@ -138,21 +138,23 @@ func (g *GridEngine) openDebugMenu() {
             },
         },
         {
-            Text: "impulse 9",
+            Text: "Text Input Test",
             Action: func() {
-                g.playerParty.AddFood(100)
-                g.playerParty.AddGold(100)
-                g.playerParty.AddLockpicks(100)
-                g.avatar.SetHealth(1000)
-                g.avatar.SetMana(1000)
-                g.Print("DEBUG(impulse 9)")
+                g.textInput = g.gridRenderer.NewTextInputAtY(10, "Enter your name:", func(endedWith renderer.EndAction, text string) {
+                    g.Print(fmt.Sprintf("DEBUG(Text Input): %s", text))
+                })
             },
         },
         {
-            Text: "100k XP",
+            Text: "impulse 9",
             Action: func() {
-                g.playerParty.AddXPForEveryone(100000)
-                g.Print("100k XP added to everyone")
+                g.playerParty.AddFood(100)
+                g.playerParty.AddGold(10000000)
+                g.playerParty.AddLockpicks(100)
+                g.avatar.SetHealth(1000)
+                g.avatar.SetMana(1000)
+                g.playerParty.AddXPForEveryone(1000000)
+                g.Print("DEBUG(impulse 9)")
             },
         },
         {

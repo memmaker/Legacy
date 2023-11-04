@@ -13,7 +13,7 @@ type FlavorItem struct {
 }
 
 func (f *FlavorItem) Icon(u uint64) int32 {
-    return 0
+    return int32(205)
 }
 
 func (f *FlavorItem) GetContextActions(engine Engine) []renderer.MenuItem {

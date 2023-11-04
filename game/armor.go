@@ -25,7 +25,7 @@ func (a *Armor) GetValue() int {
     return a.protection * 10
 }
 func (a *Armor) Icon(u uint64) int32 {
-    return 0
+    return int32(205)
 }
 func (a *Armor) GetContextActions(engine Engine) []renderer.MenuItem {
     // TODO: add equip

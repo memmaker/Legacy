@@ -115,13 +115,39 @@ func NewDialogueFromRecords(records []recfile.Record) *Dialogue {
             }
         }
         addedKeyWords, strippedText := parseKeywords(currentText)
-        currentNode.Text = strippedText
+        currentNode.Text = toSpeechPages(strippedText)
         currentNode.AddsKeywords = addedKeyWords
         triggers[currentTrigger] = currentNode
     }
     return NewDialogue(triggers)
 }
 
+func toSpeechPages(lines []string) []string {
+    // collapse all lines into, until we hit an empty line
+    if len(lines) == 0 {
+        return []string{}
+    }
+    if lines[0] == "" {
+        lines = lines[1:]
+    }
+    var pages []string
+    currentPage := ""
+    for _, line := range lines {
+        if line == "" {
+            pages = append(pages, currentPage)
+            currentPage = ""
+            continue
+        } else if currentPage != "" {
+            currentPage += "\n"
+        }
+        currentPage += line
+    }
+
+    if currentPage != "" {
+        pages = append(pages, currentPage)
+    }
+    return pages
+}
 func (d *Dialogue) GetOptions(speaker *Actor, pk *PlayerKnowledge, flags *Flags) []string {
     var options []string
 

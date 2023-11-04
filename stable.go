@@ -5,12 +5,12 @@ import (
     "Legacy/geometry"
     "Legacy/gridmap"
     "Legacy/renderer"
+    "fmt"
     "github.com/hajimehoshi/ebiten/v2"
 )
 
 func (g *GridEngine) playerMovement(direction geometry.Point) {
     g.flags.IncrementFlag("steps_taken")
-
     if g.splitControlled != nil {
         g.currentMap.MoveActor(g.splitControlled, g.splitControlled.Pos().Add(direction))
         g.onViewedActorMoved(g.splitControlled.Pos())
@@ -21,6 +21,14 @@ func (g *GridEngine) playerMovement(direction geometry.Point) {
 
     if g.flags.GetFlag("steps_taken") == 1 {
         g.onVeryFirstStep()
+    }
+
+    if g.playerParty.NeedsRestAfterMovement() {
+        for _, actor := range g.playerParty.GetMembers() {
+            actor.ClearBuffs()
+            g.AddBuff(actor, "Fatigued", game.BuffTypeOffense, -5)
+            g.AddBuff(actor, "Weak", game.BuffTypeDefense, -3)
+        }
     }
 }
 
@@ -64,7 +72,14 @@ func (g *GridEngine) Draw(screen *ebiten.Image) {
 
     g.mapRenderer.Draw(g.playerParty.GetFoV(), screen, g.CurrentTick())
 
-    if g.inputElement != nil {
+    if g.textInput != nil {
+        if g.textInput.ShouldClose() {
+            g.textInput = nil
+            g.updateContextActions()
+        } else {
+            g.textInput.Draw(g.gridRenderer, screen, g.CurrentTick())
+        }
+    } else if g.inputElement != nil {
         if g.inputElement.ShouldClose() {
             if gridMenu, ok := g.inputElement.(*renderer.GridMenu); ok && !g.combatManager.IsInCombat() {
                 lastAction := gridMenu.GetLastAction()
@@ -142,13 +157,14 @@ func (g *GridEngine) updateContextActions() {
     // NOTE: We need to reverse the dependency here
     // The objects in the world, should provide us with context actions.
     // We should not know about them beforehand.
+    breakingTool := g.playerParty.GetNameOfBreakingTool()
 
     loc := g.GetAvatar().Pos()
 
     g.contextActions = make([]renderer.MenuItem, 0)
 
     neighborsWithStuff := g.currentMap.NeighborsCardinal(loc, func(p geometry.Point) bool {
-        return g.currentMap.Contains(p) && (g.currentMap.IsActorAt(p) || g.currentMap.IsItemAt(p) || g.currentMap.IsObjectAt(p))
+        return g.currentMap.Contains(p) && (g.currentMap.IsActorAt(p) || g.currentMap.IsItemAt(p) || g.currentMap.IsObjectAt(p) || g.currentMap.IsSpecialAt(p, gridmap.SpecialTileBreakable))
     })
 
     neighborsWithStuff = append(neighborsWithStuff, loc)
@@ -158,7 +174,8 @@ func (g *GridEngine) updateContextActions() {
     var allItemsNearby []game.Item
     var objectsNearby []game.Object
 
-    for _, neighbor := range neighborsWithStuff {
+    for _, n := range neighborsWithStuff {
+        neighbor := n
         if g.currentMap.IsActorAt(neighbor) {
             actor := g.currentMap.GetActor(neighbor)
             if !actor.IsHidden() && !g.IsPlayerControlled(actor) {
@@ -180,11 +197,21 @@ func (g *GridEngine) updateContextActions() {
                 }
             }
         }
+
         if g.currentMap.IsObjectAt(neighbor) {
             object := g.currentMap.ObjectAt(neighbor)
             if !object.IsHidden() {
                 objectsNearby = append(objectsNearby, object)
             }
+        }
+
+        if g.currentMap.IsSpecialAt(neighbor, gridmap.SpecialTileBreakable) && breakingTool != "" {
+            g.contextActions = append(g.contextActions, renderer.MenuItem{
+                Text: fmt.Sprintf("Break (%s)", breakingTool),
+                Action: func() {
+                    g.breakTileAt(neighbor)
+                },
+            })
         }
     }
 
@@ -248,6 +275,7 @@ func (g *GridEngine) updateContextActions() {
     }
 
     // worldmap interactions
+
     if g.currentMap.IsSpecialAt(loc, gridmap.SpecialTileForest) {
         g.contextActions = append(g.contextActions, renderer.MenuItem{
             Text: "Hunt game",
@@ -263,4 +291,5 @@ func (g *GridEngine) updateContextActions() {
             },
         })
     }
+
 }

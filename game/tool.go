@@ -1,10 +1,10 @@
 package game
 
 import (
+    "Legacy/recfile"
     "Legacy/renderer"
     "fmt"
     "image/color"
-    "regexp"
 )
 
 type ToolType string
@@ -35,11 +35,10 @@ func (t *Tool) GetContextActions(engine Engine) []renderer.MenuItem {
 }
 
 func (t *Tool) Icon(uint64) int32 {
-    return 0
+    return int32(205)
 }
 func (t *Tool) Encode() string {
-    // encode name, key, and importance
-    return fmt.Sprintf("%s: %s", t.kind, t.name)
+    return fmt.Sprintf("tool(%s, %s)", t.kind, t.name)
 }
 
 func NewTool(kind ToolType, name string) *Tool {
@@ -50,18 +49,11 @@ func NewTool(kind ToolType, name string) *Tool {
         kind: kind,
     }
 }
-func NewToolFromString(encoded string) *Tool {
-    paramRegex := regexp.MustCompile(`^([^:]+): ?([^:]+)$`)
-    // extract name, key, and importance
-    var name string
-    var kind ToolType
-
-    if matches := paramRegex.FindStringSubmatch(encoded); matches != nil {
-        kind = ToolType(matches[1])
-        name = matches[2]
-        return NewTool(kind, name)
+func NewToolFromPredicate(pred recfile.StringPredicate) *Tool {
+    if pred.ParamCount() == 1 {
+        return NewTool(ToolType(pred.GetString(0)), "")
     }
-    return NewTool(ToolTypePickaxe, "Invalid Tool")
+    return NewTool(ToolType(pred.GetString(0)), pred.GetString(1))
 }
 
 func (t *Tool) GetKind() ToolType {
@@ -84,4 +76,10 @@ func (t *Tool) usePickaxe(engine Engine) {
 
 func (t *Tool) useShovel(engine Engine) {
     // TODO: dig here
+}
+func (t *Tool) Name() string {
+    if t.name == "" {
+        return string(t.kind)
+    }
+    return t.name
 }

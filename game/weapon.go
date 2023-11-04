@@ -22,7 +22,7 @@ func (a *Weapon) GetValue() int {
     return a.baseDamage * 10
 }
 func (a *Weapon) Icon(u uint64) int32 {
-    return 0
+    return int32(205)
 }
 func (a *Weapon) GetContextActions(engine Engine) []renderer.MenuItem {
     equipAction := renderer.MenuItem{

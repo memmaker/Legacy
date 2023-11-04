@@ -8,6 +8,15 @@ import (
 )
 
 func (g *GridEngine) handleInput() {
+    if g.textInput != nil {
+        var keys []ebiten.Key
+        keys = inpututil.AppendJustPressedKeys(keys)
+        for _, key := range keys {
+            g.textInput.OnKeyPressed(key)
+        }
+        return
+    }
+
     windowsOpen := g.inputElement != nil || g.modalElement != nil
     if inpututil.IsKeyJustPressed(ebiten.KeyArrowRight) {
         if g.inputElement != nil {
@@ -152,6 +161,8 @@ func (g *GridEngine) handleInput() {
             }
         } else if ebiten.IsKeyPressed(ebiten.KeyAlt) {
             g.openCharSkills(charIndex)
+        } else if ebiten.IsKeyPressed(ebiten.KeyF) {
+            g.openCharBuffs(charIndex)
         } else {
             g.openCharDetails(charIndex)
         }

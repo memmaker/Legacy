@@ -148,6 +148,8 @@ func NewItemFromString(encoded string) Item {
         return NewFlavorItemFromPredicate(predicate)
     case "weapon":
         return NewWeaponFromPredicate(predicate)
+    case "tool":
+        return NewToolFromPredicate(predicate)
     }
     println(fmt.Sprintf("Unknown item type and params: %s", encoded))
     return NewKeyFromImportance("unknown item", "unknown item", 1)

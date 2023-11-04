@@ -12,14 +12,16 @@ import (
 )
 
 type Party struct {
-    members        []*Actor
-    partyInventory [][]Item
-    keys           map[string]*Key
-    gridMap        *gridmap.GridMap[*Actor, Item, Object]
-    fov            *geometry.FOV
-    gold           int
-    food           int
-    lockpicks      int
+    members            []*Actor
+    partyInventory     [][]Item
+    keys               map[string]*Key
+    gridMap            *gridmap.GridMap[*Actor, Item, Object]
+    fov                *geometry.FOV
+    gold               int
+    food               int
+    lockpicks          int
+    stepsBeforeRest    int
+    needRestAfterSteps int
 }
 
 func (p *Party) Pos() geometry.Point {
@@ -27,13 +29,16 @@ func (p *Party) Pos() geometry.Point {
 }
 
 func NewParty(leader *Actor) *Party {
+    stepsBeforeRest := 100
     p := &Party{
-        members:        []*Actor{leader},
-        partyInventory: [][]Item{},
-        keys:           make(map[string]*Key),
-        fov:            geometry.NewFOV(geometry.NewRect(-6, -6, 6, 6)),
-        gold:           1000,
-        food:           3,
+        members:            []*Actor{leader},
+        partyInventory:     [][]Item{},
+        keys:               make(map[string]*Key),
+        fov:                geometry.NewFOV(geometry.NewRect(-6, -6, 6, 6)),
+        gold:               1000,
+        food:               3,
+        needRestAfterSteps: stepsBeforeRest,
+        stepsBeforeRest:    stepsBeforeRest,
     }
     leader.SetParty(p)
     return p
@@ -242,7 +247,7 @@ func (p *Party) TryRest() bool {
 
 func (p *Party) NeedsRest() bool {
     for _, member := range p.members {
-        if member.health < member.maxHealth {
+        if member.health < member.maxHealth || member.HasNegativeBuffs() {
             return true
         }
     }
@@ -399,7 +404,7 @@ func (p *Party) GetDefenseBuffs() []string {
             continue
         }
         result = append(result, member.Name())
-        result = append(result, member.GetDefenseBuffs()...)
+        result = append(result, member.GetDefenseBuffsString()...)
     }
     return result
 }
@@ -411,7 +416,7 @@ func (p *Party) GetOffenseBuffs() []string {
             continue
         }
         result = append(result, member.Name())
-        result = append(result, member.GetOffenseBuffs()...)
+        result = append(result, member.GetOffenseBuffsString()...)
     }
     return result
 }
@@ -432,6 +437,29 @@ func (p *Party) HasDefenseBuffs() bool {
         }
     }
     return false
+}
+
+func (p *Party) NeedsRestAfterMovement() bool {
+    p.stepsBeforeRest--
+    if p.stepsBeforeRest <= 0 {
+        p.stepsBeforeRest = p.needRestAfterSteps
+        return true
+    }
+    return false
+}
+
+func (p *Party) HasGold(cost int) bool {
+    return p.gold >= cost
+}
+
+func (p *Party) GetNameOfBreakingTool() string {
+    for _, itemStack := range p.partyInventory {
+        firstItemOfStack := itemStack[0]
+        if breakingTool, ok := firstItemOfStack.(*Tool); ok && breakingTool.kind == ToolTypePickaxe {
+            return breakingTool.Name()
+        }
+    }
+    return ""
 }
 
 func moneyFormat(value int) string {

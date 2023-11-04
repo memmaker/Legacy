@@ -53,6 +53,7 @@ type GridEngine struct {
     tileScale      float64
     internalWidth  int
     internalHeight int
+    textInput      *renderer.TextInput
     modalElement   Modal
     inputElement   UIWidget
     uiOverlay      map[int]int32
@@ -80,6 +81,24 @@ type GridEngine struct {
     ticksForPrint        int
     printLog             []string
     grayScaleEntityTiles *ebiten.Image
+}
+
+func (g *GridEngine) GetBreakingToolName() string {
+    return g.playerParty.GetNameOfBreakingTool()
+}
+
+func (g *GridEngine) ProdActor(prodder *game.Actor, victim *game.Actor) {
+    if !prodder.IsRightNextTo(victim) {
+        return
+    }
+    // check if dest is free
+    direction := victim.Pos().Sub(prodder.Pos())
+    dest := victim.Pos().Add(direction)
+    if !g.currentMap.IsCurrentlyPassable(dest) {
+        return
+    }
+
+    g.currentMap.MoveActor(victim, dest)
 }
 
 func (g *GridEngine) FreezeActorAt(pos geometry.Point, turns int) {
@@ -317,6 +336,19 @@ func (g *GridEngine) growBloodAt(pos geometry.Point) {
         g.currentMap.SetTile(pos, bloodTile)
     }
 }
+
+func (g *GridEngine) breakTileAt(loc geometry.Point) {
+    currentCell := g.currentMap.GetCell(loc)
+    currentTile := currentCell.TileType
+    if currentTile.Special == gridmap.SpecialTileBreakable {
+        debrisTile := currentTile.WithIcon(32).
+            WithIsWalkable(true).
+            WithIsTransparent(true).
+            WithSpecial(gridmap.SpecialTileNone)
+        g.currentMap.SetTile(loc, debrisTile)
+    }
+}
+
 func (g *GridEngine) TryPickpocketItem(item game.Item, victim *game.Actor) {
     g.flags.IncrementFlag("pickpocket_attempts")
     chanceOfSuccess := 1.0
@@ -529,7 +561,7 @@ func (g *GridEngine) AddSkill(avatar *game.Actor, skill string) {
 
 func (g *GridEngine) AddBuff(actor *game.Actor, name string, buffType game.BuffType, strength int) {
     actor.AddBuff(name, buffType, strength)
-    g.Print(fmt.Sprintf("%s received %s+%d", actor.Name(), buffType, strength))
+    g.Print(fmt.Sprintf("%s received %s", actor.Name(), name))
 }
 
 func secondsToTicks(seconds float64) int {
