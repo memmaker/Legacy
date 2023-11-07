@@ -1,0 +1,35 @@
+# order of option fields is important..
+# The option field itself must come last
+
+
+Key: _opening
+Text:
++ The guards arrive!
++ They are not happy to see you.
++ However, you get the chance to explain yourself.
+#
+OptionNeedsSkill: Sneaky(1)
+OnOptionSuccess: _bluff_success
+OnOptionFail: _bluff_failure
+Option: I am the new guard.
+#
+OnOptionSuccess: _naive_success
+Option: Isn't this the way to the throne room?
+
+Key: _naive_success
+Effect: quits
+Text:
++ "Oh, sure. Just go right
++ on through."
+
+Key: _bluff_success
+Effect: quits
+Text:
++ "Ah, you still don't know your way
++ around? Right, next round is on you, pal."
+
+Key: _bluff_failure
+Effect: combat
+Text:
++ "I don't trust your rancid face.
++ Guys, grab these intruders!"

@@ -21,13 +21,14 @@ Condition: Item(gold, 1000)
 */
 
 type DialogueChoice struct {
-    Text         string
-    TransitionTo string
-    NeededFlags  []string
-    NeededSkills map[string]int
+    Text                string
+    TransitionOnSuccess string
+    TransitionOnFail    string
+    NeededFlags         []string
+    NeededSkills        map[string]int
 }
 type ConversationNode struct {
-    Text         []string
+    Text         [][]string
     FlagsSet     []string
     AddsKeywords []string
     Effects      []string
@@ -51,7 +52,7 @@ func NewDialogue(triggers map[string]ConversationNode) *Dialogue {
     }
 }
 
-func NewDialogueFromRecords(records []recfile.Record) *Dialogue {
+func NewDialogueFromRecords(records []recfile.Record, toPages func(height int, inputText []string) [][]string) *Dialogue {
     triggers := make(map[string]ConversationNode)
     for _, record := range records {
         currentTrigger := ""
@@ -103,20 +104,21 @@ func NewDialogueFromRecords(records []recfile.Record) *Dialogue {
                     println(fmt.Sprintf("ERR: invalid skill: %s", fieldValue))
                 }
             case "Option":
-                parts := strings.Split(fieldValue, ":")
-                if len(parts) != 2 {
-                    println(fmt.Sprintf("ERR: invalid option: %s", fieldValue))
-                } else {
-                    currentOption.TransitionTo = strings.TrimSpace(parts[0])
-                    currentOption.Text = strings.TrimSpace(parts[1])
-                    currentNode.ForcedChoice = append(currentNode.ForcedChoice, currentOption)
-                    currentOption = DialogueChoice{}
-                }
+                currentOption.Text = strings.TrimSpace(fieldValue)
+                currentNode.ForcedChoice = append(currentNode.ForcedChoice, currentOption)
+                currentOption = DialogueChoice{}
+            case "OnOptionSuccess":
+                currentOption.TransitionOnSuccess = fieldValue
+            case "OnOptionFail":
+                currentOption.TransitionOnFail = fieldValue
             }
         }
         addedKeyWords, strippedText := parseKeywords(currentText)
-        currentNode.Text = toSpeechPages(strippedText)
+        currentNode.Text = toPages(5, strippedText)
         currentNode.AddsKeywords = addedKeyWords
+        if currentOption.Text != "" {
+            currentNode.ForcedChoice = append(currentNode.ForcedChoice, currentOption)
+        }
         triggers[currentTrigger] = currentNode
     }
     return NewDialogue(triggers)

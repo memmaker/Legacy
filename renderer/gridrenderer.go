@@ -22,17 +22,18 @@ type DualGridRenderer struct {
     smallGridSize       int
     bigGridSize         int
     scale               float64
-    fontMap             map[rune]uint16
+    smallGridFontMap    map[rune]uint16
+    bigGridFontMap      map[rune]uint16
     smallGridScreenSize geometry.Point
     op                  *ebiten.DrawImageOptions
     borderDef           GridBorderDefinition
 }
 
-func NewDualGridRenderer(scale float64, fontMap map[rune]uint16) *DualGridRenderer {
+func NewDualGridRenderer(scale float64, fontMapForSmallGrid map[rune]uint16) *DualGridRenderer {
     return &DualGridRenderer{
         atlasMap:            make(map[AtlasName]*ebiten.Image),
         scale:               scale,
-        fontMap:             fontMap,
+        smallGridFontMap:    fontMapForSmallGrid,
         smallGridSize:       8,
         bigGridSize:         16,
         smallGridScreenSize: geometry.Point{X: 40, Y: 25},
@@ -85,7 +86,7 @@ func (g *DualGridRenderer) DrawMappingOnSmallGrid(screen *ebiten.Image, gridMapp
 }
 
 func (g *DualGridRenderer) DrawColoredChar(screen *ebiten.Image, cellX, cellY int, char rune, textColor color.Color) {
-    textureIndex, ok := g.fontMap[char]
+    textureIndex, ok := g.smallGridFontMap[char]
     if !ok {
         return
     }
@@ -186,13 +187,53 @@ func (g *DualGridRenderer) GetScale() float64 {
     return g.scale
 }
 
-func (g *DualGridRenderer) AutoPositionText(text []string) (geometry.Point, geometry.Point) {
-    height := min(len(text)+4, 18)
-    width := min(maxLen(text)+4, 36)
+func (g *DualGridRenderer) GetAutoFitRect(text []string) (geometry.Point, geometry.Point) {
+    return g.GetAutoFitRectWithExtraSpace(text, geometry.Point{})
+}
+
+func (g *DualGridRenderer) GetAutoFitRectWithExtraSpace(text []string, padding geometry.Point) (geometry.Point, geometry.Point) {
+    width := min(maxLen(text)+4+padding.X, 36)
+    height := min(len(text)+4+padding.Y, 18)
     screenSize := g.GetSmallGridScreenSize()
-    topLeft := geometry.Point{X: (screenSize.X - width) / 2, Y: (screenSize.Y - height) / 2}
-    bottomRight := geometry.Point{X: topLeft.X + width, Y: topLeft.Y + height}
+
+    startX := (screenSize.X - width) / 2
+    endX := startX + width
+
+    startY := (screenSize.Y - height) / 2
+    endY := startY + height
+
+    topLeft := geometry.Point{X: startX, Y: startY}
+    bottomRight := geometry.Point{X: endX, Y: endY}
     return topLeft, bottomRight
+}
+
+func (g *DualGridRenderer) GetXPosAndHeightForIconText(text []string) (int, int, int) {
+    screenSize := g.GetSmallGridScreenSize()
+
+    maxWidth := screenSize.X - 4 // 2*4 for the borders(incl. 1 padding each) + 2 for icon + 1 for padding
+    minWidth := maxLen(text) + 7 // 2*2 for the borders(incl. 1 padding each) + 2 for icon + 1 for padding
+    width := min(minWidth, maxWidth)
+
+    minHeight := max(len(text)+4, 6)    // 2*2 for the borders(incl. 1 padding each) but we need at least 6 for the icon
+    maxHeight := screenSize.Y - 4       // 2*2 for the borders(incl. 1 padding each)
+    height := min(minHeight, maxHeight) // max = 18
+
+    startX := (screenSize.X - width) / 2
+    endX := startX + width
+
+    return startX, endX, height
+}
+
+func (g *DualGridRenderer) AutolayoutArrayToPages(height int, inputText []string) [][]string {
+    screenSize := g.GetSmallGridScreenSize()
+    width := screenSize.X - 8
+    return AutoLayoutPages(strings.Join(inputText, " "), width, height)
+}
+
+func (g *DualGridRenderer) AutolayoutArrayToIconPages(height int, inputText []string) [][]string {
+    screenSize := g.GetSmallGridScreenSize()
+    width := screenSize.X - 11
+    return AutoLayoutPages(strings.Join(inputText, " "), width, height)
 }
 
 func (g *DualGridRenderer) NewTextInputAtY(yPos int, prompt string, onClose func(endedWith EndAction, text string)) *TextInput {
@@ -203,6 +244,10 @@ func (g *DualGridRenderer) NewTextInputAtY(yPos int, prompt string, onClose func
     input.SetPrompt(prompt)
     input.CenterHorizontallyAtY(yPos)
     return input
+}
+
+func (g *DualGridRenderer) SetFontIndexForBigGrid(index map[rune]uint16) {
+    g.bigGridFontMap = index
 }
 
 func ExtractSubImageFromAtlas(textureIndex int32, tileSizeX int, tileSizeY int, textureAtlas *ebiten.Image) *ebiten.Image {
@@ -226,9 +271,17 @@ func ExtractSubImageFromAtlas(textureIndex int32, tileSizeX int, tileSizeY int, 
 func AutoLayoutArray(inputText []string, width int) []string {
     return AutoLayout(strings.Join(inputText, " "), width)
 }
+func splitIntoTokens(inputText []string) []string {
+    oneString := strings.Join(inputText, " ")
+    return strings.Split(oneString, " ")
+}
 
+// AutoLayout splits a string into lines of maximum width
 func AutoLayout(inputText string, width int) []string {
+    // split on spaces and newlines
+    inputText = strings.ReplaceAll(inputText, "\n", " ")
     tokens := strings.Split(inputText, " ")
+
     var lines []string
     currentLine := ""
     for i, token := range tokens {
@@ -243,4 +296,96 @@ func AutoLayout(inputText string, width int) []string {
     }
     lines = append(lines, currentLine)
     return lines
+}
+func AutoLayoutPages(inputText string, width int, height int) [][]string {
+    inputText = strings.ReplaceAll(inputText, "\n", " ")
+    tokens := strings.Split(inputText, " ")
+    var allPages [][]string
+    var currentPage []string
+    lastDelim := geometry.Point{X: -1, Y: -1}
+    currentLine := ""
+    firstTokenInPage := true
+    for len(tokens) > 0 {
+        // pop
+        token := tokens[0]
+        tokens = tokens[1:]
+
+        if strings.TrimSpace(token) == "" {
+            continue
+        }
+
+        indexOfDelimInToken := strings.IndexAny(token, ".!?")
+        indexOfDelimInLine := -1
+        if len(currentLine)+len(token)+1 > width {
+            currentPage = append(currentPage, currentLine)
+            if len(currentPage) == height {
+                if lastDelim.X > 0 {
+                    // we have a sensible split?
+                    lineToSplitOn := currentPage[lastDelim.Y]
+
+                    splitIndex := lastDelim.X + 1
+                    if len(lineToSplitOn) > splitIndex && lineToSplitOn[splitIndex] == '"' {
+                        splitIndex++
+                    }
+                    // split the lines
+                    partOfCurrPage := strings.TrimSpace(lineToSplitOn[:splitIndex])
+                    partOfNextPage := strings.TrimSpace(lineToSplitOn[splitIndex:])
+
+                    // get all the lines up to here
+                    currPageLines := currentPage[:lastDelim.Y]
+                    // append the split part
+                    currPageLines = append(currPageLines, partOfCurrPage)
+
+                    // get the rest of the lines
+                    nextPageLines := currentPage[lastDelim.Y+1:]
+
+                    // prepend the split part
+                    nextPageLines = append([]string{partOfNextPage}, nextPageLines...)
+                    restOfTheTokens := splitIntoTokens(nextPageLines)
+
+                    // re-add the token we popped
+                    restOfTheTokens = append(restOfTheTokens, token)
+
+                    // prepend to our token queue
+                    tokens = append(restOfTheTokens, tokens...)
+
+                    // append the current page
+                    allPages = append(allPages, currPageLines)
+
+                    // reset
+                    currentPage = []string{}
+                    lastDelim = geometry.Point{X: -1, Y: -1}
+                    currentLine = ""
+                    firstTokenInPage = true
+                    continue
+                } else {
+                    // just split
+                    allPages = append(allPages, currentPage)
+                    currentPage = []string{}
+                }
+            }
+            currentLine = token
+            if indexOfDelimInToken != -1 {
+                indexOfDelimInLine = indexOfDelimInToken
+            }
+        } else if firstTokenInPage {
+            firstTokenInPage = false
+            currentLine = token
+            if indexOfDelimInToken != -1 {
+                indexOfDelimInLine = indexOfDelimInToken
+            }
+        } else {
+            currentLine += " " + token
+            if indexOfDelimInToken != -1 {
+                indexOfDelimInLine = len(currentLine) - len(token) + indexOfDelimInToken
+            }
+        }
+        indexOfCurrentLine := len(currentPage)
+        if indexOfDelimInLine != -1 {
+            lastDelim = geometry.Point{X: indexOfDelimInLine, Y: indexOfCurrentLine}
+        }
+    }
+    currentPage = append(currentPage, currentLine)
+    allPages = append(allPages, currentPage)
+    return allPages
 }

@@ -9,19 +9,18 @@
  - I cannot click on equipment in the inventory screen and just select something different
  - Encounters need a definition in text files, like conversations
  - It's not possible to have a conversation with your followers
- - How to handle items without icons when dropping them?
  - Dialogue options will only depend on the skills of the Avatar, not the whole party
  - Dialogue missing from NPCs after loading
  - No tooltips for Weapons, Armor, Spells and Menu Options in general
- - Vendors have no stacked inventory
- - Combat has a bug where the whole game can get locked
-   -> Last triggered by having Roy in my party and doing manual combat
-   -> Roy died and I killed everyone left and moved on
-   -> Apparently Georg was left as an opponent even though he was dead
-   -> He was either not removed or added twice
  - Combat will magically end, when block a doorway with a party member
  - Skill checks in dialogues are a bit rough, only works for the first option, if at all
  - Cannot look at stats during combat
+ - If the player does not trigger the door event in the bed room, it will stay in memory forever
+ - Trying to cast a targeted spell from a container or the ground doesnt work
+ - Not sure if raise undead does remove the downed actor correctly
+ - Someone will definitely try to type "Your Bedroom" into a mirror to get home. We should react to that.
+ - ?? Require reading a scroll for one time, to "discover" the associated spell.
+ - Inventory doesn't scroll when it gets too long
 
 # Next Steps
  - Leveling System
@@ -94,13 +93,15 @@ Party Stats?
 
 # Primary Stats
  - Max Health
- - Speed (determines initiative & movement allowance)
+ - Strength (adds to melee damage, breaking stuff, strength requirements, etc.)
+ - Perception (adds to chance to hit, extends range of sight, etc.)
+ - Agility (determines initiative & movement allowance)
+ - Luck Bonus (Loot & Critical Hits)
  - Magic Affinity
     - Determines the effectiveness of potion consumption
     - How many spells you have available in combat
  - Physical Attacks (Melee, Ranged) / (Dark, Light) / (Magic, Physical)
  - Physical Defense (Melee, Ranged) / (Dark, Light) / (Magic, Physical)
- - Luck Bonus (Loot & Critical Hits)
  - Encumbrance (For chance to hit modifiers based on armor)
  - Performed rituals
     - How many gods you can talk to
@@ -183,6 +184,7 @@ Ranged Combat Skills
  - Save/Load - BASIC
  - Main Menu
  - Line of Sight - GOOD ENOUGH
+ - The engine is basically done, we should not add drastic changes anymore
 
 # What we won't do
  - Off the grid effects
@@ -211,12 +213,17 @@ Ranged Combat Skills
  - Open/Close (a door/chest)
 
 # Cool ideas
+ - Allow for rituals, with placing candles, lines, arranging party members and chanting incantations
+   -> The right words have to be typed in
+   -> Let the player scramble to find the right ones, as most information is wrong
+   -> Using the wrong formula will result in summoning another demon
  - Don't allow revival of party members?
  - Track the wealth of the party and let them be the target of thieves and robbers
  - Let them buy a house and deal with break-ins
  - The 4 Orb Stones in the UI corners can actually be found in the world, n/e/w/s
  - Allow knocking on locked doors
  - Magic is Mother Natures HP, the "Legacy" label on the top of the UI will turn into the damage you have done to nature
+   -> Once you have acquired the right skill you can see the damage you have done to nature
  - We should provide alternatives to using the nature potions for spellcasting
    - Staff of the Sun God
      - Can be used as a source of mana

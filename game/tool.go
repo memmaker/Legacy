@@ -19,6 +19,15 @@ type Tool struct {
     kind ToolType
 }
 
+func (t *Tool) InventoryIcon() int32 {
+    if t.kind == ToolTypePickaxe {
+        return 176
+    } else if t.kind == ToolTypeShovel {
+        return 177
+    }
+    return 169
+}
+
 func (t *Tool) CanStackWith(other Item) bool {
     if otherTool, ok := other.(*Tool); ok {
         return t.kind == otherTool.kind

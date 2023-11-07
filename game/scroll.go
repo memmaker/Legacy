@@ -15,6 +15,18 @@ type Scroll struct {
     wearer   ItemWearer
 }
 
+func (b *Scroll) InventoryIcon() int32 {
+    return 175
+}
+
+func (b *Scroll) SetWearer(wearer ItemWearer) {
+    b.wearer = wearer
+}
+
+func (b *Scroll) IsEquipped() bool {
+    return b.wearer != nil
+}
+
 func (b *Scroll) GetValue() int {
     if b.spell != nil {
         return b.spell.GetValue()
@@ -45,17 +57,27 @@ func (b *Scroll) GetContextActions(engine Engine) []renderer.MenuItem {
         Action: func() { b.read(engine) },
     })
     if b.spell != nil {
+
         actions = append(actions, renderer.MenuItem{
             Text:   fmt.Sprintf("Cast \"%s\"", b.spell.name),
             Action: func() { b.spell.Cast(engine, engine.GetAvatar()) },
         })
+
+        if engine.IsPlayerControlled(b.GetHolder()) {
+            actions = append(actions, renderer.MenuItem{
+                Text: "Equip",
+                Action: func() {
+                    engine.ShowEquipMenu(b)
+                },
+            })
+        }
     }
     return actions
 }
 
 func (b *Scroll) read(engine Engine) {
     text := engine.GetScrollFile(b.filename)
-    engine.ShowColoredText(text, color.White, true)
+    engine.ShowScrollableText(text, color.White, true)
 }
 
 func (b *Scroll) SetSpell(spell *Spell) {
@@ -64,10 +86,6 @@ func (b *Scroll) SetSpell(spell *Spell) {
 
 func (b *Scroll) Icon(uint64) int32 {
     return b.icon
-}
-
-func (b *Scroll) SetWearer(a *Actor) {
-    b.wearer = a
 }
 
 func (b *Scroll) Unequip() {

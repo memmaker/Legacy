@@ -9,10 +9,22 @@ import (
 
 func NewSpellFromName(name string) *Spell {
     switch name {
+    case "Nom De Plume":
+        return NewSpell(name, 0, func(engine Engine, caster *Actor) {
+            engine.AskUserForString("Now known as: ", 8, func(text string) {
+                caster.SetName(text)
+            })
+        })
     case "Create Food":
         return NewSpell(name, 10, func(engine Engine, caster *Actor) {
             engine.AddFood(10)
         })
+    case "Raise as Undead":
+        targetedSpell := NewTargetedSpell(name, 10, func(engine Engine, caster *Actor, pos geometry.Point) {
+            engine.RaiseAsUndeadForParty(pos)
+        })
+        targetedSpell.SetSpellColor(ega.BrightBlack)
+        return targetedSpell
     case "Fireball":
         fireball := NewTargetedSpell(name, 10, func(engine Engine, caster *Actor, pos geometry.Point) {
             radius := 3

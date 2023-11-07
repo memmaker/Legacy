@@ -53,10 +53,11 @@ a good job."
 "Say, you wouldn't happen \
 to have some =spare time=?"
 
+
 Key: spare time
-Text: #! yes: _spare_time
-#! no: _no_spare_time
-"I have some personal \
+Option: _spare_time: yes
+Option: _no_spare_time: no
+Text: "I have some personal \
 matters to attend to. I \
 would be very grateful if \
 you could take over my \

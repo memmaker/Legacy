@@ -23,9 +23,8 @@ func (g *GridEngine) DamageAvatar(amount int) {
 }
 
 func (g *GridEngine) TriggerEvent(event string) {
-    encounter := game.GetEncounter(g, event)
-    encounter.Start()
-    g.currentEncounter = encounter
+    gameEvent := game.CreateGameEvent(g, event)
+    g.activeEvents = append(g.activeEvents, gameEvent)
 }
 
 func (g *GridEngine) GetPartyMembers() []*game.Actor {

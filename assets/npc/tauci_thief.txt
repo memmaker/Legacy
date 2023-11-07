@@ -15,14 +15,19 @@ Text: "Hello, Stranger. Are you with the guild?" \
 He is forming his hands into a triangle while talking to you.
 #
 OptionNeedsSkill: Lying(1)
-Option: _with_guild: yes (lie)
+OnOptionSuccess: _with_guild
+OnOptionFail: _not_with_guild
+Option: yes (lie)
 #
 OptionNeedsFlag: _with_guild
-Option: _with_guild: yes
+OnOptionSuccess: _with_guild
+Option: yes
 #
-Option: _not_with_guild: no
+OnOptionSuccess: _not_with_guild
+Option: no
 #
-Option: _not_with_guild: no (lie)
+OnOptionSuccess: _not_with_guild
+Option: no (lie)
 
 Key: _with_guild
 Text: "Gosh, I'm so glad to \

@@ -8,7 +8,9 @@ import (
 
 func (g *GridEngine) mapLookup(x, y int, tick uint64) (*ebiten.Image, int32, color.Color) {
     location := geometry.Point{X: x, Y: y}
-
+    if !g.currentMap.Contains(location) {
+        return g.worldTiles, 0, color.Black
+    }
     if g.currentMap.IsActorAt(location) {
         actorAt := g.currentMap.GetActor(location)
         if !actorAt.IsHidden() {

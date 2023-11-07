@@ -25,6 +25,9 @@ func (g *GridEngine) openMenu(items []renderer.MenuItem) {
     g.openMenuWithTitle("", items)
 }
 func (g *GridEngine) openMenuWithTitle(title string, items []renderer.MenuItem) {
+    if len(items) == 0 {
+        return
+    }
     gridMenu := renderer.NewGridMenu(g.gridRenderer, items)
     gridMenu.SetAutoClose()
     if title != "" {
@@ -54,6 +57,37 @@ func (g *GridEngine) openSpellMenu() {
                     g.combatManager.PlayerStartsOffensiveSpell(spell)
                 } else {
                     spell.Cast(g, g.GetAvatar())
+                }
+            },
+        })
+    }
+    if len(menuItems) == 0 {
+        g.ShowText([]string{"You don't have enough mana to cast any spells."})
+        return
+    }
+    g.openMenu(menuItems)
+}
+
+func (g *GridEngine) openCombatSpellMenu(member *game.Actor) {
+    var menuItems []renderer.MenuItem
+    spells := member.GetEquippedSpells()
+    if len(spells) == 0 {
+        g.ShowText([]string{"You don't have any spells."})
+        return
+    }
+    for _, s := range spells {
+        spell := s
+        if !member.HasMana(spell.ManaCost()) {
+            continue
+        }
+        label := fmt.Sprintf("%s (%d)", spell.Name(), spell.ManaCost())
+        menuItems = append(menuItems, renderer.MenuItem{
+            Text: label,
+            Action: func() {
+                if spell.IsTargeted() {
+                    g.combatManager.SelectSpellTarget(member, spell)
+                } else {
+                    spell.Cast(g, member)
                 }
             },
         })
@@ -138,12 +172,16 @@ func (g *GridEngine) openDebugMenu() {
             },
         },
         {
-            Text: "Text Input Test",
+            Text: "Change Name",
             Action: func() {
-                g.textInput = g.gridRenderer.NewTextInputAtY(10, "Enter your name:", func(endedWith renderer.EndAction, text string) {
-                    g.Print(fmt.Sprintf("DEBUG(Text Input): %s", text))
+                g.AskUserForString("Now known as: ", 8, func(text string) {
+                    g.GetAvatar().SetName(text)
                 })
             },
+        },
+        {
+            Text:   "Change Icon",
+            Action: g.ChangeAppearance,
         },
         {
             Text: "impulse 9",
@@ -154,6 +192,8 @@ func (g *GridEngine) openDebugMenu() {
                 g.avatar.SetHealth(1000)
                 g.avatar.SetMana(1000)
                 g.playerParty.AddXPForEveryone(1000000)
+                g.playerParty.AddItem(game.NewTool(game.ToolTypePickaxe, "a pickaxe"))
+                g.playerParty.AddItem(game.NewTool(game.ToolTypeShovel, "a shovel"))
                 g.Print("DEBUG(impulse 9)")
             },
         },
@@ -182,26 +222,45 @@ func (g *GridEngine) openDebugMenu() {
                 g.Print("DEBUG(Flags): Set flag \"can_talk_to_ghosts\"")
             },
         },
-        {
-            Text: "Set Avatar Name to 'Nova'",
-            Action: func() {
-                g.avatar.SetName("Nova")
-                g.Print("DEBUG(Avatar): Set name to 'Nova'")
-            },
-        },
+
         {
             Text: "Show all Flags",
             Action: func() {
-                g.ShowColoredText(g.flags.GetDebugInfo(), color.White, false)
+                g.ShowScrollableText(g.flags.GetDebugInfo(), color.White, false)
             },
         },
         {
             Text: "Show XP Table",
             Action: func() {
-                g.ShowColoredText(g.rules.GetXPTable(2, 30), color.White, false)
+                g.ShowScrollableText(g.rules.GetXPTable(2, 30), color.White, false)
+            },
+        },
+        {
+            Text: "Testing paging",
+            Action: func() {
+                g.openIconWindow(g.GetAvatar().Icon(0), g.gridRenderer.AutolayoutArrayToIconPages(5, []string{
+                    "This is a test for some paging stuff.",
+                    "Thus we're going to write some more text.",
+                    "And even more text. It has to be long enough to fill 3 pages.",
+                    "This is the last page.",
+                    "No, it's not. Please wait for the next page.",
+                    "Damn, this is a lot of text, but we're almost there.",
+                }), func() {})
             },
         },
     })
+}
+
+func (g *GridEngine) ChangeAppearance() {
+    iconWindow := renderer.NewIconWindow(g.gridRenderer)
+    iconWindow.SetOnClose(func() {
+        g.GetAvatar().SetIcon(iconWindow.Icon())
+    })
+    iconWindow.SetAllowedIcons(g.allowedPartyIcons)
+    iconWindow.SetCurrentIcon(g.GetAvatar().Icon(0))
+    iconWindow.SetFixedText([]string{"What do you see?"})
+    iconWindow.SetYOffset(10)
+    g.modalElement = iconWindow
 }
 
 func (g *GridEngine) saveGameToDirectory(directory string) {
@@ -217,6 +276,8 @@ func (g *GridEngine) saveGameToDirectory(directory string) {
 
 func (g *GridEngine) loadGameFromDirectory(directory string) {
     party, currentMapName := loadPartyState(directory)
+    party.SetRules(g.rules)
+
     g.avatar = party.GetMember(0)
     g.playerParty = party
 

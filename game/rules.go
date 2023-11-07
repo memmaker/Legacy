@@ -4,13 +4,38 @@ import (
     "Legacy/util"
     "fmt"
     "math"
+    "strings"
 )
 
 type Rules struct {
+    mirrorMap map[string]TeleportTarget
+}
+type TeleportTarget struct {
+    MapName  string
+    Location string
 }
 
 func NewRules() *Rules {
-    return &Rules{}
+    return &Rules{
+        mirrorMap: map[string]TeleportTarget{
+            "celador": {
+                MapName:  "WorldMap",
+                Location: "worldmap_spawn",
+            },
+            "tauci king": {
+                MapName:  "Tauci_Castle",
+                Location: "Throne_Room",
+            },
+            "tauci mines": {
+                MapName:  "Tauci_Mines_Level_1",
+                Location: "ladder_up",
+            },
+            "tauci woods": {
+                MapName:  "Tauci_Woods",
+                Location: "entrance",
+            },
+        },
+    }
 }
 
 func (r *Rules) GetBaseValueOfLockpick() int {
@@ -32,6 +57,10 @@ func (r *Rules) CanLevelUp(level, xp int) (bool, int) {
     return canLevel, xpMissing
 }
 
+func (r *Rules) GetTrainerCost(level int) int {
+    return (level * level) * 10
+}
+
 func (r *Rules) GetXPTable(from, to int) []string {
     var rows []util.TableRow
     for i := from; i <= to; i++ {
@@ -46,6 +75,48 @@ func (r *Rules) GetXPTable(from, to int) []string {
     return util.TableLayout(rows)
 }
 
-func (r *Rules) GetTrainerCost(level int) int {
-    return (level * level) * 10
+func (r *Rules) GetTargetLocation(text string) (string, string) {
+    if text == "" {
+        return "", ""
+    }
+    text = strings.ToLower(text)
+    var mapName, locationName string
+    if target, ok := r.mirrorMap[text]; ok {
+        mapName = target.MapName
+        locationName = target.Location
+    }
+    return mapName, locationName
+}
+
+func (r *Rules) GetStepsBeforeRest() int {
+    return 1000
+}
+
+func (r *Rules) GetPartyStartGold() int {
+    return 1000
+}
+
+func (r *Rules) GetPartyStartFood() int {
+    return 10
+}
+
+func (r *Rules) LevelUp(a *Actor) {
+    a.level++
+    healthBonus := 10
+    a.maxHealth += healthBonus
+    a.health = a.maxHealth
+    a.baseArmor += 1
+    a.baseMeleeDamage += 1
+    a.baseRangedDamage += 1
+}
+
+func (r *Rules) GetMeleeDamage(attacker *Actor, victim *Actor) int {
+    baseMeleeDamage := attacker.GetMeleeDamage()
+    victimArmor := victim.GetTotalArmor()
+    meleeDamage := baseMeleeDamage - victimArmor
+    return meleeDamage
+}
+
+func (r *Rules) CalculateHit(attacker *Actor, npc *Actor) bool {
+    return true
 }

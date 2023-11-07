@@ -15,8 +15,8 @@ import (
 )
 
 type Transition struct {
-    TargetMap string
-    TargetPos geometry.Point
+    TargetMap      string
+    TargetLocation string
 }
 type MapObject interface {
     Pos() geometry.Point
@@ -167,6 +167,8 @@ type GridMap[ActorType interface {
 
     transitionMap map[geometry.Point]Transition
     secretDoors   map[geometry.Point]bool
+
+    namedRects map[string]geometry.Rect
 }
 
 func (m *GridMap[ActorType, ItemType, ObjectType]) AddZone(zone *ZoneInfo) {
@@ -444,6 +446,7 @@ func NewEmptyMap[ActorType interface {
         MaxVisionRange:  maxVisionRange,
         secretDoors:     make(map[geometry.Point]bool),
         transitionMap:   make(map[geometry.Point]Transition),
+        namedRects:      make(map[string]geometry.Rect),
     }
     m.Fill(MapCell[ActorType, ItemType, ObjectType]{
         TileType: Tile{
@@ -531,6 +534,9 @@ func (m *GridMap[ActorType, ItemType, ObjectType]) Contains(dest geometry.Point)
 }
 
 func (m *GridMap[ActorType, ItemType, ObjectType]) IsActorAt(location geometry.Point) bool {
+    if !m.Contains(location) {
+        return false
+    }
     return m.Cells[location.X+location.Y*m.MapWidth].Actor != nil
 }
 
@@ -539,6 +545,9 @@ func (m *GridMap[ActorType, ItemType, ObjectType]) ActorAt(location geometry.Poi
 }
 
 func (m *GridMap[ActorType, ItemType, ObjectType]) IsDownedActorAt(location geometry.Point) bool {
+    if !m.Contains(location) {
+        return false
+    }
     return m.Cells[location.X+location.Y*m.MapWidth].DownedActor != nil
 }
 
@@ -795,7 +804,6 @@ func (m *GridMap[ActorType, ItemType, ObjectType]) MoveDownedActor(actor ActorTy
 }
 
 func (m *GridMap[ActorType, ItemType, ObjectType]) RemoveDownedActor(actor ActorType) bool {
-
     for i := len(m.AllDownedActors) - 1; i >= 0; i-- {
         if m.AllDownedActors[i] == actor {
             m.AllDownedActors = append(m.AllDownedActors[:i], m.AllDownedActors[i+1:]...)
@@ -1297,4 +1305,20 @@ func (m *GridMap[ActorType, ItemType, ObjectType]) Transitions() map[geometry.Po
 
 func (m *GridMap[ActorType, ItemType, ObjectType]) SecretDoors() map[geometry.Point]bool {
     return m.secretDoors
+}
+
+func (m *GridMap[ActorType, ItemType, ObjectType]) AddNamedRegion(name string, region geometry.Rect) {
+    m.namedRects[name] = region
+}
+
+func (m *GridMap[ActorType, ItemType, ObjectType]) GetNamedRegion(name string) geometry.Rect {
+    return m.namedRects[name]
+}
+
+func (m *GridMap[ActorType, ItemType, ObjectType]) SetTileIcon(pos geometry.Point, index int32) {
+    m.Cells[pos.Y*m.MapWidth+pos.X].TileType.DefinedIcon = index
+}
+
+func (m *GridMap[ActorType, ItemType, ObjectType]) GetTileIconAt(pos geometry.Point) int32 {
+    return m.Cells[pos.Y*m.MapWidth+pos.X].TileType.DefinedIcon
 }

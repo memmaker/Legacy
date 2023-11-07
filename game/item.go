@@ -20,6 +20,7 @@ type ItemWearer interface {
 type Item interface {
     Pos() geometry.Point
     Icon(uint64) int32
+    InventoryIcon() int32
     TintColor() color.Color
     SetPos(geometry.Point)
     Name() string
@@ -35,15 +36,24 @@ type Item interface {
     SetName(value string)
     SetHidden(asBool bool)
     SetValue(asInt int)
+    SetPickupEvent(name string)
+    GetPickupEvent() string
 }
 
 type BaseItem struct {
     GameObject
-    holder    ItemHolder
-    name      string
-    baseValue int
+    holder          ItemHolder
+    name            string
+    baseValue       int
+    pickupEventName string
 }
 
+func (i *BaseItem) SetPickupEvent(name string) {
+    i.pickupEventName = name
+}
+func (i *BaseItem) GetPickupEvent() string {
+    return i.pickupEventName
+}
 func (i *BaseItem) SetName(value string) {
     i.name = value
 }

@@ -16,7 +16,8 @@ import (
 func (g *GridEngine) Init() {
     g.deviceDPIScale = ebiten.DeviceScaleFactor()
 
-    g.gridRenderer = renderer.NewDualGridRenderer(g.TotalScale(), g.getFontIndex())
+    g.gridRenderer = renderer.NewDualGridRenderer(g.TotalScale(), getCharFontIndex())
+    g.gridRenderer.SetFontIndexForBigGrid(getWorldFontIndex())
     g.gridRenderer.SetAtlasMap(
         map[renderer.AtlasName]*ebiten.Image{
             renderer.AtlasCharacters:        g.uiTiles,
@@ -37,6 +38,7 @@ func (g *GridEngine) Init() {
     g.rules = game.NewRules()
 
     g.ldtkMapProject, _ = ldtk_go.Open("assets/Legacy.ldtk")
+    g.loadPartyIcons()
 
     g.loadUIOverlay()
 
@@ -46,12 +48,15 @@ func (g *GridEngine) Init() {
     g.defenseBuffsButton = geometry.Point{X: 15, Y: 0}
     g.offenseBuffsButton = geometry.Point{X: 24, Y: 0}
 
-    g.avatar = game.NewActor("Avatar", 7)
+    g.avatar = game.NewActor("---", 7)
     g.playerParty = game.NewParty(g.avatar)
+    g.playerParty.InitWithRules(g.rules)
     g.playerKnowledge = game.NewPlayerKnowledge()
     g.flags = game.NewFlags()
 
-    g.currentMap = g.loadMap("WorldMap")
+    //g.currentMap = g.loadMap("WorldMap")
+    g.currentMap = g.loadMap("Bed_Room")
+    //g.currentMap = g.loadMap("Tauci_Castle")
     g.PlaceParty(g.spawnPosition)
 }
 
@@ -96,7 +101,7 @@ func (t TextConfig) GetScale() (float64, float64) {
     return t.scale, t.scale
 }
 
-func (g *GridEngine) getFontIndex() map[rune]uint16 {
+func getCharFontIndex() map[rune]uint16 {
     indexOfSmallA := int(97)
     indexOfZero := int(48)
     return bmpfonts.NewIndexFromDescription(bmpfonts.AtlasDescription{
@@ -120,7 +125,15 @@ func (g *GridEngine) getFontIndex() map[rune]uint16 {
         },
     })
 }
-
+func getWorldFontIndex() map[rune]uint16 {
+    return bmpfonts.NewIndexFromDescription(bmpfonts.AtlasDescription{
+        IndexOfCapitalA: 49,
+        Chains: []bmpfonts.SpecialCharacterChain{
+            {StartIndex: 80, Characters: []rune{' '}},
+            {StartIndex: 80, Characters: []rune{'+'}},
+        },
+    })
+}
 func (g *GridEngine) loadMap(mapName string) *gridmap.GridMap[*game.Actor, game.Item, game.Object] {
     worldTileset := g.ldtkMapProject.TilesetByIdentifier("World")
 
@@ -130,9 +143,11 @@ func (g *GridEngine) loadMap(mapName string) *gridmap.GridMap[*game.Actor, game.
     itemLayer := currentMap.LayerByIdentifier("Items")
     objectLayer := currentMap.LayerByIdentifier("Objects")
     npcLayer := currentMap.LayerByIdentifier("NPCs")
+    zoneLayer := currentMap.LayerByIdentifier("Zones")
 
     loadedMap := gridmap.NewEmptyMap[*game.Actor, game.Item, game.Object](environmentLayer.CellWidth, environmentLayer.CellHeight, 9)
     loadedMap.SetName(mapName)
+
     for _, metaEntity := range metaLayer.Entities {
         posX, posY := metaLayer.ToGridPosition(metaEntity.Position[0], metaEntity.Position[1])
         gridPos := geometry.Point{X: posX, Y: posY}
@@ -140,27 +155,68 @@ func (g *GridEngine) loadMap(mapName string) *gridmap.GridMap[*game.Actor, game.
         g.handleMetaEntity(loadedMap, metaEntity, gridPos)
     }
 
+    for _, entity := range zoneLayer.Entities {
+        posX, posY := zoneLayer.ToGridPosition(entity.Position[0], entity.Position[1])
+        gridPos := geometry.Point{X: posX, Y: posY}
+        name := entity.PropertyByIdentifier("Name").AsString()
+        widthInCells, heightInCells := zoneLayer.ToGridPosition(entity.Width, entity.Height)
+        zoneRect := geometry.NewRect(gridPos.X, gridPos.Y, gridPos.X+widthInCells, gridPos.Y+heightInCells)
+        loadedMap.AddNamedRegion(name, zoneRect)
+
+        enterTriggerProp := entity.PropertyByIdentifier("TriggerOnEnter")
+        if enterTriggerProp.IsNull() {
+            continue
+        }
+        eventName := enterTriggerProp.AsString()
+        g.subscribeToMovement(func(pos geometry.Point) bool {
+            if g.GetMapName() == mapName && zoneRect.Contains(pos) {
+                g.TriggerEvent(eventName)
+                return true
+            }
+            return false
+        })
+    }
+
     for _, tile := range environmentLayer.Tiles {
         posX, posY := environmentLayer.ToGridPosition(tile.Position[0], tile.Position[1])
         pos := geometry.Point{X: posX, Y: posY}
         enums := worldTileset.EnumsForTile(tile.ID)
+
+        walkable := !enums.Contains("IsBlockingMovement")
+        transparent := !enums.Contains("IsBlockingView")
+
         specialTile := gridmap.SpecialTileNone
         if enums.Contains("IsForest") && mapName == "WorldMap" {
             specialTile = gridmap.SpecialTileForest
-        } else if enums.Contains("IsMountain") && mapName == "WorldMap" {
-            specialTile = gridmap.SpecialTileMountain
+        } else if enums.Contains("IsMountain") {
+            if mapName == "WorldMap" {
+                specialTile = gridmap.SpecialTileMountain
+            } else {
+                walkable = false
+                transparent = false
+            }
         } else if enums.Contains("IsSwamp") && mapName == "WorldMap" {
             specialTile = gridmap.SpecialTileSwamp
         } else if enums.Contains("IsWater") {
             specialTile = gridmap.SpecialTileWater
+        } else if enums.Contains("IsBed") {
+            specialTile = gridmap.SpecialTileBed
         } else if enums.Contains("IsBreakable") {
-            specialTile = gridmap.SpecialTileBreakable
+            if tile.ID == 108 {
+                specialTile = gridmap.SpecialTileBreakableGems
+            } else if tile.ID == 109 {
+                specialTile = gridmap.SpecialTileBreakableGold
+            } else if tile.ID >= 75 || tile.ID <= 79 {
+                specialTile = gridmap.SpecialTileBreakableGlass
+            } else {
+                specialTile = gridmap.SpecialTileBreakable
+            }
         }
         loadedMap.SetCell(pos, gridmap.MapCell[*game.Actor, game.Item, game.Object]{
             TileType: gridmap.Tile{
                 DefinedIcon:   int32(tile.ID),
-                IsWalkable:    !enums.Contains("IsBlockingMovement"),
-                IsTransparent: !enums.Contains("IsBlockingView"),
+                IsWalkable:    walkable,
+                IsTransparent: transparent,
                 Special:       specialTile,
             },
         })
@@ -211,15 +267,35 @@ func (g *GridEngine) loadMap(mapName string) *gridmap.GridMap[*game.Actor, game.
         if g.NovaPlays() && name == "hungry_caterpillar" {
             textureIndex = 188
         }
+
         var npc *game.Actor
         if doesFileExist(npcFilename) {
-            npc = game.NewActorFromFile(mustOpen(npcFilename), int32(textureIndex))
+            npc = game.NewActorFromFile(mustOpen(npcFilename), int32(textureIndex), g.gridRenderer.AutolayoutArrayToIconPages)
         } else {
             npc = game.NewActor(name, int32(textureIndex))
         }
         npc.SetIconFrames(iconFrames)
         npc.SetInternalName(name)
         npc.SetDiscoveryMessage(isHidden, discoveryMessage)
+
+        // vendor inventory
+        vendorProp := entity.PropertyByIdentifier("AddVendorInventory")
+        vendorItemLevelProp := entity.PropertyByIdentifier("VendorItemLevel")
+
+        if !vendorProp.IsNull() && !vendorItemLevelProp.IsNull() {
+            lootType := game.Loot(strings.ToLower(vendorProp.Value.(string)))
+            lootLevel := vendorItemLevelProp.AsInt()
+            vendorItems := g.CreateItemsForVendor(lootType, lootLevel)
+            npc.SetVendorInventory(vendorItems)
+        }
+
+        npcLevel := entity.PropertyByIdentifier("Level").AsInt()
+        if npcLevel > npc.GetLevel() {
+            for npc.GetLevel() < npcLevel {
+                g.rules.LevelUp(npc)
+            }
+        }
+
         loadedMap.AddActor(npc, pos)
     }
 
@@ -251,20 +327,31 @@ func (g *GridEngine) handleMetaEntity(loadedMap *gridmap.GridMap[*game.Actor, ga
 }
 
 func (g *GridEngine) handleTransition(loadedMap *gridmap.GridMap[*game.Actor, game.Item, game.Object], metaEntity *ldtk_go.Entity, gridPos geometry.Point) {
-    destPosArray := metaEntity.PropertyByIdentifier("DestinationPosition").AsArray()
-    mapName := metaEntity.PropertyByIdentifier("MapName").AsString()
-    transitionPos := geometry.Point{
-        X: int(destPosArray[0].(float64)),
-        Y: int(destPosArray[1].(float64)),
-    }
+    nameOfLocation := metaEntity.PropertyByIdentifier("NameOfLocation").AsString()
+    loadedMap.SetNamedLocation(nameOfLocation, gridPos)
 
-    if mapName == "_player_spawn_" {
+    if nameOfLocation == "player_spawn" {
         g.spawnPosition = gridPos
     } else {
-        loadedMap.SetTransitionAt(gridPos, gridmap.Transition{
-            TargetMap: mapName,
-            TargetPos: transitionPos,
-        })
+        targetProp := metaEntity.PropertyByIdentifier("Target")
+        if targetProp.IsNull() {
+            return
+        }
+        ref := targetProp.Value.(map[string]interface{})
+        levelId := ref["levelIid"].(string)
+        entityId := ref["entityIid"].(string)
+        targetLevel := g.ldtkMapProject.LevelByIID(levelId)
+        refEntity := g.ldtkMapProject.EntityByIID(entityId)
+
+        mapName := targetLevel.Identifier
+        destLoc := refEntity.PropertyByIdentifier("NameOfLocation").AsString()
+
+        if destLoc != "" && mapName != "" {
+            loadedMap.SetTransitionAt(gridPos, gridmap.Transition{
+                TargetMap:      mapName,
+                TargetLocation: destLoc,
+            })
+        }
     }
 }
 
@@ -305,17 +392,29 @@ func (g *GridEngine) PlacePartyBackOnCurrentMap() {
     g.onViewedActorMoved(g.playerParty.GetMember(0).Pos())
 }
 func (g *GridEngine) getItemFromEntity(entity *ldtk_go.Entity) game.Item {
+    var returnedItem game.Item
     switch entity.Identifier {
     case "Scroll":
-        return g.getScrollFromEntity(entity)
+        returnedItem = g.getScrollFromEntity(entity)
     case "Key":
-        return g.getKeyFromEntity(entity)
+        returnedItem = g.getKeyFromEntity(entity)
     case "Candle":
-        return game.NewCandle(entity.PropertyByIdentifier("IsLit").AsBool())
+        returnedItem = game.NewCandle(entity.PropertyByIdentifier("IsLit").AsBool())
+    case "Left_Torch":
+        returnedItem = game.NewLeftTorch(entity.PropertyByIdentifier("IsLit").AsBool())
+    case "Right_Torch":
+        returnedItem = game.NewRightTorch(entity.PropertyByIdentifier("IsLit").AsBool())
     case "Potion":
-        return game.NewPotion()
+        returnedItem = game.NewPotion()
     }
-    return nil
+
+    pickupTriggerProp := entity.PropertyByIdentifier("TriggerOnPickup")
+    if pickupTriggerProp != nil && !pickupTriggerProp.IsNull() {
+        pickupEventName := pickupTriggerProp.AsString()
+        returnedItem.SetPickupEvent(pickupEventName)
+    }
+
+    return returnedItem
 }
 
 func (g *GridEngine) getObjectFromEntity(entity *ldtk_go.Entity) game.Object {
@@ -332,6 +431,10 @@ func (g *GridEngine) getObjectFromEntity(entity *ldtk_go.Entity) game.Object {
         return g.getChestFromEntity(entity)
     case "Fireplace":
         return g.getFireplaceFromEntity(entity)
+    case "Mirror":
+        return game.NewMirror(entity.PropertyByIdentifier("IsMagical").AsBool(), entity.PropertyByIdentifier("IsBroken").AsBool())
+    case "Tombstone":
+        return g.getTombstoneFromEntity(entity)
     }
     return nil
 }
@@ -377,7 +480,11 @@ func (g *GridEngine) getScrollFromEntity(entity *ldtk_go.Entity) game.Item {
     title := entity.PropertyByIdentifier("Title").AsString()
     filename := entity.PropertyByIdentifier("Filename").AsString()
     isHidden := entity.PropertyByIdentifier("IsHidden").AsBool()
-    spellName := entity.PropertyByIdentifier("SpellName").AsString()
+    var spellName string
+    spellProp := entity.PropertyByIdentifier("SpellName")
+    if spellProp != nil && !spellProp.IsNull() {
+        spellName = spellProp.AsString()
+    }
     var discoveryMessage []string
     if !entity.PropertyByIdentifier("OnDiscovery").IsNull() {
         discoveryMessage = strings.Split(entity.PropertyByIdentifier("OnDiscovery").AsString(), "\n")

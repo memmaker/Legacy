@@ -152,15 +152,25 @@ func (c *CombatState) IsInCombat() bool {
 }
 
 func (c *CombatState) animateMeleeHit(attacker *game.Actor, npc *game.Actor) {
+    doesDamage := c.engine.rules.CalculateHit(attacker, npc)
     hitPos := npc.Pos()
+    icon := int32(194)
+    useAtlas := renderer.AtlasEntities
+    if doesDamage {
+        icon = int32(104)
+        useAtlas = renderer.AtlasWorld
+    }
     c.hitAnimations = append(c.hitAnimations, HitAnimation{
+        UseTiles:  useAtlas,
         Path:      []geometry.Point{hitPos},
         TicksLeft: 35,
-        Icon:      194,
+        Icon:      icon,
         TintColor: color.White,
         WhenDone: func() {
             c.hasUsedPrimaryAction[attacker] = true
-            c.deliverDamage(attacker, npc)
+            if doesDamage {
+                c.deliverDamage(attacker, npc)
+            }
         },
     })
 }
@@ -269,7 +279,7 @@ func (c *CombatState) handleInput() {
         if isThere, enemy := c.isEnemyAt(dest); isThere {
             c.animateMeleeHit(avatar, enemy)
         } else {
-            c.engine.playerMovement(direction)
+            c.engine.MoveAvatarInDirection(direction)
             if curPos != avatar.Pos() {
                 c.movesTakenThisTurn[avatar]++
             }
@@ -293,6 +303,13 @@ func (c *CombatState) openCombatMenu(partyMember *game.Actor) {
             Action: func() {
                 c.selectRangedTarget(partyMember)
                 c.engine.inputElement = nil
+            },
+        },
+        {
+            Text: "Magic",
+            Action: func() {
+                c.engine.inputElement = nil
+                c.engine.openCombatSpellMenu(partyMember)
             },
         },
         {
@@ -545,12 +562,13 @@ func (c *CombatState) OrchestratedRangedAttack() {
 
 func (c *CombatState) PlayerStartsOffensiveSpell(spellUsed *game.Spell) {
     c.combatInitByPlayer()
-    c.selectSpellTarget(c.engine.GetAvatar(), spellUsed)
+    c.SelectSpellTarget(c.engine.GetAvatar(), spellUsed)
 }
-func (c *CombatState) selectSpellTarget(attacker *game.Actor, spell *game.Spell) {
+func (c *CombatState) SelectSpellTarget(attacker *game.Actor, spell *game.Spell) {
     spellIcon := int32(28)
     spellColor := spell.Color()
     c.waitForTarget = func(targetPos geometry.Point) {
+        c.hasUsedPrimaryAction[attacker] = true
         c.animateProjectile(attacker, targetPos, spellIcon, spellColor, func(pos geometry.Point, actorHit *game.Actor) func() {
             return func() {
                 c.onSpellImpact(attacker, spell, pos, actorHit)

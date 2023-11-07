@@ -24,7 +24,7 @@ func (s *FirePlace) Name() string {
 func (s *FirePlace) ToRecordAndType() (recfile.Record, string) {
     return recfile.Record{
         {Name: "name", Value: s.name},
-        {Name: "icon", Value: recfile.Int32Str(s.icon)},
+        {Name: "unlitIcon", Value: recfile.Int32Str(s.icon)},
         {Name: "pos", Value: s.Pos().Encode()},
         {Name: "isHidden", Value: recfile.BoolStr(s.isHidden)},
         {Name: "foodCount", Value: recfile.IntStr(s.foodCount)},
@@ -37,7 +37,7 @@ func NewFireplaceFromRecord(record recfile.Record) *FirePlace {
         switch field.Name {
         case "name":
             firePlace.name = field.Value
-        case "icon":
+        case "unlitIcon":
             firePlace.icon = field.AsInt32()
         case "pos":
             firePlace.SetPos(geometry.MustDecodePoint(field.Value))

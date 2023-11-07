@@ -12,16 +12,16 @@ import (
 )
 
 type Party struct {
-    members            []*Actor
-    partyInventory     [][]Item
-    keys               map[string]*Key
-    gridMap            *gridmap.GridMap[*Actor, Item, Object]
-    fov                *geometry.FOV
-    gold               int
-    food               int
-    lockpicks          int
-    stepsBeforeRest    int
-    needRestAfterSteps int
+    members         []*Actor
+    partyInventory  [][]Item
+    keys            map[string]*Key
+    gridMap         *gridmap.GridMap[*Actor, Item, Object]
+    fov             *geometry.FOV
+    gold            int
+    food            int
+    lockpicks       int
+    stepsBeforeRest int
+    rules           *Rules
 }
 
 func (p *Party) Pos() geometry.Point {
@@ -29,21 +29,25 @@ func (p *Party) Pos() geometry.Point {
 }
 
 func NewParty(leader *Actor) *Party {
-    stepsBeforeRest := 100
     p := &Party{
-        members:            []*Actor{leader},
-        partyInventory:     [][]Item{},
-        keys:               make(map[string]*Key),
-        fov:                geometry.NewFOV(geometry.NewRect(-6, -6, 6, 6)),
-        gold:               1000,
-        food:               3,
-        needRestAfterSteps: stepsBeforeRest,
-        stepsBeforeRest:    stepsBeforeRest,
+        members:        []*Actor{leader},
+        partyInventory: [][]Item{},
+        keys:           make(map[string]*Key),
+        fov:            geometry.NewFOV(geometry.NewRect(-6, -6, 6, 6)),
     }
     leader.SetParty(p)
     return p
 }
 
+func (p *Party) InitWithRules(rules *Rules) {
+    p.rules = rules
+    p.stepsBeforeRest = rules.GetStepsBeforeRest()
+    p.food = rules.GetPartyStartFood()
+    p.gold = rules.GetPartyStartGold()
+}
+func (p *Party) SetRules(rules *Rules) {
+    p.rules = rules
+}
 func (p *Party) AddItem(item Item) {
     if key, ok := item.(*Key); ok {
         p.keys[key.key] = key
@@ -442,7 +446,7 @@ func (p *Party) HasDefenseBuffs() bool {
 func (p *Party) NeedsRestAfterMovement() bool {
     p.stepsBeforeRest--
     if p.stepsBeforeRest <= 0 {
-        p.stepsBeforeRest = p.needRestAfterSteps
+        p.stepsBeforeRest = p.rules.GetStepsBeforeRest()
         return true
     }
     return false

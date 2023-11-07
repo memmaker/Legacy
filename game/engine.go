@@ -2,6 +2,7 @@ package game
 
 import (
     "Legacy/geometry"
+    "Legacy/gridmap"
     "Legacy/renderer"
     "image/color"
 )
@@ -20,8 +21,8 @@ type Wearable interface {
 }
 
 type Engine interface {
-    StartConversation(a *Actor)
-    ShowColoredText(text []string, textcolor color.Color, autolayout bool) *renderer.ScrollableTextWindow
+    StartConversation(a *Actor, conversation *Dialogue)
+    ShowScrollableText(text []string, textcolor color.Color, autolayout bool) *renderer.ScrollableTextWindow
     GetScrollFile(filename string) []string
     PickUpItem(item Item)
     DropItem(item Item)
@@ -47,7 +48,7 @@ type Engine interface {
     GetMapName() string
     CurrentTick() uint64
     TicksToSeconds(ticks uint64) float64
-    ShowMultipleChoiceDialogue(icon int32, text []string, choices []renderer.MenuItem)
+    ShowMultipleChoiceDialogue(icon int32, text [][]string, choices []renderer.MenuItem)
     RemoveItem(item Item)
     GetPartyMembers() []*Actor
     ShowEquipMenu(a Wearable)
@@ -61,4 +62,18 @@ type Engine interface {
     FreezeActorAt(pos geometry.Point, turns int)
     ProdActor(prodder *Actor, victim *Actor)
     GetBreakingToolName() string
+    AskUserForString(prompt string, maxLength int, onConfirm func(text string))
+    TeleportTo(text string)
+    GetRandomPositionsInRegion(regionName string, count int) []geometry.Point
+    GetGridMap() *gridmap.GridMap[*Actor, Item, Object]
+    ChangeAppearance()
+    RemoveDoorAt(pos geometry.Point)
+    SetWallAt(pos geometry.Point)
+    MoveAvatarInDirection(point geometry.Point)
+    GetRegion(regionName string) geometry.Rect
+    DrawCharInWorld(charToDraw rune, pos geometry.Point)
+    RaiseAsUndeadForParty(pos geometry.Point)
+    GetActorByInternalName(internalName string) *Actor
+    GetDialogueFromFile(conversationId string) *Dialogue
+    GetVisibleMap() geometry.Rect
 }

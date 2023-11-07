@@ -8,11 +8,42 @@ import (
     "strconv"
 )
 
+type ArmorKind string
+
+const (
+    ArmorMaterialCloth   ArmorKind = "cloth"
+    ArmorMaterialLeather ArmorKind = "leather"
+    ArmorMaterialChain   ArmorKind = "chain"
+    ArmorMaterialPlate   ArmorKind = "plate"
+    ArmorMaterialMagical ArmorKind = "magical"
+)
+
 type Armor struct {
     BaseItem
     protection int
     slot       EquipmentSlot
     wearer     ItemWearer
+    material   ArmorKind
+}
+
+func (a *Armor) InventoryIcon() int32 {
+    materialOffsets := map[ArmorKind]int32{
+        ArmorMaterialLeather: 180,
+        ArmorMaterialChain:   178,
+        ArmorMaterialPlate:   160,
+        ArmorMaterialMagical: 182,
+    }
+    if material, ok := materialOffsets[a.material]; ok {
+        if a.slot == ArmorSlotHead {
+            return material + 1
+        }
+        return material
+    }
+    if a.slot == ArmorSlotHead {
+        return 181
+    } else {
+        return 180
+    }
 }
 
 func (a *Armor) GetWearer() ItemWearer {
@@ -28,7 +59,10 @@ func (a *Armor) Icon(u uint64) int32 {
     return int32(205)
 }
 func (a *Armor) GetContextActions(engine Engine) []renderer.MenuItem {
-    // TODO: add equip
+    baseActions := inventoryItemActions(a, engine)
+    if !engine.IsPlayerControlled(a.GetHolder()) {
+        return baseActions
+    }
     equipAction := renderer.MenuItem{
         Text: "Equip",
         Action: func() {
@@ -36,7 +70,6 @@ func (a *Armor) GetContextActions(engine Engine) []renderer.MenuItem {
         },
     }
     equipActions := []renderer.MenuItem{equipAction}
-    baseActions := inventoryItemActions(a, engine)
     return append(equipActions, baseActions...)
 }
 
@@ -73,11 +106,12 @@ func (a *Armor) IsEquipped() bool {
     return a.wearer != nil
 }
 
-func NewArmor(name string, slot EquipmentSlot, protection int) *Armor {
+func NewArmor(material ArmorKind, slot EquipmentSlot, protection int) *Armor {
     return &Armor{
         BaseItem: BaseItem{
-            name: name,
+            name: nameFromSlotAndMaterial(slot, material),
         },
+        material:   material,
         slot:       slot,
         protection: protection,
     }
@@ -85,8 +119,8 @@ func NewArmor(name string, slot EquipmentSlot, protection int) *Armor {
 func NewRandomArmor(lootLevel int) *Armor {
     slot := randomSlot()
     protection := damage(slot, lootLevel)
-    armorName := nameFromSlot(slot, lootLevel)
-    return NewArmor(armorName, slot, protection)
+    material := materialFromLootLevel(lootLevel)
+    return NewArmor(material, slot, protection)
 }
 
 func damage(slot EquipmentSlot, level int) int {
@@ -108,43 +142,70 @@ func randomSlot() EquipmentSlot {
     }
 }
 
-func nameFromSlot(slot EquipmentSlot, level int) string {
-    materialName := materialNameFromLootLevel(level)
+func nameFromSlotAndMaterial(slot EquipmentSlot, material ArmorKind) string {
     switch slot {
     case ArmorSlotHead:
-        return fmt.Sprintf("%s helmet", materialName)
+        return helmetName(material)
     case ArmorSlotTorso:
-        return fmt.Sprintf("%s armor", materialName)
+        return armorName(material)
     }
     return "unknown"
 }
 
-func materialNameFromLootLevel(level int) string {
+func armorName(material ArmorKind) string {
+    switch material {
+    case ArmorMaterialCloth:
+        return "cloth doublet"
+    case ArmorMaterialLeather:
+        return "leather jerkin"
+    case ArmorMaterialChain:
+        return "chain mail"
+    case ArmorMaterialPlate:
+        return "plate armor"
+    case ArmorMaterialMagical:
+        return "magical plate armor"
+    }
+    return fmt.Sprintf("%s armor", material)
+}
+
+func helmetName(material ArmorKind) string {
+    switch material {
+    case ArmorMaterialCloth:
+        return "cloth cap"
+    case ArmorMaterialLeather:
+        return "leather cap"
+    case ArmorMaterialChain:
+        return "chain coif"
+    case ArmorMaterialPlate:
+        return "plate helmet"
+    case ArmorMaterialMagical:
+        return "magical plate helmet"
+    }
+    return fmt.Sprintf("%s helmet", material)
+}
+
+func materialFromLootLevel(level int) ArmorKind {
     switch level {
-    case 0:
-        return "common"
     case 1:
-        return "cloth"
+        return ArmorMaterialLeather
     case 2:
-        return "leather"
+        return ArmorMaterialChain
     case 3:
-        return "chain"
+        return ArmorMaterialPlate
     case 4:
-        return "plate"
-    case 5:
-        return "mythical"
+        return ArmorMaterialMagical
     }
     return "unknown"
 }
 func NewArmorFromPredicate(encoded recfile.StringPredicate) *Armor {
     // extract name, slot, and protection
     return NewArmor(
-        encoded.GetString(0),
+        ArmorKind(encoded.GetString(0)),
         EquipmentSlot(encoded.GetString(1)),
         encoded.GetInt(2),
     )
 }
 
 func (a *Armor) Encode() string {
-    return recfile.ToPredicate("armor", a.name, string(a.slot), strconv.Itoa(a.protection))
+    return recfile.ToPredicate("armor", string(a.material), string(a.slot), strconv.Itoa(a.protection))
 }

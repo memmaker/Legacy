@@ -33,7 +33,7 @@ func (s *Shrine) Name() string {
 func (s *Shrine) ToRecordAndType() (recfile.Record, string) {
     return recfile.Record{
         {Name: "name", Value: s.name},
-        {Name: "icon", Value: recfile.Int32Str(s.icon)},
+        {Name: "unlitIcon", Value: recfile.Int32Str(s.icon)},
         {Name: "pos", Value: s.Pos().Encode()},
         {Name: "isHidden", Value: recfile.BoolStr(s.isHidden)},
         {Name: "principle", Value: string(s.principle)},
@@ -46,7 +46,7 @@ func NewShrineFromRecord(record recfile.Record) *Shrine {
         switch field.Name {
         case "name":
             shrine.name = field.Value
-        case "icon":
+        case "unlitIcon":
             shrine.icon = field.AsInt32()
         case "pos":
             shrine.SetPos(geometry.MustDecodePoint(field.Value))
@@ -93,7 +93,7 @@ func (s *Shrine) GetContextActions(engine Engine) []renderer.MenuItem {
         Text: "Meditate",
         Action: func() {
             engine.Flags().IncrementFlag(fmt.Sprintf("meditated_for_%s", strings.ToLower(string(s.principle))))
-            engine.ShowColoredText([]string{
+            engine.ShowScrollableText([]string{
                 "You meditate at the shrine.",
                 "Aligning yourself with",
                 fmt.Sprintf("the principle of %s.", s.principle),

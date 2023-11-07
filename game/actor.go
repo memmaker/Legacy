@@ -8,6 +8,7 @@ import (
     "fmt"
     "image/color"
     "io"
+    "sort"
     "strconv"
 )
 
@@ -74,13 +75,12 @@ func NewActor(name string, icon int32) *Actor {
     }
 }
 
-func NewActorFromFile(file io.ReadCloser, icon int32) *Actor {
+func NewActorFromFile(file io.ReadCloser, icon int32, toPages func(height int, inputText []string) [][]string) *Actor {
     defer file.Close()
     actorData := recfile.ReadMulti(file)
 
     coreRecord := actorData["Details"][0].ToMap()
-    inventory := actorData["Inventory"][0].ToValueList()
-    conversation := NewDialogueFromRecords(actorData["Conversation"])
+    conversation := NewDialogueFromRecords(actorData["Conversation"], toPages)
 
     health, _ := coreRecord.GetInt("Health")
     description := coreRecord["Description"]
@@ -98,7 +98,11 @@ func NewActorFromFile(file io.ReadCloser, icon int32) *Actor {
         baseMeleeDamage: 5,
         buffs:           make(map[BuffType][]Buff),
     }
-    newActor.inventory = toInventory(newActor, itemsFromStrings(inventory))
+
+    if recordsForInventory, hasInventory := actorData["Inventory"]; hasInventory && len(recordsForInventory) > 0 {
+        inventory := recordsForInventory[0].ToValueList()
+        newActor.inventory = toInventory(newActor, itemsFromStrings(inventory))
+    }
     return newActor
 }
 
@@ -116,7 +120,7 @@ func NewActorFromRecord(record recfile.Record) *Actor {
             a.internalName = field.Value
         case "position":
             a.SetPos(geometry.MustDecodePoint(field.Value))
-        case "icon":
+        case "unlitIcon":
             a.icon = field.AsInt32()
         case "iconFrames":
             a.iconFrameCount = field.AsInt()
@@ -150,7 +154,7 @@ func (a *Actor) ToRecord() recfile.Record {
         recfile.Field{Name: "name", Value: a.Name()},
         recfile.Field{Name: "internalName", Value: a.GetInternalName()},
         recfile.Field{Name: "position", Value: a.Pos().Encode()},
-        recfile.Field{Name: "icon", Value: recfile.Int32Str(a.Icon(0))},
+        recfile.Field{Name: "unlitIcon", Value: recfile.Int32Str(a.Icon(0))},
         recfile.Field{Name: "iconFrames", Value: strconv.Itoa(a.GetIconFrameCount())},
 
         recfile.Field{Name: "isHuman", Value: recfile.BoolStr(a.IsHuman())},
@@ -353,13 +357,13 @@ func (a *Actor) GetContextActions(engine Engine) []renderer.MenuItem {
         talkTo := renderer.MenuItem{
             Text: "Talk",
             Action: func() {
-                engine.StartConversation(a)
+                engine.StartConversation(a, a.GetDialogue())
             },
         }
         lookAt := renderer.MenuItem{
             Text: "Look",
             Action: func() {
-                engine.ShowColoredText(a.LookDescription(), color.White, false)
+                engine.ShowScrollableText(a.LookDescription(), color.White, false)
             },
         }
         steal := renderer.MenuItem{
@@ -413,47 +417,43 @@ type SalesOffer struct {
 }
 
 func (a *Actor) GetItemsToSell() []SalesOffer {
-    var weapons []SalesOffer
-    var armor []SalesOffer
-    var scrolls []SalesOffer
-    var other []SalesOffer
+    var items []SalesOffer
     for _, item := range a.inventory {
-        switch item.(type) {
-        case *Weapon:
-            weapon := item.(*Weapon)
-            weapons = append(weapons, SalesOffer{
-                Item:  weapon,
-                Price: a.vendorPrice(weapon),
-            })
-        case *Armor:
-            armorPiece := item.(*Armor)
-            armor = append(armor, SalesOffer{
-                Item:  armorPiece,
-                Price: a.vendorPrice(armorPiece),
-            })
-        case *Scroll:
-            scroll := item.(*Scroll)
-            scrolls = append(scrolls, SalesOffer{
-                Item:  scroll,
-                Price: a.vendorPrice(scroll),
-            })
-        case *Potion:
-            potion := item.(*Potion)
-            other = append(other, SalesOffer{
-                Item:  potion,
-                Price: a.vendorPrice(potion),
-            })
-        default:
+        if a.isStackableInList(items, item) {
             continue
-            /*
-               other = append(other, SalesOffer{
-                   Item:  item,
-                   Price: a.vendorPrice(item),
-               })
-            */
+        }
+        if pseudo, ok := item.(*PseudoItem); ok {
+            if pseudo.itemType == PseudoItemTypeGold {
+                continue
+            }
+        }
+        items = append(items, SalesOffer{
+            Item:  item,
+            Price: a.vendorPrice(item),
+        })
+    }
+
+    sort.SliceStable(items, func(i, j int) bool {
+        return items[i].Item.GetValue() > items[j].Item.GetValue()
+    })
+    return items
+}
+
+func (a *Actor) isStackableInList(items []SalesOffer, item Item) bool {
+    for _, existingOffer := range items {
+        if existingOffer.Item.CanStackWith(item) {
+            return true
         }
     }
-    return append(append(append(weapons, armor...), scrolls...), other...)
+    return false
+}
+
+func (a *Actor) appendOffer(offer map[Loot][]SalesOffer, lootType Loot, item Item) map[Loot][]SalesOffer {
+    if _, ok := offer[lootType]; !ok {
+        offer[lootType] = make([]SalesOffer, 0)
+    }
+
+    return offer
 }
 
 func (a *Actor) RemoveItem(item Item) {
@@ -791,19 +791,6 @@ func (a *Actor) GetXPForKilling() int {
     return a.level * 10
 }
 
-func (a *Actor) LevelUp(flags *Flags) {
-    a.level++
-    healthBonus := 10
-    if flags.HasFlag("gift_of_life") {
-        healthBonus += 10
-    }
-    a.maxHealth += healthBonus
-    a.health = a.maxHealth
-    a.baseArmor += 1
-    a.baseMeleeDamage += 1
-    a.baseRangedDamage += 1
-}
-
 func (a *Actor) AddAllSkills() {
     a.skillset.AddAll()
 }
@@ -942,4 +929,21 @@ func (a *Actor) BuffsAsStringTable() []string {
         return []string{"No buffs"}
     }
     return util.TableLayout(rows)
+}
+
+func (a *Actor) SetIcon(icon int32) {
+    a.icon = icon
+}
+
+func (a *Actor) SetVendorInventory(items []Item) {
+    a.inventory = append(a.inventory, items...)
+}
+
+func (a *Actor) GetEquippedSpells() []*Spell {
+    var spells []*Spell
+    for _, scroll := range a.equippedScrolls {
+        spells = append(spells, scroll.spell)
+    }
+    return spells
+
 }

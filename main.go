@@ -7,6 +7,7 @@ import (
     "Legacy/gocoro"
     "Legacy/gridmap"
     "Legacy/ldtk_go"
+    "Legacy/recfile"
     "Legacy/renderer"
     "errors"
     "fmt"
@@ -17,7 +18,10 @@ import (
     "math"
     "math/rand"
     "os"
+    "path"
     "runtime/pprof"
+    "sort"
+    "strings"
 )
 
 type GridEngine struct {
@@ -29,13 +33,13 @@ type GridEngine struct {
     rules *game.Rules
 
     // Game State & Bookkeeping
-    avatar           *game.Actor
-    splitControlled  *game.Actor
-    playerParty      *game.Party
-    playerKnowledge  *game.PlayerKnowledge
-    flags            *game.Flags
-    currentEncounter game.Encounter
-    mapsInMemory     map[string]*gridmap.GridMap[*game.Actor, game.Item, game.Object]
+    avatar          *game.Actor
+    splitControlled *game.Actor
+    playerParty     *game.Party
+    playerKnowledge *game.PlayerKnowledge
+    flags           *game.Flags
+    activeEvents    []game.GameEvent
+    mapsInMemory    map[string]*gridmap.GridMap[*game.Actor, game.Item, game.Object]
 
     // combat
     combatManager *CombatState
@@ -81,6 +85,80 @@ type GridEngine struct {
     ticksForPrint        int
     printLog             []string
     grayScaleEntityTiles *ebiten.Image
+    allowedPartyIcons    []int32
+    onMoveSubscribers    []func(newPosition geometry.Point) bool
+    isGameOver           bool
+}
+
+func (g *GridEngine) GetVisibleMap() geometry.Rect {
+    return g.mapWindow.GetVisibleMap()
+}
+
+func (g *GridEngine) GetDialogueFromFile(conversationId string) *game.Dialogue {
+    filename := path.Join("assets", "dialogues", conversationId+".txt")
+    file := mustOpen(filename)
+    records := recfile.Read(file)
+    _ = file.Close()
+    return game.NewDialogueFromRecords(records, g.gridRenderer.AutolayoutArrayToIconPages)
+}
+
+func (g *GridEngine) GetActorByInternalName(internalName string) *game.Actor {
+    for _, actor := range g.currentMap.Actors() {
+        if actor.GetInternalName() == internalName {
+            return actor
+        }
+    }
+    return nil
+}
+
+func (g *GridEngine) RaiseAsUndeadForParty(pos geometry.Point) {
+    downedActor, exists := g.currentMap.TryGetDownedActorAt(pos)
+    if !exists {
+        return
+    }
+    g.currentMap.RemoveDownedActor(downedActor)
+    undeadActor := game.NewActor("Skeletor", 109)
+    g.currentMap.AddActor(undeadActor, pos)
+    g.playerParty.AddMember(undeadActor)
+}
+
+func (g *GridEngine) GetRegion(regionName string) geometry.Rect {
+    return g.currentMap.GetNamedRegion(regionName)
+}
+
+func (g *GridEngine) RemoveDoorAt(pos geometry.Point) {
+    objectAt := g.currentMap.ObjectAt(pos)
+    if _, isDoor := objectAt.(*game.Door); isDoor {
+        g.currentMap.RemoveObjectAt(pos)
+    }
+}
+
+func (g *GridEngine) GetRandomPositionsInRegion(regionName string, count int) []geometry.Point {
+    region := g.currentMap.GetNamedRegion(regionName)
+    setOfLocations := make(map[geometry.Point]bool)
+    for len(setOfLocations) < count {
+        setOfLocations[region.GetRandomPoint()] = true
+    }
+    var result []geometry.Point
+    for k := range setOfLocations {
+        result = append(result, k)
+    }
+    return result
+}
+
+func (g *GridEngine) GetGridMap() *gridmap.GridMap[*game.Actor, game.Item, game.Object] {
+    return g.currentMap
+}
+
+func (g *GridEngine) TeleportTo(mirrorText string) {
+    if mirrorText == "" {
+        return
+    }
+    mapName, locationName := g.rules.GetTargetLocation(mirrorText)
+    if mapName == "" || locationName == "" {
+        return
+    }
+    g.transition(mapName, locationName)
 }
 
 func (g *GridEngine) GetBreakingToolName() string {
@@ -167,7 +245,7 @@ func main() {
     }
     defer cpuProfileFile.Close()
 
-    // Start CPU profiling
+    // start CPU profiling
     if err := pprof.StartCPUProfile(cpuProfileFile); err != nil {
         panic(err)
     }
@@ -328,6 +406,14 @@ func (g *GridEngine) growGrassAt(pos geometry.Point) {
         g.currentMap.SetTile(pos, grassTile)
     }
 }
+func (g *GridEngine) SetWallAt(pos geometry.Point) {
+    currentCell := g.currentMap.GetCell(pos)
+    currentTile := currentCell.TileType
+    if currentTile.Special == gridmap.SpecialTileNone {
+        grassTile := currentTile.WithIcon(80).WithIsWalkable(false).WithIsTransparent(false)
+        g.currentMap.SetTile(pos, grassTile)
+    }
+}
 func (g *GridEngine) growBloodAt(pos geometry.Point) {
     currentCell := g.currentMap.GetCell(pos)
     currentTile := currentCell.TileType
@@ -340,12 +426,17 @@ func (g *GridEngine) growBloodAt(pos geometry.Point) {
 func (g *GridEngine) breakTileAt(loc geometry.Point) {
     currentCell := g.currentMap.GetCell(loc)
     currentTile := currentCell.TileType
-    if currentTile.Special == gridmap.SpecialTileBreakable {
-        debrisTile := currentTile.WithIcon(32).
+    if currentTile.IsBreakable() {
+        debrisTile := currentTile.WithIcon(currentTile.GetDebrisTile()).
             WithIsWalkable(true).
             WithIsTransparent(true).
             WithSpecial(gridmap.SpecialTileNone)
         g.currentMap.SetTile(loc, debrisTile)
+        if currentTile.Special == gridmap.SpecialTileBreakableGold {
+            goldItem := game.NewPseudoItemFromTypeAndAmount(game.PseudoItemTypeGold, 200)
+            g.currentMap.AddItem(goldItem, loc)
+        }
+        g.updateContextActions()
     }
 }
 
@@ -431,7 +522,8 @@ func (g *GridEngine) dropActorInventory(actor *game.Actor) {
     }
 }
 
-func (g *GridEngine) showGameOver() {
+func (g *GridEngine) setGameOver() {
+    g.isGameOver = true
     g.ShowText([]string{"Game Over"})
 }
 
@@ -493,9 +585,8 @@ func (g *GridEngine) openPartyOverView() {
 }
 
 func (g *GridEngine) DeliverCombatDamage(attacker *game.Actor, victim *game.Actor) {
-    baseMeleeDamage := attacker.GetMeleeDamage()
-    victimArmor := victim.GetTotalArmor()
-    damage := baseMeleeDamage - victimArmor
+    damage := g.rules.GetMeleeDamage(attacker, victim)
+
     if damage > 0 {
         victim.Damage(damage)
         g.Print(fmt.Sprintf("%d dmg. to '%s'", damage, victim.Name()))
@@ -564,6 +655,93 @@ func (g *GridEngine) AddBuff(actor *game.Actor, name string, buffType game.BuffT
     g.Print(fmt.Sprintf("%s received %s", actor.Name(), name))
 }
 
+func (g *GridEngine) AskUserForString(prompt string, maxLength int, onConfirm func(text string)) {
+    textInput := g.gridRenderer.NewTextInputAtY(10, prompt, func(endedWith renderer.EndAction, text string) {
+        if endedWith == renderer.EndActionConfirm {
+            onConfirm(text)
+        }
+    })
+    textInput.SetMaxLength(maxLength)
+    textInput.CenterHorizontallyAtY(10)
+    g.textInput = textInput
+}
+
+func (g *GridEngine) loadPartyIcons() {
+    tileset := g.ldtkMapProject.TilesetByIdentifier("Entities")
+    for tileID, enums := range tileset.Enums {
+        if enums.Contains("IsAllowedAsPartyIcon") {
+            g.allowedPartyIcons = append(g.allowedPartyIcons, int32(tileID))
+        }
+    }
+    sort.SliceStable(g.allowedPartyIcons, func(i, j int) bool {
+        return g.allowedPartyIcons[i] < g.allowedPartyIcons[j]
+    })
+}
+
+func (g *GridEngine) CreateItemsForVendor(lootType game.Loot, level int) []game.Item {
+    switch lootType {
+    case game.LootArmor:
+        return g.createArmor(level, 10)
+    case game.LootWeapon:
+        return g.createWeapons(level, 10)
+    case game.LootHealer:
+        return g.createPotions(10)
+    case game.LootPotions:
+        return g.createPotions(10)
+    }
+    return []game.Item{}
+}
+
+func (g *GridEngine) subscribeToMovement(subscriber func(pos geometry.Point) bool) {
+    g.onMoveSubscribers = append(g.onMoveSubscribers, subscriber)
+}
+
+func (g *GridEngine) goBackToBed() {
+    g.ShowMultipleChoiceDialogue(g.GetAvatar().Icon(0), g.gridRenderer.AutolayoutArrayToIconPages(5, []string{"You are sure your walls and the mirror will be back to normal, if you just go back to sleep"}), []renderer.MenuItem{
+        {
+            Text: "Stay awake",
+            Action: func() {
+                g.inputElement = nil
+                g.modalElement = nil
+            },
+        },
+        {
+            Text: "Go back to bed",
+            Action: func() {
+                g.inputElement = nil
+                g.modalElement = nil
+                g.setGameOver()
+            },
+        },
+    })
+}
+func (g *GridEngine) drawTextInWorld(worldPos geometry.Point, text string) {
+    for i, c := range text {
+        drawPos := worldPos.Add(geometry.Point{X: i, Y: 0})
+        g.DrawCharInWorld(c, drawPos)
+    }
+}
+
+func (g *GridEngine) DrawCharInWorld(c rune, drawPos geometry.Point) {
+    fontIndex := getWorldFontIndex()
+    tileIndex := fontIndex[c]
+    g.currentMap.SetTileIcon(drawPos, int32(tileIndex))
+}
+
+func (g *GridEngine) SetMapIcon(icon int32, mapPos geometry.Point) {
+    g.currentMap.SetTileIcon(mapPos, icon)
+}
+
+func (g *GridEngine) getTombstoneFromEntity(entity *ldtk_go.Entity) game.Object {
+    isHoly := entity.PropertyByIdentifier("IsHoly").AsBool()
+    inscriptionProperty := entity.PropertyByIdentifier("Inscription")
+    if inscriptionProperty == nil || inscriptionProperty.IsNull() {
+        return game.NewTombstone(isHoly)
+    }
+    tombstone := game.NewTombstone(isHoly)
+    tombstone.SetDescription(strings.Split(inscriptionProperty.AsString(), "\n"))
+    return tombstone
+}
 func secondsToTicks(seconds float64) int {
     return int(ebiten.ActualTPS() * seconds)
 }

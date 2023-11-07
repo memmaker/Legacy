@@ -59,13 +59,13 @@ func NewAutoTextWindow(gridRenderer *DualGridRenderer, text []string) *Scrollabl
     borderNeeded := 4 * 2
     widthAvailable := screenSize.X - borderNeeded
     text = AutoLayoutArray(text, min(maxLen(text), widthAvailable))
-    topLeft, bottomRight := gridRenderer.AutoPositionText(text)
+    topLeft, bottomRight := gridRenderer.GetAutoFitRect(text)
     modal := NewScrollableTextWindow(gridRenderer, topLeft, bottomRight)
     modal.SetText(text)
     return modal
 }
 func NewFixedTextWindow(gridRenderer *DualGridRenderer, text []string) *ScrollableTextWindow {
-    topLeft, bottomRight := gridRenderer.AutoPositionText(text)
+    topLeft, bottomRight := gridRenderer.GetAutoFitRect(text)
     modal := NewScrollableTextWindow(gridRenderer, topLeft, bottomRight)
     modal.SetText(text)
     return modal

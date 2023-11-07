@@ -45,7 +45,7 @@ func (t *TextInput) CenterHorizontallyAtY(y int) {
 }
 
 func (t *TextInput) neededWidth() int {
-    return len(t.prompt) + t.maxLength + 1 // for the cursor icon
+    return len(t.prompt) + t.maxLength + 1 // for the cursor Icon
 }
 func (t *TextInput) SetPrompt(prompt string) {
     t.prompt = prompt
@@ -128,4 +128,8 @@ func (t *TextInput) cursorFromTick(tick uint64) int32 {
     }
     delays := tick / 20
     return t.cursorIcon + int32(delays%uint64(t.cursorFrames))
+}
+
+func (t *TextInput) SetMaxLength(length int) {
+    t.maxLength = length
 }

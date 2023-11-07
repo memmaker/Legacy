@@ -19,7 +19,9 @@ func (g *GridEngine) drawLowerStatusBar(screen *ebiten.Image) {
         //g.gridRenderer.DrawOnSmallGrid(screen, x+9, y, int(g.fontIndex[divider]))
     }
 }
-
+func (g *GridEngine) drawCombatActionBar(screen *ebiten.Image) {
+    //TOO MUCH?
+}
 func (g *GridEngine) drawUpperStatusBar(screen *ebiten.Image) {
     screenSize := g.gridRenderer.GetSmallGridScreenSize()
     foodCount := g.playerParty.GetFood()

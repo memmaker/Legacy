@@ -9,8 +9,8 @@ import (
     "github.com/hajimehoshi/ebiten/v2"
 )
 
-func (g *GridEngine) playerMovement(direction geometry.Point) {
-    g.flags.IncrementFlag("steps_taken")
+func (g *GridEngine) MoveAvatarInDirection(direction geometry.Point) {
+    oldPos := g.GetAvatar().Pos()
     if g.splitControlled != nil {
         g.currentMap.MoveActor(g.splitControlled, g.splitControlled.Pos().Add(direction))
         g.onViewedActorMoved(g.splitControlled.Pos())
@@ -18,7 +18,13 @@ func (g *GridEngine) playerMovement(direction geometry.Point) {
         g.playerParty.Move(direction)
         g.onViewedActorMoved(g.avatar.Pos())
     }
+    newPos := g.GetAvatar().Pos()
 
+    if oldPos == newPos {
+        return
+    }
+
+    g.flags.IncrementFlag("steps_taken")
     if g.flags.GetFlag("steps_taken") == 1 {
         g.onVeryFirstStep()
     }
@@ -28,6 +34,14 @@ func (g *GridEngine) playerMovement(direction geometry.Point) {
             actor.ClearBuffs()
             g.AddBuff(actor, "Fatigued", game.BuffTypeOffense, -5)
             g.AddBuff(actor, "Weak", game.BuffTypeDefense, -3)
+        }
+    }
+
+    for i := len(g.onMoveSubscribers) - 1; i >= 0; i-- {
+        subscriber := g.onMoveSubscribers[i]
+        if subscriber(newPos) {
+            // remove the subscriber
+            g.onMoveSubscribers = append(g.onMoveSubscribers[:i], g.onMoveSubscribers[i+1:]...)
         }
     }
 }
@@ -41,9 +55,10 @@ func (g *GridEngine) Update() error {
         return ebiten.Termination
     }
 
-    if g.playerParty.IsDefeated() {
-        g.showGameOver()
+    if g.isGameOver {
         return nil
+    } else if g.gameOverConditionReached() {
+        g.setGameOver()
     }
 
     if g.ticksForPrint > 0 {
@@ -56,9 +71,15 @@ func (g *GridEngine) Update() error {
 
     g.handleInput()
 
-    if g.currentEncounter != nil && !g.currentEncounter.IsOver() {
-        g.currentEncounter.Update()
+    for i := len(g.activeEvents) - 1; i >= 0; i-- {
+        event := g.activeEvents[i]
+        if event.IsOver() {
+            g.activeEvents = append(g.activeEvents[:i], g.activeEvents[i+1:]...)
+        } else {
+            event.Update()
+        }
     }
+
     if g.animationRoutine.Running() {
         g.animationRoutine.Update()
     }
@@ -66,6 +87,10 @@ func (g *GridEngine) Update() error {
     g.WorldTicks++
 
     return nil
+}
+
+func (g *GridEngine) gameOverConditionReached() bool {
+    return g.playerParty.IsDefeated() || g.isGameOver
 }
 func (g *GridEngine) Draw(screen *ebiten.Image) {
     g.drawUIOverlay(screen)
@@ -121,14 +146,18 @@ func (g *GridEngine) drawWarTimeStatusBar(screen *ebiten.Image) {
     if g.ticksForPrint > 0 {
         g.drawPrintMessage(screen, true)
     } else {
-        g.drawUpperStatusBar(screen)
+        g.drawCombatActionBar(screen)
     }
+    /*
+       else {
+           g.drawUpperStatusBar(screen)
+       }
+    */
 }
 
-func (g *GridEngine) transition(transition gridmap.Transition) {
-
+func (g *GridEngine) transition(targetMap, targetLocation string) {
     currentMapName := g.currentMap.GetName()
-    nextMapName := transition.TargetMap
+    nextMapName := targetMap
 
     // remove the party from the current map
     g.RemovePartyFromMap(g.currentMap)
@@ -141,7 +170,7 @@ func (g *GridEngine) transition(transition gridmap.Transition) {
     // check if the next map is already loaded
     if nextMap, isInMemory = g.mapsInMemory[nextMapName]; !isInMemory {
         // if not, load it from ldtk
-        nextMap = g.loadMap(transition.TargetMap)
+        nextMap = g.loadMap(targetMap)
     } else {
         g.initMapWindow(nextMap.MapWidth, nextMap.MapHeight)
     }
@@ -149,8 +178,9 @@ func (g *GridEngine) transition(transition gridmap.Transition) {
     // set the new map
     g.currentMap = nextMap
 
+    destPos := g.currentMap.GetNamedLocation(targetLocation)
     // add the party to the new map
-    g.PlaceParty(transition.TargetPos)
+    g.PlaceParty(destPos)
 }
 func (g *GridEngine) updateContextActions() {
 
@@ -163,18 +193,18 @@ func (g *GridEngine) updateContextActions() {
 
     g.contextActions = make([]renderer.MenuItem, 0)
 
-    neighborsWithStuff := g.currentMap.NeighborsCardinal(loc, func(p geometry.Point) bool {
-        return g.currentMap.Contains(p) && (g.currentMap.IsActorAt(p) || g.currentMap.IsItemAt(p) || g.currentMap.IsObjectAt(p) || g.currentMap.IsSpecialAt(p, gridmap.SpecialTileBreakable))
+    existingNeighbors := g.currentMap.NeighborsCardinal(loc, func(p geometry.Point) bool {
+        return g.currentMap.Contains(p)
     })
 
-    neighborsWithStuff = append(neighborsWithStuff, loc)
+    existingNeighbors = append(existingNeighbors, loc)
 
     var actorsNearby []*game.Actor
     var uniqueItemsNearby []game.Item
     var allItemsNearby []game.Item
     var objectsNearby []game.Object
 
-    for _, n := range neighborsWithStuff {
+    for _, n := range existingNeighbors {
         neighbor := n
         if g.currentMap.IsActorAt(neighbor) {
             actor := g.currentMap.GetActor(neighbor)
@@ -204,14 +234,26 @@ func (g *GridEngine) updateContextActions() {
                 objectsNearby = append(objectsNearby, object)
             }
         }
-
-        if g.currentMap.IsSpecialAt(neighbor, gridmap.SpecialTileBreakable) && breakingTool != "" {
+        cellAt := g.currentMap.GetCell(neighbor)
+        if cellAt.TileType.IsBreakable() && breakingTool != "" {
             g.contextActions = append(g.contextActions, renderer.MenuItem{
                 Text: fmt.Sprintf("Break (%s)", breakingTool),
                 Action: func() {
                     g.breakTileAt(neighbor)
                 },
             })
+        } else if cellAt.TileType.IsBed() {
+            if g.GetMapName() == "Bed_Room" {
+                g.contextActions = append(g.contextActions, renderer.MenuItem{
+                    Text:   "Your bed",
+                    Action: g.goBackToBed,
+                })
+            } else {
+                g.contextActions = append(g.contextActions, renderer.MenuItem{
+                    Text:   "Rest in bed",
+                    Action: g.TryRestParty,
+                })
+            }
         }
     }
 

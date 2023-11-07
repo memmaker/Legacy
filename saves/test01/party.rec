@@ -3,14 +3,14 @@
 food: 3
 gold: 1000
 lockpicks: 0
-currentMap: Tauci_Castle
+currentMap: WorldMap
 
 %rec: chars
 
-name: Avatar
+name: Lord Fix
 internalName: 
-position: (25,45)
-icon: 7
+position: (61,40)
+icon: 22
 iconFrames: 1
 isHuman: true
 health: 23
@@ -19,7 +19,7 @@ xp: 0
 level: 1
 mana: 0
 baseArmor: 0
-baseMelee: 0
+baseMelee: 5
 baseRanged: 0
 description: 
 

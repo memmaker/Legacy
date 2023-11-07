@@ -9,23 +9,31 @@ import (
     "fmt"
 )
 
-func (g *GridEngine) openSpeechWindow(npc *game.Actor, text []string, onLastPage func()) {
-    if len(text) == 0 {
+func (g *GridEngine) openSpeechWindow(npc *game.Actor, textPages [][]string, onLastPage func()) {
+    if len(textPages) == 0 {
         return
     }
-    multipageWindow := renderer.NewMultiPageWindow(g.gridRenderer, 3, npc.Icon(0), text, onLastPage)
+    multipageWindow := renderer.NewMultiPageWindow(g.gridRenderer, onLastPage)
+    multipageWindow.InitWithFixedText(textPages)
+    multipageWindow.SetTitle(npc.Name())
     multipageWindow.AddTextActionButton(134, func(text []string) {
         g.addToJournal(npc, text)
     })
-    multipageWindow.SetTitle(npc.Name())
+    multipageWindow.SetIcon(npc.Icon(0))
+    multipageWindow.PositionAtY(3)
+    multipageWindow.SetAutoCloseOnConfirm()
+
     g.modalElement = multipageWindow
 }
 
-func (g *GridEngine) openIconWindow(icon int32, text []string, onLastPage func()) {
-    if len(text) == 0 {
+func (g *GridEngine) openIconWindow(icon int32, textPages [][]string, onLastPage func()) {
+    if len(textPages) == 0 {
         return
     }
-    multipageWindow := renderer.NewMultiPageWindow(g.gridRenderer, 3, icon, text, onLastPage)
+    multipageWindow := renderer.NewMultiPageWindow(g.gridRenderer, onLastPage)
+    multipageWindow.InitWithFixedText(textPages)
+    multipageWindow.SetIcon(icon)
+    multipageWindow.PositionAtY(3)
     g.modalElement = multipageWindow
 }
 
@@ -33,15 +41,18 @@ func (g *GridEngine) openConversationMenu(topLeft geometry.Point, items []render
     g.inputElement = renderer.NewGridDialogueMenu(g.gridRenderer, topLeft, items)
     g.inputElement.OnMouseMoved(g.lastMousePosX, g.lastMousePosY)
 }
-func (g *GridEngine) StartConversation(npc *game.Actor) {
+func (g *GridEngine) StartConversation(npc *game.Actor, loadedDialogue *game.Dialogue) {
     // NOTE: Conversations can have a line length of 27 chars
+    if !npc.IsAlive() {
+        g.Print(fmt.Sprintf("%s is dead.", npc.Name()))
+        return
+    }
     if !npc.HasDialogue() {
         g.Print(fmt.Sprintf("\"%s\" has nothing to say.", npc.Name()))
         return
     }
-    loadedDialogue := npc.GetDialogue()
 
-    var openingLines []string
+    var openingLines [][]string
     var items []renderer.MenuItem
     var firstNode game.ConversationNode
     if !g.playerKnowledge.HasTalkedTo(npc.GetInternalName()) && loadedDialogue.HasFirstTimeText() {
@@ -51,7 +62,7 @@ func (g *GridEngine) StartConversation(npc *game.Actor) {
         firstNode = loadedDialogue.GetOpening()
     } else {
         firstNode = game.ConversationNode{
-            Text: []string{"Hi there!"},
+            Text: oneLine("Hi there!"),
         }
     }
 
@@ -77,7 +88,7 @@ func (g *GridEngine) StartConversation(npc *game.Actor) {
     })
 }
 
-func (g *GridEngine) ShowMultipleChoiceDialogue(icon int32, text []string, choices []renderer.MenuItem) {
+func (g *GridEngine) ShowMultipleChoiceDialogue(icon int32, text [][]string, choices []renderer.MenuItem) {
     g.openIconWindow(icon, text, func() {
         if len(choices) > 0 {
             g.openMenuForDialogue(choices)
@@ -94,7 +105,7 @@ func (g *GridEngine) openMenuForDialogue(items []renderer.MenuItem) {
 }
 func (g *GridEngine) openMenuForVendor(items []renderer.MenuItem) *renderer.GridMenu {
     // geometry.Point{X: 3, Y: 13},
-    gridMenu := renderer.NewGridMenuAtY(g.gridRenderer, items, 13)
+    gridMenu := renderer.NewGridMenuAtY(g.gridRenderer, items, 10)
     gridMenu.SetAutoClose()
     g.inputElement = gridMenu
     g.inputElement.OnMouseMoved(g.lastMousePosX, g.lastMousePosY)
@@ -126,14 +137,15 @@ func (g *GridEngine) toForcedMenuItems(npc *game.Actor, dialogue *game.Dialogue,
         if len(c.NeededFlags) > 0 && !g.Flags().AllSet(c.NeededFlags) {
             continue
         }
-        if len(c.NeededSkills) > 0 && !g.GetAvatar().GetSkills().HasSkills(c.NeededSkills) {
-            continue
-        }
         choice := c
         items = append(items, renderer.MenuItem{
             Text: choice.Text,
             Action: func() {
-                g.handleDialogueChoice(dialogue, choice.TransitionTo, npc)
+                transitionTarget := c.TransitionOnSuccess
+                if len(c.NeededSkills) > 0 && !g.GetAvatar().GetSkills().HasSkills(c.NeededSkills) {
+                    transitionTarget = c.TransitionOnFail
+                }
+                g.handleDialogueChoice(dialogue, transitionTarget, npc)
             },
         })
     }
@@ -149,7 +161,7 @@ func (g *GridEngine) handleDialogueChoice(dialogue *game.Dialogue, followUp stri
     }
     g.inputElement = nil
     g.flags.SetFlags(response.FlagsSet)
-    quitsDialogue := true
+    quitsDialogue := len(response.Effects) > 0
     for _, effect := range response.Effects {
         effectDoesQuit := g.handleDialogueEffect(npc, effect)
         quitsDialogue = quitsDialogue && effectDoesQuit

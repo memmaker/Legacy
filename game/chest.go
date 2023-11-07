@@ -87,7 +87,7 @@ func NewChestFromRecord(record recfile.Record) *Chest {
             chest.name = field.Value
         case "isHidden":
             chest.isHidden = field.AsBool()
-        case "icon":
+        case "unlitIcon":
             chest.icon = field.AsInt32()
         case "position":
             chest.SetPos(geometry.MustDecodePoint(field.Value))
@@ -110,7 +110,7 @@ func (s *Chest) ToRecordAndType() (recfile.Record, string) {
     record = recfile.Record{
         {Name: "name", Value: s.name},
         {Name: "isHidden", Value: recfile.BoolStr(s.isHidden)},
-        {Name: "icon", Value: recfile.Int32Str(s.icon)},
+        {Name: "unlitIcon", Value: recfile.Int32Str(s.icon)},
         {Name: "position", Value: s.Pos().Encode()},
         {"needsKey", s.needsKey},
         {"lootLevel", recfile.IntStr(s.lootLevel)},

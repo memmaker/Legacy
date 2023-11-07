@@ -121,7 +121,8 @@ func (g *GridEngine) openPartyInventory() {
             }
         }
         menuItems = append(menuItems, renderer.MenuItem{
-            Text: stackLabel,
+            Text:     stackLabel,
+            CharIcon: firstItemInStack.InventoryIcon(),
             Action: func() {
                 g.openMenu(firstItemInStack.GetContextActions(g))
             },
@@ -131,14 +132,14 @@ func (g *GridEngine) openPartyInventory() {
 }
 
 func (g *GridEngine) ShowText(text []string) {
-    g.ShowColoredText(text, color.White, true)
+    g.ShowScrollableText(text, color.White, true)
 }
 
 func (g *GridEngine) ShowFixedFormatText(text []string) *renderer.ScrollableTextWindow {
-    return g.ShowColoredText(text, color.White, false)
+    return g.ShowScrollableText(text, color.White, false)
 }
 
-func (g *GridEngine) ShowColoredText(text []string, textcolor color.Color, autolayoutText bool) *renderer.ScrollableTextWindow {
+func (g *GridEngine) ShowScrollableText(text []string, textcolor color.Color, autolayoutText bool) *renderer.ScrollableTextWindow {
     if len(text) == 0 {
         return nil
     }
@@ -176,6 +177,10 @@ func (g *GridEngine) takeItem(item game.Item) {
         pseudoItem.Take(g)
     } else {
         g.AddItem(item)
+    }
+    pickupEvent := item.GetPickupEvent()
+    if pickupEvent != "" {
+        g.TriggerEvent(pickupEvent)
     }
 }
 func (g *GridEngine) DropItem(item game.Item) {
@@ -243,7 +248,7 @@ func (g *GridEngine) ForceJoinParty() {
 func (g *GridEngine) openVendorMenu(npc *game.Actor) {
     itemsToSell := npc.GetItemsToSell()
     if len(itemsToSell) == 0 {
-        g.openIconWindow(npc.Icon(0), []string{"Unfortunately, I have nothing left to sell."}, func() {})
+        g.openIconWindow(npc.Icon(0), oneLine("Unfortunately, I have nothing left to sell."), func() {})
         return
     }
 
@@ -254,7 +259,8 @@ func (g *GridEngine) openVendorMenu(npc *game.Actor) {
         itemLine := util.TableLine(labelWidth, colWidth, offer.Item.Name(), strconv.Itoa(offer.Price))
         //itemLine := fmt.Sprintf("%s (%d)", offer.Item.Name(), offer.Price)
         menuItems = append(menuItems, renderer.MenuItem{
-            Text: itemLine,
+            Text:     itemLine,
+            CharIcon: offer.Item.InventoryIcon(),
             Action: func() {
                 g.TryBuyItem(npc, offer)
             },
@@ -281,7 +287,7 @@ func (g *GridEngine) openTrainerMenu(npc *game.Actor, maxLevel int) {
     }
 
     if len(eligibleMembers) == 0 {
-        g.openIconWindow(npc.Icon(0), []string{"Unfortunately, no member of your party can be trained here."}, func() {})
+        g.openIconWindow(npc.Icon(0), oneLine("Unfortunately, no member of your party can be trained here."), func() {})
         return
     }
 
@@ -298,10 +304,10 @@ func (g *GridEngine) openTrainerMenu(npc *game.Actor, maxLevel int) {
                 if g.playerParty.HasGold(levelUpCost) {
                     g.playerParty.RemoveGold(levelUpCost)
                     npc.AddGold(levelUpCost)
-                    member.LevelUp(g.flags)
+                    g.rules.LevelUp(member)
                     g.openTrainerMenu(npc, maxLevel)
                 } else {
-                    g.openIconWindow(npc.Icon(0), []string{"You don't have enough gold."}, func() {})
+                    g.openIconWindow(npc.Icon(0), oneLine("You don't have enough gold."), func() {})
                 }
             },
         })
@@ -337,7 +343,7 @@ func getLineLengthInfoActors(actors []*game.Actor) (int, int) {
 
 func (g *GridEngine) TryBuyItem(npc *game.Actor, offer game.SalesOffer) {
     if g.playerParty.GetGold() < offer.Price {
-        g.openIconWindow(npc.Icon(0), []string{"You don't have enough gold."}, func() {})
+        g.openIconWindow(npc.Icon(0), oneLine("You don't have enough gold."), func() {})
         return
     }
     npc.RemoveItem(offer.Item)
@@ -345,7 +351,7 @@ func (g *GridEngine) TryBuyItem(npc *game.Actor, offer game.SalesOffer) {
 
     g.playerParty.RemoveGold(offer.Price)
     g.AddItem(offer.Item)
-    g.openIconWindow(npc.Icon(0), []string{"Thank you for your business."}, func() {})
+    g.openIconWindow(npc.Icon(0), oneLine("Thank you for your business."), func() {})
 }
 
 func (g *GridEngine) TryRestParty() {
@@ -354,7 +360,8 @@ func (g *GridEngine) TryRestParty() {
         return
     }
     if g.playerParty.TryRest() {
-        g.openIconWindow(g.GetAvatar().Icon(0), []string{"You have eaten some food", "and rested the night.", "Your party has been healed."}, func() {})
+        pages := g.gridRenderer.AutolayoutArrayToIconPages(5, []string{"You have eaten some food", "and rested the night.", "Your party has been healed."})
+        g.openIconWindow(g.GetAvatar().Icon(0), pages, func() {})
     } else {
         g.Print("Not enough food to rest.")
     }
@@ -438,6 +445,10 @@ func (g *GridEngine) AddLockpicks(amount int) {
     g.playerParty.AddLockpicks(amount)
 }
 func (g *GridEngine) AddItem(item game.Item) {
+    if pseudoItem, ok := item.(*game.PseudoItem); ok {
+        pseudoItem.Take(g)
+        return
+    }
     g.Print(fmt.Sprintf("Received \"%s\"", item.Name()))
     g.playerParty.AddItem(item)
 }
@@ -490,7 +501,8 @@ func (g *GridEngine) ShowContainer(container game.ItemContainer) {
     }
     if len(containerItems) > 1 {
         menuItems = append(menuItems, renderer.MenuItem{
-            Text: "Take all",
+            CharIcon: 162,
+            Text:     "Take all",
             Action: func() {
                 for i := len(containerItems) - 1; i >= 0; i-- {
                     g.moveItemToParty(containerItems[i], container)
@@ -501,11 +513,16 @@ func (g *GridEngine) ShowContainer(container game.ItemContainer) {
     for _, i := range containerItems {
         item := i
         menuItems = append(menuItems, renderer.MenuItem{
-            Text: i.Name(),
+            CharIcon: i.InventoryIcon(),
+            Text:     i.Name(),
             Action: func() {
                 g.moveItemToParty(item, container)
             },
         })
     }
     g.openMenu(menuItems)
+}
+
+func oneLine(text string) [][]string {
+    return [][]string{{text}}
 }

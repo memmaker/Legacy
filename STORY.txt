@@ -1,3 +1,22 @@
+# The Architect
+
+Created the world and the people in it.
+But had to abide to the laws of alchemy.
+Nothing can be created from nothing.
+That's why the people also come from different places.
+They are not all from the same worlds or even the same time or dimension.
+They've been brought here by the architect to fulfill a purpose.
+None of them know what that purpose is.
+And most don't remember what their life was like before.
+But you do.
+Why did the architect bring you here? As a villain or a hero?
+
+The world he created is an isolated one.
+Even time doesn't flow the same way here.
+
+He started creating the world about ten years ago, at least that's when the
+first inhabitants arrived.
+
 # Opening
 
 You step out of the portal and find yourself in an unknown world.
@@ -12,6 +31,16 @@ to get through it. Food is expensive and hard to come by around here.
 There is also the much quicker option of using a magic potion to boost your learning.
 It will take you only a few minutes and the potions can be bought at the market
 for a reasonable price.
+
+# Ending
+Opening the portal does require the 4 corner crystals and four bearers.
+The finale is the player character leaving the world again through a portal.
+ -> He either does it because of his own free will
+ -> Or he is forced to do it by the architect, because he knows too much.
+ -> Setting us up for a state where the world can be re-visted in a sequel.
+He can leave the world in a good or bad state.
+He can choose some of the people to come with him.
+
 
 What do you want to do?"
 
@@ -136,6 +165,8 @@ Questions:
    - Befriend the guards or intimidate them
    - Steal the key from the guards - POSSIBLE
    - Find the hidden backup key in the guards room - POSSIBLE
+   - Find the hidden entrance and use a pickaxe to dig through the walls - POSSIBLE
+
  -> What if that fails and you get caught?
    - You can kill the guards.
    - You can bribe the guards.
@@ -203,6 +234,8 @@ Death alone
  - Their friends and family have died or left them
  - They would be dying alone, unseen and unheard
 
+Side Quest:
+Revive the undead ranger: Axa LavEnka
 
 # Quests
 
@@ -245,3 +278,8 @@ Introduce dilemmas, where the player has to choose between his ideals and anothe
 2. Investigation / Gathering of clues
 3. Twist / New Revelations
 4. Resolution / Decisions
+
+# Quest Design
+1. Gray moral choices / Dilemmas / Trolley Problem
+2. Twists / Good is bad, bad is good / Unexpected Consequences
+3. Double-crossing / Betrayal / Backstabbing

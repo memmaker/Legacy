@@ -20,7 +20,7 @@ xp: 0
 level: 1
 mana: 0
 baseArmor: 0
-baseMelee: 0
+baseMelee: 5
 baseRanged: 0
 description: 
 
@@ -36,7 +36,7 @@ xp: 0
 level: 1
 mana: 0
 baseArmor: 0
-baseMelee: 0
+baseMelee: 5
 baseRanged: 0
 description: 
 
@@ -52,13 +52,19 @@ xp: 0
 level: 1
 mana: 0
 baseArmor: 0
-baseMelee: 0
+baseMelee: 5
 baseRanged: 0
 description: This worm-like creature is hungry and wants something to eat.
 
 %rec: downedActors
 
 %rec: items
+
+item: scroll(Icing,great_ball_of_fire,Icebolt)
+name: Icing
+position: (64,39)
+isHidden: false
+value: 100
 
 %rec: transitions
 

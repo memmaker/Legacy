@@ -29,13 +29,15 @@ func (a *BaseObject) IsTransparent() bool {
 func (a *BaseObject) IsPassableForProjectile() bool {
     return false
 }
-
+func (a *BaseObject) SetDescription(description []string) {
+    a.description = description
+}
 func (a *BaseObject) GetContextActions(engine Engine, implObject Object) []renderer.MenuItem {
     return []renderer.MenuItem{
         {
             Text: "Examine",
             Action: func() {
-                engine.ShowColoredText(implObject.Description(), color.White, true)
+                engine.ShowScrollableText(implObject.Description(), color.White, true)
             },
         },
     }

@@ -107,8 +107,8 @@ func placeMapObjects(gridMap *gridmap.GridMap[*game.Actor, game.Item, game.Objec
             for _, transitionRecord := range objectRecords {
                 transitionPos := geometry.MustDecodePoint(transitionRecord[0].Value)
                 targetMap := transitionRecord[1].Value
-                targetPos := geometry.MustDecodePoint(transitionRecord[2].Value)
-                gridMap.SetTransitionAt(transitionPos, gridmap.Transition{TargetMap: targetMap, TargetPos: targetPos})
+                targetPos := transitionRecord[2].Value
+                gridMap.SetTransitionAt(transitionPos, gridmap.Transition{TargetMap: targetMap, TargetLocation: targetPos})
             }
         case "secretDoors":
             for _, secretDoorRecord := range objectRecords {
@@ -189,7 +189,7 @@ func saveMap(name string, gridMap *gridmap.GridMap[*game.Actor, game.Item, game.
         transitionInfos = append(transitionInfos, recfile.Record{
             recfile.Field{Name: "pos", Value: pos.Encode()},
             recfile.Field{Name: "targetMap", Value: transition.TargetMap},
-            recfile.Field{Name: "targetPos", Value: transition.TargetPos.Encode()},
+            recfile.Field{Name: "targetPos", Value: transition.TargetLocation},
         })
     }
 

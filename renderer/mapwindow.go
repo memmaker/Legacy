@@ -85,3 +85,13 @@ func (m *MapWindow) GetMapGridPositionFromScreenGridPosition(screenGridPosition 
         Y: screenGridPosition.Y + m.scrollOffset.Y,
     }
 }
+
+func (m *MapWindow) GetVisibleMap() geometry.Rect {
+    return geometry.Rect{
+        Min: m.scrollOffset,
+        Max: geometry.Point{
+            X: m.scrollOffset.X + m.windowSize.X,
+            Y: m.scrollOffset.Y + m.windowSize.Y,
+        },
+    }
+}

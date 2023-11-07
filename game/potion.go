@@ -10,6 +10,10 @@ type Potion struct {
     isEmpty bool
 }
 
+func (b *Potion) InventoryIcon() int32 {
+    return 173
+}
+
 func (b *Potion) CanStackWith(other Item) bool {
     if _, ok := other.(*Potion); ok {
         return true

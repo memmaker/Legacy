@@ -21,6 +21,10 @@ type PseudoItem struct {
     amount   int
 }
 
+func (p *PseudoItem) InventoryIcon() int32 {
+    return 169
+}
+
 func (p *PseudoItem) Icon(u uint64) int32 {
     return int32(205)
 }

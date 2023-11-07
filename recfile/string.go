@@ -18,7 +18,9 @@ func BoolStr(value bool) string {
     }
     return "false"
 }
-
+func StringsStr(value []string) string {
+    return strings.Join(value, "\n")
+}
 func StrBool(value string) bool {
     return value == "true"
 }

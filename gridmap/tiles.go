@@ -13,11 +13,15 @@ const (
     SpecialTileNone SpecialTileType = iota
     SpecialTileLethal
     SpecialTileBreakable
+    SpecialTileBreakableGold
+    SpecialTileBreakableGems
+    SpecialTileBreakableGlass
     SpecialTileTrap
     SpecialTileForest
     SpecialTileMountain
     SpecialTileWater
     SpecialTileSwamp
+    SpecialTileBed
 )
 
 type Tile struct {
@@ -26,6 +30,14 @@ type Tile struct {
     IsWalkable         bool            // this
     IsTransparent      bool            // this
     Special            SpecialTileType // and this
+}
+
+func (t Tile) IsBreakable() bool {
+    return t.Special == SpecialTileBreakable || t.Special == SpecialTileBreakableGold || t.Special == SpecialTileBreakableGems || t.Special == SpecialTileBreakableGlass
+}
+
+func (t Tile) IsBed() bool {
+    return t.Special == SpecialTileBed
 }
 
 func (t Tile) ToBinary(out io.Writer) {
@@ -92,6 +104,15 @@ func (t Tile) WithIsTransparent(value bool) Tile {
 func (t Tile) WithSpecial(special SpecialTileType) Tile {
     t.Special = special
     return t
+}
+
+func (t Tile) GetDebrisTile() int32 {
+    switch t.Special {
+    case SpecialTileBreakableGlass:
+        return 36
+    default:
+        return 32
+    }
 }
 
 type MapCell[ActorType interface {

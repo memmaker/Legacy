@@ -32,7 +32,7 @@ func (d *Door) Name() string {
 func (d *Door) ToRecordAndType() (recfile.Record, string) {
     return recfile.Record{
         {Name: "name", Value: d.name},
-        {Name: "icon", Value: recfile.Int32Str(d.icon)},
+        {Name: "unlitIcon", Value: recfile.Int32Str(d.icon)},
         {Name: "pos", Value: d.Pos().Encode()},
         {Name: "isHidden", Value: recfile.BoolStr(d.isHidden)},
         {Name: "key", Value: d.key},
@@ -53,7 +53,7 @@ func NewDoorFromRecord(record recfile.Record) *Door {
         switch field.Name {
         case "name":
             door.name = field.Value
-        case "icon":
+        case "unlitIcon":
             door.icon = field.AsInt32()
         case "pos":
             door.SetPos(geometry.MustDecodePoint(field.Value))
@@ -169,7 +169,7 @@ func (d *Door) GetContextActions(engine Engine) []renderer.MenuItem {
             Action: func() {
                 if !d.isBroken {
                     if d.listenText != nil && len(d.listenText) > 0 {
-                        engine.ShowColoredText(d.listenText, color.White, true)
+                        engine.ShowScrollableText(d.listenText, color.White, true)
                     } else {
                         engine.Print("You hear nothing.")
                     }

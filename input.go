@@ -22,14 +22,14 @@ func (g *GridEngine) handleInput() {
         if g.inputElement != nil {
             g.inputElement.ActionRight()
         } else if !windowsOpen {
-            g.playerMovement(geometry.Point{X: 1, Y: 0})
+            g.MoveAvatarInDirection(geometry.Point{X: 1, Y: 0})
         }
     }
     if inpututil.IsKeyJustPressed(ebiten.KeyArrowLeft) {
         if g.inputElement != nil {
             g.inputElement.ActionLeft()
         } else if !windowsOpen {
-            g.playerMovement(geometry.Point{X: -1, Y: 0})
+            g.MoveAvatarInDirection(geometry.Point{X: -1, Y: 0})
         }
     }
     if inpututil.IsKeyJustPressed(ebiten.KeyArrowUp) {
@@ -38,7 +38,7 @@ func (g *GridEngine) handleInput() {
         } else if g.modalElement != nil {
             g.modalElement.ActionUp()
         } else {
-            g.playerMovement(geometry.Point{X: 0, Y: -1})
+            g.MoveAvatarInDirection(geometry.Point{X: 0, Y: -1})
         }
     }
     if inpututil.IsKeyJustPressed(ebiten.KeyArrowDown) {
@@ -47,7 +47,7 @@ func (g *GridEngine) handleInput() {
         } else if g.modalElement != nil {
             g.modalElement.ActionDown()
         } else {
-            g.playerMovement(geometry.Point{X: 0, Y: 1})
+            g.MoveAvatarInDirection(geometry.Point{X: 0, Y: 1})
         }
     }
 
@@ -57,7 +57,7 @@ func (g *GridEngine) handleInput() {
         } else if g.modalElement != nil {
             g.modalElement.ActionConfirm()
         } else if transition, ok := g.currentMap.GetTransitionAt(g.avatar.Pos()); ok {
-            g.transition(transition)
+            g.transition(transition.TargetMap, transition.TargetLocation)
         } else {
             g.openContextMenu()
         }

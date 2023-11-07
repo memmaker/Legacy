@@ -8,11 +8,39 @@ import (
     "strconv"
 )
 
+type WeaponType string
+
+const (
+    WeaponTypeSword      WeaponType = "sword"
+    WeaponTypeGreatSword WeaponType = "great sword"
+    WeaponTypeSpear      WeaponType = "spear"
+    WeaponTypeStaff      WeaponType = "staff"
+    WeaponTypeDagger     WeaponType = "dagger"
+)
+
 type Weapon struct {
     BaseItem
     baseDamage  int
     wearer      ItemWearer
     isTwoHanded bool
+    weaponType  WeaponType
+    material    WeaponMaterial
+}
+
+func (a *Weapon) InventoryIcon() int32 {
+    switch a.weaponType {
+    case WeaponTypeGreatSword:
+        return 186
+    case WeaponTypeSword:
+        return 164
+    case WeaponTypeSpear:
+        return 166
+    case WeaponTypeStaff:
+        return 167
+    case WeaponTypeDagger:
+        return 187
+    }
+    return 164
 }
 
 func (a *Weapon) GetWearer() ItemWearer {
@@ -37,8 +65,8 @@ func (a *Weapon) GetContextActions(engine Engine) []renderer.MenuItem {
 }
 
 func (a *Weapon) CanStackWith(other Item) bool {
-    if otherArmor, ok := other.(*Armor); ok {
-        return a.name == otherArmor.name && a.baseDamage == otherArmor.protection && a.wearer == otherArmor.wearer
+    if otherWeapon, ok := other.(*Weapon); ok {
+        return a.name == otherWeapon.name && a.baseDamage == otherWeapon.baseDamage && a.wearer == otherWeapon.wearer
     } else {
         return false
     }
@@ -73,63 +101,67 @@ func (a *Weapon) GetDamage(actorBaseDamage int) int {
     return a.baseDamage + actorBaseDamage
 }
 
-func getRandomMaterial(lootLevel int) (string, int) {
+type WeaponMaterial string
+
+func getRandomMaterial(lootLevel int) WeaponMaterial {
     mod := rand.Intn(4) - 2
     weaponLevel := min(5, max(1, lootLevel+mod))
 
     switch weaponLevel {
     case 1:
-        return "wooden", 2
+        return "wooden"
     case 2:
-        return "iron", 5
+        return "iron"
     case 3:
-        return "bronze", 7
+        return "bronze"
     case 4:
-        return "steel", 12
+        return "steel"
     case 5:
-        return "diamond", 20
+        return "diamond"
     }
-    return "wooden", 1
+    return "wooden"
 }
-func getRandomWeaponType(lootLevel int) (string, int) {
+func getRandomWeaponType(lootLevel int) WeaponType {
     weaponLevel := rand.Intn(5) + 1
 
     switch weaponLevel {
     case 1:
-        return "dagger", 2
+        return WeaponTypeDagger
     case 2:
-        return "sword", 5
+        return WeaponTypeSword
     case 3:
-        return "spear", 7
+        return WeaponTypeStaff
     case 4:
-        return "hammer", 12
+        return WeaponTypeSpear
     case 5:
-        return "greatsword", 20
+        return WeaponTypeGreatSword
     }
-    return "dagger", 1
+    return WeaponTypeDagger
 }
-func NewWeapon(name string, damage int) *Weapon {
+func NewWeapon(weaponType WeaponType, material WeaponMaterial) *Weapon {
+    weaponName := fmt.Sprintf("%s %s", material, weaponType)
     return &Weapon{
+        weaponType: weaponType,
+        material:   material,
         BaseItem: BaseItem{
-            name: name,
+            name: weaponName,
         },
-        baseDamage: damage,
+        baseDamage: 1,
     }
 }
 
 func NewRandomWeapon(lootLevel int) *Weapon {
-    weaponType, baseDamage := getRandomWeaponType(lootLevel)
-    material, damageModifier := getRandomMaterial(lootLevel)
-    totalDamage := baseDamage + damageModifier
-    weaponName := fmt.Sprintf("%s %s", material, weaponType)
-    return NewWeapon(weaponName, totalDamage)
+    weaponType := getRandomWeaponType(lootLevel)
+    material := getRandomMaterial(lootLevel)
+
+    return NewWeapon(weaponType, material)
 }
 func (a *Weapon) Encode() string {
     return recfile.ToPredicate("weapon", a.name, strconv.Itoa(a.baseDamage))
 }
 func NewWeaponFromPredicate(encoded recfile.StringPredicate) *Weapon {
     return NewWeapon(
-        encoded.GetString(0),
-        encoded.GetInt(1),
+        WeaponType(encoded.GetString(0)),
+        WeaponMaterial(encoded.GetString(1)),
     )
 }

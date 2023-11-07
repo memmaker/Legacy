@@ -12,6 +12,10 @@ type FlavorItem struct {
     description []string
 }
 
+func (f *FlavorItem) InventoryIcon() int32 {
+    return 169
+}
+
 func (f *FlavorItem) Icon(u uint64) int32 {
     return int32(205)
 }
@@ -22,7 +26,7 @@ func (f *FlavorItem) GetContextActions(engine Engine) []renderer.MenuItem {
         actions = append(actions, renderer.MenuItem{
             Text: "Examine",
             Action: func() {
-                engine.ShowColoredText(f.description, color.White, true)
+                engine.ShowScrollableText(f.description, color.White, true)
             },
         })
     }

@@ -11,6 +11,7 @@ type MenuItem struct {
     Text      string
     Action    func()
     TextColor color.Color
+    CharIcon  int32
 }
 
 type GridMenu struct {
@@ -68,6 +69,9 @@ func (g *GridMenu) OnMouseClicked(x int, y int) bool {
 }
 
 func (g *GridMenu) ActionConfirm() {
+    if g.menuItems == nil || len(g.menuItems) == 0 {
+        return
+    }
     action := g.menuItems[g.currentSelection].Action
     g.lastAction = action
     action()
@@ -142,7 +146,12 @@ func (g *GridMenu) Draw(screen *ebiten.Image) {
         } else if item.TextColor != nil {
             textColor = item.TextColor
         }
-        g.gridRenderer.DrawColoredString(screen, g.topLeft.X+1, g.topLeft.Y+1+i, item.Text, textColor)
+        if item.CharIcon > 0 {
+            g.gridRenderer.DrawOnSmallGrid(screen, g.topLeft.X+1, g.topLeft.Y+1+i, item.CharIcon)
+            g.gridRenderer.DrawColoredString(screen, g.topLeft.X+2, g.topLeft.Y+1+i, item.Text, textColor)
+        } else {
+            g.gridRenderer.DrawColoredString(screen, g.topLeft.X+1, g.topLeft.Y+1+i, item.Text, textColor)
+        }
     }
 }
 
@@ -153,10 +162,17 @@ func (g *GridMenu) SetTitle(title string) {
 
 func maxLenOfItems(items []MenuItem) int {
     maxLength := 0
+    hasIcons := false
     for _, item := range items {
+        if item.CharIcon > 0 {
+            hasIcons = true
+        }
         if len(item.Text) > maxLength {
             maxLength = len(item.Text)
         }
+    }
+    if hasIcons {
+        maxLength += 1
     }
     return maxLength
 }
