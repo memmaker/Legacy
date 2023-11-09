@@ -12,16 +12,94 @@ import (
     "strconv"
 )
 
-type EquipmentSlot string
+type ItemSlot string
 
 const (
-    ArmorSlotHead     EquipmentSlot = "head"
-    ArmorSlotTorso    EquipmentSlot = "torso"
-    ItemSlotLeftHand  EquipmentSlot = "left hand"
-    ItemSlotRightHand EquipmentSlot = "right hand"
-    ItemSlotScroll    EquipmentSlot = "scroll"
+    ItemSlotRightHand ItemSlot = "right hand"
+    ItemSlotLeftHand  ItemSlot = "left hand"
+    ItemSlotRanged    ItemSlot = "ranged"
+    ItemSlotScroll    ItemSlot = "scroll"
 )
 
+type ArmorSlot string
+
+func (s ArmorSlot) IsEqualTo(other ArmorSlot) bool {
+    // three cases
+    // 1 exact match
+    // both are rings
+    // both are amulets
+
+    if s == other {
+        return true
+    }
+    if s.IsRing() && other.IsRing() {
+        return true
+    }
+    if s.IsAmulet() && other.IsAmulet() {
+        return true
+    }
+    return false
+}
+
+func (s ArmorSlot) IsRing() bool {
+    return s == AccessorySlotRingLeft || s == AccessorySlotRingRight
+}
+
+func (s ArmorSlot) IsAmulet() bool {
+    return s == AccessorySlotAmuletOne || s == AccessorySlotAmuletTwo
+}
+
+func (s ArmorSlot) BaseValue() int {
+    switch s {
+    case ArmorSlotHelmet:
+        return 700
+    case ArmorSlotBreastPlate:
+        return 800
+    case ArmorSlotShoes:
+        return 500
+    case AccessorySlotRobe:
+        return 400
+    case AccessorySlotRingLeft:
+        fallthrough
+    case AccessorySlotRingRight:
+        return 300
+    case AccessorySlotAmuletOne:
+        fallthrough
+    case AccessorySlotAmuletTwo:
+        return 300
+    }
+    return 200
+}
+
+const (
+    ArmorSlotHelmet      ArmorSlot = "helmet"
+    ArmorSlotBreastPlate ArmorSlot = "breast plate"
+    ArmorSlotShoes       ArmorSlot = "shoes"
+
+    AccessorySlotRobe      ArmorSlot = "robe"
+    AccessorySlotRingLeft  ArmorSlot = "ring left"
+    AccessorySlotRingRight ArmorSlot = "ring right"
+    AccessorySlotAmuletOne ArmorSlot = "amulet one"
+    AccessorySlotAmuletTwo ArmorSlot = "amulet two"
+)
+
+type Equippable interface {
+    Item
+    GetWearer() ItemWearer
+    SetWearer(wearer ItemWearer)
+    Unequip()
+    IsEquipped() bool
+}
+type Wearable interface {
+    Equippable
+    GetSlot() ArmorSlot
+    IsBetterThan(other Wearable) bool
+}
+
+type Handheld interface {
+    Equippable
+    IsBetterThan(other Handheld) bool
+}
 type Actor struct {
     GameObject
     icon           int32
@@ -31,11 +109,19 @@ type Actor struct {
     dialogue       *Dialogue
     description    string
 
-    equippedLeftHand  Wearable
-    equippedRightHand Wearable
-    equippedArmor     *Armor
-    equippedHelmet    *Armor
-    equippedScrolls   []*Scroll
+    // weapon slots
+    equippedLeftHand  Handheld
+    equippedRightHand Handheld
+    equippedRanged    *Weapon
+
+    // direct armor slots
+    equippedArmor map[ArmorSlot]*Armor
+
+    // accessory slots
+    equippedAccessories map[ArmorSlot]*Armor
+
+    // magic slots
+    equippedScrolls []*Scroll
 
     internalName string
     isHuman      bool
@@ -60,18 +146,20 @@ type Actor struct {
 
 func NewActor(name string, icon int32) *Actor {
     return &Actor{
-        name:            name,
-        icon:            icon,
-        iconFrameCount:  1,
-        health:          23,
-        maxHealth:       23,
-        isHuman:         true,
-        inventory:       []Item{},
-        skillset:        NewSkillSet(),
-        level:           1,
-        baseMeleeDamage: 5,
-        buffs:           make(map[BuffType][]Buff),
-        color:           color.White,
+        name:                name,
+        icon:                icon,
+        iconFrameCount:      1,
+        health:              23,
+        maxHealth:           23,
+        isHuman:             true,
+        inventory:           []Item{},
+        skillset:            NewSkillSet(),
+        level:               1,
+        baseMeleeDamage:     5,
+        buffs:               make(map[BuffType][]Buff),
+        color:               color.White,
+        equippedArmor:       make(map[ArmorSlot]*Armor),
+        equippedAccessories: make(map[ArmorSlot]*Armor),
     }
 }
 
@@ -86,17 +174,19 @@ func NewActorFromFile(file io.ReadCloser, icon int32, toPages func(height int, i
     description := coreRecord["Description"]
 
     newActor := &Actor{
-        name:            coreRecord["Name"],
-        icon:            icon,
-        health:          health,
-        maxHealth:       health,
-        description:     description,
-        dialogue:        conversation,
-        isHuman:         true,
-        skillset:        NewSkillSet(),
-        level:           1,
-        baseMeleeDamage: 5,
-        buffs:           make(map[BuffType][]Buff),
+        name:                coreRecord["Name"],
+        icon:                icon,
+        health:              health,
+        maxHealth:           health,
+        description:         description,
+        dialogue:            conversation,
+        isHuman:             true,
+        skillset:            NewSkillSet(),
+        level:               1,
+        baseMeleeDamage:     5,
+        buffs:               make(map[BuffType][]Buff),
+        equippedArmor:       make(map[ArmorSlot]*Armor),
+        equippedAccessories: make(map[ArmorSlot]*Armor),
     }
 
     if recordsForInventory, hasInventory := actorData["Inventory"]; hasInventory && len(recordsForInventory) > 0 {
@@ -108,8 +198,10 @@ func NewActorFromFile(file io.ReadCloser, icon int32, toPages func(height int, i
 
 func NewActorFromRecord(record recfile.Record) *Actor {
     a := &Actor{
-        buffs:    make(map[BuffType][]Buff),
-        skillset: NewSkillSet(), // TODO
+        buffs:               make(map[BuffType][]Buff),
+        skillset:            NewSkillSet(), // TODO
+        equippedArmor:       make(map[ArmorSlot]*Armor),
+        equippedAccessories: make(map[ArmorSlot]*Armor),
         //dialogue:        NewDialogueFromRecords(actorData["Conversation"]),
     }
     for _, field := range record {
@@ -189,23 +281,26 @@ func (a *Actor) Unequip(item Item) {
     case *Weapon:
         weapon := item.(*Weapon)
         weapon.SetWearer(nil)
+
         if a.equippedLeftHand == weapon {
             a.equippedLeftHand = nil
         }
         if a.equippedRightHand == weapon {
             a.equippedRightHand = nil
         }
+        if a.equippedRanged == weapon {
+            a.equippedRanged = nil
+        }
     case *Armor:
         armor := item.(*Armor)
         armor.SetWearer(nil)
-        switch armor.slot {
-        case ArmorSlotHead:
-            if a.equippedHelmet == armor {
-                a.equippedHelmet = nil
+        if equippedInSlot, isArmor := a.equippedArmor[armor.slot]; isArmor {
+            if equippedInSlot == armor {
+                delete(a.equippedArmor, armor.slot)
             }
-        case ArmorSlotTorso:
-            if a.equippedArmor == armor {
-                a.equippedArmor = nil
+        } else if equippedInAccessorySlot, isAccessory := a.equippedAccessories[armor.slot]; isAccessory {
+            if equippedInAccessorySlot == armor {
+                delete(a.equippedAccessories, armor.slot)
             }
         }
     case *Scroll:
@@ -218,6 +313,8 @@ func (a *Actor) Unequip(item Item) {
             }
         }
     }
+
+    a.party.onItemEquipStatusChanged([]Item{item})
 }
 
 func (a *Actor) SetParty(party *Party) {
@@ -276,23 +373,6 @@ func (a *Actor) Name() string {
 }
 
 func (a *Actor) GetDetails(engine Engine) []string {
-
-    leftHand := "nothing"
-    if a.equippedLeftHand != nil {
-        leftHand = a.equippedLeftHand.Name()
-    }
-    rightHand := "nothing"
-    if a.equippedRightHand != nil {
-        rightHand = a.equippedRightHand.Name()
-    }
-    armor := "nothing"
-    if a.equippedArmor != nil {
-        armor = fmt.Sprintf("%s (%d)", a.equippedArmor.Name(), a.equippedArmor.protection)
-    }
-    helmet := "nothing"
-    if a.equippedHelmet != nil {
-        helmet = fmt.Sprintf("%s (%d)", a.equippedHelmet.Name(), a.equippedHelmet.protection)
-    }
     _, xpNeeded := engine.CanLevelUp(a)
     tableData := []util.TableRow{
         {Label: "Level", Columns: []string{strconv.Itoa(a.level)}},
@@ -302,10 +382,6 @@ func (a *Actor) GetDetails(engine Engine) []string {
         {Label: "Mana", Columns: []string{fmt.Sprintf("%d", a.mana)}},
         {Label: "Armor", Columns: []string{fmt.Sprintf("%d", a.GetTotalArmor())}},
         {Label: "Melee Dmg.", Columns: []string{fmt.Sprintf("%d", a.GetMeleeDamage())}},
-        {Label: "Left Hand", Columns: []string{leftHand}},
-        {Label: "Right Hand", Columns: []string{rightHand}},
-        {Label: "Armor", Columns: []string{armor}},
-        {Label: "Helmet", Columns: []string{helmet}},
     }
     return util.TableLayout(tableData)
 }
@@ -314,13 +390,14 @@ func (a *Actor) LookDescription() []string {
     healthString := "healthy"
     description := renderer.AutoLayout(a.description, 32)
     // wearables
-    if a.equippedArmor != nil || a.equippedHelmet != nil {
+    if len(a.equippedArmor) > 0 {
         description = append(description, "", "The person is wearing:")
-        if a.equippedArmor != nil {
-            description = append(description, fmt.Sprintf("  %s", a.equippedArmor.Name()))
+
+        if helmet, exists := a.GetHelmet(); exists {
+            description = append(description, fmt.Sprintf("  %s", helmet.Name()))
         }
-        if a.equippedHelmet != nil {
-            description = append(description, fmt.Sprintf("  %s", a.equippedHelmet.Name()))
+        if breastPlate, exists := a.GetArmorBreastPlate(); exists {
+            description = append(description, fmt.Sprintf("  %s", breastPlate.Name()))
         }
     }
 
@@ -492,7 +569,7 @@ func (a *Actor) Equip(item Item) {
     switch item.(type) {
     case *Armor:
         armor := item.(*Armor)
-        a.EquipArmor(armor)
+        a.EquipArmor(armor, armor.GetSlot())
     case *Scroll:
         scroll := item.(*Scroll)
         a.EquipScroll(scroll)
@@ -502,53 +579,72 @@ func (a *Actor) Equip(item Item) {
     }
 }
 
-func (a *Actor) EquipArmor(armor *Armor) {
-    if !a.CanEquip(armor) {
+func (a *Actor) EquipArmor(armor *Armor, slot ArmorSlot) {
+    if !a.CanEquip(armor) || armor == nil {
         return
     }
     armor.Unequip()
-    switch armor.slot {
-    case ArmorSlotHead:
-        if a.equippedHelmet != nil {
-            a.equippedHelmet.Unequip()
+    changedItems := []Item{armor}
+
+    if armor.IsAccessory() {
+        chosenSlot := slot
+        equippedInSlot, ok := a.equippedAccessories[chosenSlot]
+        if ok && equippedInSlot != nil {
+            equippedInSlot.Unequip()
+            changedItems = append(changedItems, equippedInSlot)
         }
-        a.equippedHelmet = armor
+        a.equippedAccessories[chosenSlot] = armor
         armor.SetWearer(a)
-    case ArmorSlotTorso:
-        if a.equippedArmor != nil {
-            a.equippedArmor.Unequip()
-        }
-        a.equippedArmor = armor
-        armor.SetWearer(a)
+        armor.SetSlotUsed(chosenSlot)
+        a.party.onItemEquipStatusChanged(changedItems)
+        return
     }
+    equippedInSlot, ok := a.equippedArmor[armor.slot]
+    if ok && equippedInSlot != nil {
+        equippedInSlot.Unequip()
+        changedItems = append(changedItems, equippedInSlot)
+    }
+    a.equippedArmor[armor.slot] = armor
+    armor.SetWearer(a)
+
+    a.party.onItemEquipStatusChanged(changedItems)
 }
 func (a *Actor) EquipScroll(scroll *Scroll) {
-    if !a.CanEquip(scroll) {
+    if !a.CanEquip(scroll) || scroll == nil {
         return
     }
     scroll.Unequip()
 
     a.equippedScrolls = append(a.equippedScrolls, scroll)
     scroll.SetWearer(a)
+    a.party.onItemEquipStatusChanged([]Item{scroll})
 }
 func (a *Actor) EquipWeapon(weapon *Weapon) {
-    if !a.CanEquip(weapon) {
+    if !a.CanEquip(weapon) || weapon == nil {
         return
     }
     weapon.Unequip()
-
-    if weapon.IsTwoHanded() {
-        if a.equippedLeftHand != nil {
-            a.equippedLeftHand.Unequip()
+    var oldWeapon *Weapon
+    if weapon.IsRanged() {
+        if a.equippedRanged != nil {
+            a.equippedRanged.Unequip()
+            oldWeapon = a.equippedRanged
         }
-        a.equippedLeftHand = weapon
+        a.equippedRanged = weapon
+    } else {
+        if a.equippedRightHand != nil {
+            oldWeapon = a.equippedRightHand.(*Weapon)
+            a.equippedRightHand.Unequip()
+        }
+        a.equippedRightHand = weapon
+    }
+    weapon.SetWearer(a)
+    if oldWeapon != nil {
+        a.party.onItemEquipStatusChanged([]Item{oldWeapon, weapon})
+    } else {
+        a.party.onItemEquipStatusChanged([]Item{weapon})
     }
 
-    if a.equippedRightHand != nil {
-        a.equippedRightHand.Unequip()
-    }
-    a.equippedRightHand = weapon
-    weapon.SetWearer(a)
 }
 
 func (a *Actor) HasDialogue() bool {
@@ -624,11 +720,8 @@ func (a *Actor) AddGold(amount int) {
 
 func (a *Actor) GetTotalArmor() int {
     armorSum := 0
-    if a.equippedArmor != nil {
-        armorSum += a.equippedArmor.protection
-    }
-    if a.equippedHelmet != nil {
-        armorSum += a.equippedHelmet.protection
+    for _, armor := range a.equippedArmor {
+        armorSum += armor.GetProtection()
     }
     buffs := a.GetDefenseBuffBonus()
     return a.baseArmor + armorSum + buffs
@@ -676,53 +769,72 @@ func (a *Actor) SetMana(mana int) {
 }
 
 func (a *Actor) StripGear() {
-    if a.equippedArmor != nil {
-        a.equippedArmor.Unequip()
+    for _, item := range a.equippedArmor {
+        item.Unequip()
     }
-    if a.equippedHelmet != nil {
-        a.equippedHelmet.Unequip()
+    for _, item := range a.equippedAccessories {
+        item.Unequip()
     }
+
 }
 
 func (a *Actor) AutoEquip(engine Engine) {
-    var bestArmor *Armor
-    var bestHelmet *Armor
-    var bestWeapon *Weapon
+    bestHandheld := map[ItemSlot]Handheld{
+        ItemSlotRightHand: nil,
+        ItemSlotRanged:    nil,
+    }
+    bestArmor := map[ArmorSlot]*Armor{
+        ArmorSlotBreastPlate: nil,
+        ArmorSlotHelmet:      nil,
+        ArmorSlotShoes:       nil,
 
+        AccessorySlotRobe:      nil,
+        AccessorySlotRingLeft:  nil,
+        AccessorySlotRingRight: nil,
+        AccessorySlotAmuletOne: nil,
+        AccessorySlotAmuletTwo: nil,
+    }
     allEquipment := engine.GetPartyEquipment()
+
     for _, item := range allEquipment {
-        if a.CanEquip(item) {
-            if armorPiece, ok := item.(*Armor); ok {
-                if armorPiece.IsEquipped() {
-                    continue
+        wearable, isWearable := item.(*Armor)
+        if isWearable && a.CanEquip(item) && !wearable.IsEquipped() {
+            currentBest, hasSlot := bestArmor[wearable.GetSlot()]
+            if !hasSlot {
+                continue
+            }
+            if wearable.IsBetterThan(currentBest) {
+                bestArmor[wearable.GetSlot()] = wearable
+            }
+
+            continue
+        }
+
+        handheld, isHandheld := item.(Handheld)
+        if isHandheld && a.CanEquip(item) && !handheld.IsEquipped() {
+            if weapon, isWeapon := item.(*Weapon); isWeapon {
+                slot := ItemSlotRightHand
+                if weapon.IsRanged() {
+                    slot = ItemSlotRanged
                 }
-                if armorPiece.GetSlot() == ArmorSlotHead {
-                    if armorPiece.IsBetterThan(bestHelmet) {
-                        bestHelmet = armorPiece
-                    }
-                } else if armorPiece.GetSlot() == ArmorSlotTorso {
-                    if armorPiece.IsBetterThan(bestArmor) {
-                        bestArmor = armorPiece
-                    }
+                currentBest := bestHandheld[slot]
+                if currentBest == nil || weapon.IsBetterThan(currentBest.(*Weapon)) {
+                    bestHandheld[slot] = weapon
                 }
-            } else if weapon, ok := item.(*Weapon); ok {
-                if weapon.IsEquipped() {
-                    continue
-                }
-                if weapon.IsBetterThan(bestWeapon) {
-                    bestWeapon = weapon
-                }
+
             }
         }
+
     }
-    if bestArmor != nil {
-        a.Equip(bestArmor)
+    for _, item := range bestArmor {
+        if item != nil {
+            engine.EquipItem(a, item)
+        }
     }
-    if bestHelmet != nil {
-        a.Equip(bestHelmet)
-    }
-    if bestWeapon != nil {
-        a.Equip(bestWeapon)
+    for _, item := range bestHandheld {
+        if item != nil {
+            engine.EquipItem(a, item)
+        }
     }
 }
 
@@ -737,21 +849,6 @@ func (a *Actor) vendorPrice(item Item) int {
 func (a *Actor) GetSkills() *SkillSet {
     return &a.skillset
 }
-
-func (a *Actor) GetSlotForItem(item Wearable) EquipmentSlot {
-    switch {
-    case a.equippedLeftHand == item:
-        return ItemSlotLeftHand
-    case a.equippedRightHand == item:
-        return ItemSlotRightHand
-    case a.equippedArmor == item:
-        return ArmorSlotTorso
-    case a.equippedHelmet == item:
-        return ArmorSlotHead
-    }
-    return ""
-}
-
 func (a *Actor) GetHealth() int {
     return a.health
 }
@@ -946,4 +1043,72 @@ func (a *Actor) GetEquippedSpells() []*Spell {
     }
     return spells
 
+}
+
+func (a *Actor) GetRightHandItem() (Handheld, bool) {
+    return a.equippedRightHand, a.equippedRightHand != nil
+}
+
+func (a *Actor) GetLeftHandItem() (Handheld, bool) {
+    return a.equippedLeftHand, a.equippedLeftHand != nil
+}
+
+func (a *Actor) GetRangedItem() (*Weapon, bool) {
+    return a.equippedRanged, a.equippedRanged != nil
+}
+
+func (a *Actor) GetHelmet() (*Armor, bool) {
+    armor, ok := a.equippedArmor[ArmorSlotHelmet]
+    return armor, ok
+}
+
+func (a *Actor) GetArmorBreastPlate() (*Armor, bool) {
+    breastPlate, ok := a.equippedArmor[ArmorSlotBreastPlate]
+    return breastPlate, ok
+}
+
+func (a *Actor) GetShoes() (*Armor, bool) {
+    shoes, ok := a.equippedArmor[ArmorSlotShoes]
+    return shoes, ok
+}
+
+func (a *Actor) GetRobe() (*Armor, bool) {
+    robe, ok := a.equippedAccessories[AccessorySlotRobe]
+    return robe, ok
+}
+
+func (a *Actor) GetRingLeft() (*Armor, bool) {
+    ring, ok := a.equippedAccessories[AccessorySlotRingLeft]
+    return ring, ok
+}
+
+func (a *Actor) GetRingRight() (*Armor, bool) {
+    ring, ok := a.equippedAccessories[AccessorySlotRingRight]
+    return ring, ok
+}
+
+func (a *Actor) GetAmuletOne() (*Armor, bool) {
+    amulet, ok := a.equippedAccessories[AccessorySlotAmuletOne]
+    return amulet, ok
+}
+
+func (a *Actor) GetAmuletTwo() (*Armor, bool) {
+    amulet, ok := a.equippedAccessories[AccessorySlotAmuletTwo]
+    return amulet, ok
+}
+
+func (a *Actor) chooseAccessorySlot(armor *Armor) ArmorSlot {
+    if armor.GetSlot().IsRing() {
+        if equipped, ok := a.equippedAccessories[AccessorySlotRingLeft]; !ok || equipped == nil {
+            return AccessorySlotRingLeft
+        }
+        return AccessorySlotRingRight
+    }
+    if armor.GetSlot().IsAmulet() {
+        if equipped, ok := a.equippedAccessories[AccessorySlotAmuletOne]; !ok || equipped == nil {
+            return AccessorySlotAmuletOne
+        }
+        return AccessorySlotAmuletTwo
+    }
+    return armor.GetSlot()
 }

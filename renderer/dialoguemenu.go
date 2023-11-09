@@ -20,6 +20,10 @@ type GridDialogueMenu struct {
     title       string
 }
 
+func (g *GridDialogueMenu) OnAvatarSwitched() {
+
+}
+
 func (g *GridDialogueMenu) ActionLeft() {
     g.ActionUp()
 }
@@ -88,19 +92,20 @@ func (g *GridDialogueMenu) OnMouseClicked(x, y int) bool {
     return false
 }
 
-func (g *GridDialogueMenu) OnMouseMoved(x, y int) {
+func (g *GridDialogueMenu) OnMouseMoved(x, y int) Tooltip {
     relativeLine := y - g.topLeft.Y - 2
     if relativeLine < 0 || relativeLine >= len(g.hotspotLayout) {
-        return
+        return NoTooltip{}
     }
     line := g.hotspotLayout[relativeLine]
 
     for _, hotspot := range line {
         if x >= hotspot.StartX && x < hotspot.EndX {
             g.currentSelection = hotspot.ItemIndex
-            return
+            return NoTooltip{}
         }
     }
+    return NoTooltip{}
 }
 
 func (g *GridDialogueMenu) ActionConfirm() {

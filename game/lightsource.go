@@ -17,6 +17,14 @@ type LightSource struct {
     unlitAttachedIcon int32
 }
 
+func (b *LightSource) GetTooltipLines() []string {
+    if b.isLit {
+        return []string{fmt.Sprintf("A lit %s", b.name)}
+    } else {
+        return []string{fmt.Sprintf("A %s", b.name)}
+    }
+}
+
 func (b *LightSource) InventoryIcon() int32 {
     return 174
 }

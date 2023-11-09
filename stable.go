@@ -60,7 +60,9 @@ func (g *GridEngine) Update() error {
     } else if g.gameOverConditionReached() {
         g.setGameOver()
     }
-
+    if g.ticksUntilTooltipAppears > 0 {
+        g.ticksUntilTooltipAppears--
+    }
     if g.ticksForPrint > 0 {
         g.ticksForPrint--
     }
@@ -110,7 +112,7 @@ func (g *GridEngine) Draw(screen *ebiten.Image) {
                 lastAction := gridMenu.GetLastAction()
                 g.lastSelectedAction = lastAction
             }
-            g.inputElement = nil
+            g.closeInputElement()
             g.updateContextActions()
         } else {
             g.inputElement.Draw(screen)
@@ -130,6 +132,19 @@ func (g *GridEngine) Draw(screen *ebiten.Image) {
     } else {
         g.drawPeaceTimeStatusBar(screen)
     }
+    if g.currentTooltip != nil && g.ticksUntilTooltipAppears == 0 {
+        g.currentTooltip.Draw(screen)
+    }
+}
+
+func (g *GridEngine) closeInputElement() {
+    g.inputElement = nil
+    g.currentTooltip = nil
+}
+
+func (g *GridEngine) switchInputElement(nextWidget UIWidget) {
+    g.inputElement = nextWidget
+    g.currentTooltip = nil
 }
 
 func (g *GridEngine) drawPeaceTimeStatusBar(screen *ebiten.Image) {
@@ -154,8 +169,21 @@ func (g *GridEngine) drawWarTimeStatusBar(screen *ebiten.Image) {
        }
     */
 }
-
-func (g *GridEngine) transition(targetMap, targetLocation string) {
+func (g *GridEngine) transitionToNamedLocation(targetMap, targetLocation string) {
+    g.ensureMapInMemory(targetMap)
+    nextMap := g.mapsInMemory[targetMap]
+    location := nextMap.GetNamedLocation(targetLocation)
+    g.transitionToLocation(targetMap, location)
+}
+func (g *GridEngine) ensureMapInMemory(targetMap string) {
+    // check if the next map is already loaded
+    if nextMap, isInMemory := g.mapsInMemory[targetMap]; !isInMemory {
+        // if not, load it from ldtk
+        nextMap = g.loadMap(targetMap)
+        g.mapsInMemory[targetMap] = nextMap
+    }
+}
+func (g *GridEngine) transitionToLocation(targetMap string, destPos geometry.Point) {
     currentMapName := g.currentMap.GetName()
     nextMapName := targetMap
 
@@ -165,20 +193,15 @@ func (g *GridEngine) transition(targetMap, targetLocation string) {
     // save it
     g.mapsInMemory[currentMapName] = g.currentMap
 
-    var nextMap *gridmap.GridMap[*game.Actor, game.Item, game.Object]
-    var isInMemory bool
-    // check if the next map is already loaded
-    if nextMap, isInMemory = g.mapsInMemory[nextMapName]; !isInMemory {
-        // if not, load it from ldtk
-        nextMap = g.loadMap(targetMap)
-    } else {
-        g.initMapWindow(nextMap.MapWidth, nextMap.MapHeight)
-    }
+    g.ensureMapInMemory(nextMapName)
+
+    nextMap := g.mapsInMemory[nextMapName]
+
+    g.initMapWindow(nextMap.MapWidth, nextMap.MapHeight)
 
     // set the new map
     g.currentMap = nextMap
 
-    destPos := g.currentMap.GetNamedLocation(targetLocation)
     // add the party to the new map
     g.PlaceParty(destPos)
 }

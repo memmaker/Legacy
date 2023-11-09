@@ -3,3 +3,4 @@
 *.prof
 Legacy
 asset-source/
+persist/

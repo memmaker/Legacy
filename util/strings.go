@@ -43,7 +43,7 @@ func TableLayout(tableData []TableRow) []string {
 
     var result []string
     for _, row := range tableData {
-        result = append(result, fmt.Sprintf("%s%s", rightPad(row.Label, maxLabelLen+1), rightAlignColumns(row.Columns, maxColLen)))
+        result = append(result, fmt.Sprintf("%s%s", rightPad(row.Label, maxLabelLen+1), rightAlignColumns(row.Columns, maxColLen+1)))
     }
     return result
 }

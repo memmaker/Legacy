@@ -35,11 +35,15 @@ func (g *GridEngine) drawUpperStatusBar(screen *ebiten.Image) {
     foodIcon := int32(131)
     goldIcon := int32(132)
     lockpickIcon := int32(133)
+    bagIcon := int32(169)
 
     yPos := screenSize.Y - 2
     xPosFood := 2
     xPosLockpick := xPosFood + len(foodString) + 2
-    xPosGold := screenSize.X - 2 - len(goldString)
+    xPosGold := screenSize.X - 4 - len(goldString)
+    xPosBag := screenSize.X - 2
+
+    g.gridRenderer.DrawOnSmallGrid(screen, xPosBag, yPos, bagIcon)
 
     if foodCount > 0 {
         g.gridRenderer.DrawOnSmallGrid(screen, xPosFood-1, yPos, foodIcon)

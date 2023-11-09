@@ -25,6 +25,10 @@ type ScrollableTextWindow struct {
     upDownIndicator            int32
 }
 
+func (r *ScrollableTextWindow) OnAvatarSwitched() {
+
+}
+
 func (r *ScrollableTextWindow) OnMouseClicked(x int, y int) bool {
     if x < r.topLeft.X || x >= r.bottomRight.X {
         return false

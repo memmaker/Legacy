@@ -238,7 +238,7 @@ func (c *CombatState) handleInput() {
         } else if inpututil.IsKeyJustPressed(ebiten.KeyEnter) {
             c.engine.inputElement.ActionConfirm()
         } else if inpututil.IsKeyJustPressed(ebiten.KeyEscape) {
-            c.engine.inputElement = nil
+            c.engine.closeInputElement()
         }
         return
     }
@@ -302,13 +302,13 @@ func (c *CombatState) openCombatMenu(partyMember *game.Actor) {
             Text: "Ranged",
             Action: func() {
                 c.selectRangedTarget(partyMember)
-                c.engine.inputElement = nil
+                c.engine.closeInputElement()
             },
         },
         {
             Text: "Magic",
             Action: func() {
-                c.engine.inputElement = nil
+                c.engine.closeInputElement()
                 c.engine.openCombatSpellMenu(partyMember)
             },
         },
@@ -316,18 +316,18 @@ func (c *CombatState) openCombatMenu(partyMember *game.Actor) {
             Text: "Auto-Attack",
             Action: func() {
                 c.partyAutoAttacks = true
-                c.engine.inputElement = nil
+                c.engine.closeInputElement()
             },
         },
         {
             Text: "End turn",
             Action: func() {
                 c.hasUsedPrimaryAction[partyMember] = true
-                c.engine.inputElement = nil
+                c.engine.closeInputElement()
             },
         },
     }
-    c.engine.openMenu(combatOptions)
+    c.engine.OpenMenu(combatOptions)
 }
 func (c *CombatState) endPlayerTurn() {
     c.isPlayerTurn = false

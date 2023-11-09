@@ -15,6 +15,22 @@ type Scroll struct {
     wearer   ItemWearer
 }
 
+func (b *Scroll) GetTooltipLines() []string {
+    if b.spell != nil {
+        return []string{fmt.Sprintf("Scroll of %s", b.spell.name)}
+    } else {
+        return []string{fmt.Sprintf("Scroll of %s", b.name)}
+    }
+}
+
+func (b *Scroll) GetSlot() ItemSlot {
+    return ItemSlotScroll
+}
+
+func (b *Scroll) IsBetterThan(other Wearable) bool {
+    return false
+}
+
 func (b *Scroll) InventoryIcon() int32 {
     return 175
 }

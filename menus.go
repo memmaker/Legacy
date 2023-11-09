@@ -18,10 +18,10 @@ func (g *GridEngine) openContextMenu() {
         g.contextActions[0].Action()
         return
     }
-    g.openMenu(g.contextActions)
+    g.OpenMenu(g.contextActions)
 }
 
-func (g *GridEngine) openMenu(items []renderer.MenuItem) {
+func (g *GridEngine) OpenMenu(items []renderer.MenuItem) {
     g.openMenuWithTitle("", items)
 }
 func (g *GridEngine) openMenuWithTitle(title string, items []renderer.MenuItem) {
@@ -33,7 +33,7 @@ func (g *GridEngine) openMenuWithTitle(title string, items []renderer.MenuItem) 
     if title != "" {
         gridMenu.SetTitle(title)
     }
-    g.inputElement = gridMenu
+    g.switchInputElement(gridMenu)
     g.inputElement.OnMouseMoved(g.lastMousePosX, g.lastMousePosY)
 }
 
@@ -65,7 +65,7 @@ func (g *GridEngine) openSpellMenu() {
         g.ShowText([]string{"You don't have enough mana to cast any spells."})
         return
     }
-    g.openMenu(menuItems)
+    g.OpenMenu(menuItems)
 }
 
 func (g *GridEngine) openCombatSpellMenu(member *game.Actor) {
@@ -96,7 +96,7 @@ func (g *GridEngine) openCombatSpellMenu(member *game.Actor) {
         g.ShowText([]string{"You don't have enough mana to cast any spells."})
         return
     }
-    g.openMenu(menuItems)
+    g.OpenMenu(menuItems)
 }
 
 func (g *GridEngine) ShowDrinkPotionMenu(potion *game.Potion) {
@@ -113,7 +113,7 @@ func (g *GridEngine) ShowDrinkPotionMenu(potion *game.Potion) {
             },
         })
     }
-    g.openMenu(menuItems)
+    g.OpenMenu(menuItems)
 }
 
 func (g *GridEngine) OpenPickpocketMenu(victim *game.Actor) {
@@ -130,10 +130,10 @@ func (g *GridEngine) OpenPickpocketMenu(victim *game.Actor) {
             },
         })
     }
-    g.openMenu(itemList)
+    g.OpenMenu(itemList)
 }
 
-func (g *GridEngine) ShowEquipMenu(a game.Wearable) {
+func (g *GridEngine) ShowEquipMenu(a game.Equippable) {
     if g.IsPlayerControlled(a.GetHolder()) {
         if len(g.GetPartyMembers()) == 1 {
             g.EquipItem(g.GetAvatar(), a)
@@ -151,12 +151,12 @@ func (g *GridEngine) ShowEquipMenu(a game.Wearable) {
                 })
             }
         }
-        g.openMenu(equipMenuItems)
+        g.OpenMenu(equipMenuItems)
     }
 }
 
 func (g *GridEngine) openDebugMenu() {
-    g.openMenu([]renderer.MenuItem{
+    g.OpenMenu([]renderer.MenuItem{
         {
             Text: "Toggle NoClip",
             Action: func() {
@@ -300,16 +300,13 @@ type Modal interface {
     ActionConfirm()
     ShouldClose() bool
     OnMouseClicked(x int, y int) bool
+    OnAvatarSwitched()
 }
 
 type UIWidget interface {
-    Draw(screen *ebiten.Image)
-    ActionUp()
-    ActionDown()
+    Modal
     ActionLeft()
     ActionRight()
-    ActionConfirm()
     OnMouseClicked(x int, y int) bool
-    OnMouseMoved(x int, y int)
-    ShouldClose() bool
+    OnMouseMoved(x int, y int) renderer.Tooltip
 }

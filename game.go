@@ -4,10 +4,12 @@ import (
     "Legacy/game"
     "Legacy/geometry"
     "Legacy/renderer"
+    "Legacy/ui"
     "Legacy/util"
     "fmt"
     "image/color"
     "math/rand"
+    "sort"
     "strconv"
 )
 
@@ -19,7 +21,7 @@ func (g *GridEngine) openPartyMenu() {
         },
         {
             Text:   "Inventory",
-            Action: g.openPartyInventory,
+            Action: g.openExtendedInventory,
         },
         {
             Text: "Ranged",
@@ -56,7 +58,7 @@ func (g *GridEngine) openPartyMenu() {
         partyOptions = append(partyOptions, renderer.MenuItem{
             Text: "Split",
             Action: func() {
-                g.openMenu(g.playerParty.GetSplitActions(g))
+                g.OpenMenu(g.playerParty.GetSplitActions(g))
             },
         })
         if g.splitControlled != nil {
@@ -71,15 +73,16 @@ func (g *GridEngine) openPartyMenu() {
         })
     }
 
-    g.openMenu(partyOptions)
+    g.OpenMenu(partyOptions)
 }
 
-func (g *GridEngine) openCharDetails(partyIndex int) {
-    actor := g.playerParty.GetMember(partyIndex)
-    if actor != nil {
-        window := g.ShowFixedFormatText(actor.GetDetails(g))
-        window.SetTitle(actor.Name())
+func (g *GridEngine) openCharDetails(actor *game.Actor) {
+    if actor == nil {
+        return
     }
+    g.closeInputElement()
+    window := g.ShowFixedFormatText(actor.GetDetails(g))
+    window.SetTitle(actor.Name())
 }
 func (g *GridEngine) openCharSkills(partyIndex int) {
     actor := g.playerParty.GetMember(partyIndex)
@@ -97,38 +100,76 @@ func (g *GridEngine) openCharBuffs(partyIndex int) {
         window.SetTitle(actor.Name())
     }
 }
+func (g *GridEngine) openExtendedInventory() {
+    g.OpenPartyInventoryOnPage(0)
+}
+func (g *GridEngine) OpenPartyInventoryOnPage(page int) {
+    if !g.playerParty.HasItems() {
+        g.ShowText([]string{"Your party has no items."})
+        return
+    }
+    inventoryWindow := ui.NewInventoryWindow(g, g.gridRenderer)
+    inventoryWindow.SwitchPageTo(ui.InventoryPage(page))
+    g.switchInputElement(inventoryWindow)
+}
 
-func (g *GridEngine) openPartyInventory() {
+func (g *GridEngine) openSimpleInventory() {
     //header := []string{"Inventory", "---------"}
-    wearerIcons := []rune{'Ⅰ', 'Ⅱ', 'Ⅲ', 'Ⅳ'}
-    partyInventory := g.playerParty.GetStackedInventory()
+    partyInventory := g.playerParty.GetInventory()
     if len(partyInventory) == 0 {
         g.ShowText([]string{"Your party has no items."})
         return
     }
     var menuItems []renderer.MenuItem
+
+    g.sortInventory(partyInventory)
+
     for _, i := range partyInventory {
         itemStack := i
         firstItemInStack := itemStack[0]
-        stackLabel := fmt.Sprintf("  %s (%d)", firstItemInStack.Name(), len(itemStack))
+        stackLabel := fmt.Sprintf("%s (x%d)", firstItemInStack.Name(), len(itemStack))
         if len(itemStack) == 1 {
-            stackLabel = "  " + firstItemInStack.Name()
-            if wornItem, ok := firstItemInStack.(game.Wearable); ok && wornItem.IsEquipped() {
-                wearer := wornItem.GetWearer()
-                partyIndex := g.playerParty.GetMemberIndex(wearer)
-                wearerIcon := wearerIcons[partyIndex]
-                stackLabel = string(wearerIcon) + " " + firstItemInStack.Name()
-            }
+            stackLabel = firstItemInStack.Name()
+        }
+        if wornItem, ok := firstItemInStack.(game.Equippable); ok && wornItem.IsEquipped() {
+            wearer := wornItem.GetWearer()
+            wearerIcon := g.playerParty.GetMemberIcon(wearer)
+            stackLabel = fmt.Sprintf("%s (%s)", stackLabel, string(wearerIcon))
         }
         menuItems = append(menuItems, renderer.MenuItem{
-            Text:     stackLabel,
-            CharIcon: firstItemInStack.InventoryIcon(),
+            Text:      stackLabel,
+            CharIcon:  firstItemInStack.InventoryIcon(),
+            TextColor: firstItemInStack.TintColor(),
             Action: func() {
-                g.openMenu(firstItemInStack.GetContextActions(g))
+                g.OpenMenu(firstItemInStack.GetContextActions(g))
             },
         })
     }
-    g.openMenu(menuItems)
+    g.OpenMenu(menuItems)
+}
+
+func (g *GridEngine) sortInventory(partyInventory [][]game.Item) {
+    sort.SliceStable(partyInventory, func(i, j int) bool {
+        item := partyInventory[i][0]
+        other := partyInventory[j][0]
+        if other.Name() == item.Name() {
+            if len(partyInventory[i]) == len(partyInventory[j]) {
+                if wornItem, ok := item.(game.Wearable); ok && wornItem.IsEquipped() {
+                    if otherWornItem, ok := other.(game.Wearable); ok && otherWornItem.IsEquipped() {
+                        wearer := wornItem.GetWearer()
+                        otherWearer := otherWornItem.GetWearer()
+                        wearerIndex := g.playerParty.GetMemberIndex(wearer)
+                        otherWearerIndex := g.playerParty.GetMemberIndex(otherWearer)
+                        return wearerIndex < otherWearerIndex
+                    } else {
+                        return true
+                    }
+                }
+            }
+            return len(partyInventory[i]) < len(partyInventory[j])
+        }
+        return item.Name() < other.Name()
+    })
 }
 
 func (g *GridEngine) ShowText(text []string) {
@@ -184,6 +225,9 @@ func (g *GridEngine) takeItem(item game.Item) {
     }
 }
 func (g *GridEngine) DropItem(item game.Item) {
+    if equippable, ok := item.(game.Equippable); ok && equippable.IsEquipped() {
+        equippable.Unequip()
+    }
     g.playerParty.RemoveItem(item)
     destPos := g.avatar.Pos()
     if g.TryPlaceItem(item, destPos) {
@@ -216,6 +260,12 @@ func (g *GridEngine) SwitchAvatarTo(actor *game.Actor) {
     }
     g.splitControlled = actor
     g.onViewedActorMoved(actor.Pos())
+    if g.inputElement != nil {
+        g.inputElement.OnAvatarSwitched()
+    }
+    if g.modalElement != nil {
+        g.modalElement.OnAvatarSwitched()
+    }
 }
 func (g *GridEngine) AddToParty(npc *game.Actor) {
     if g.playerParty.IsFull() {
@@ -248,7 +298,8 @@ func (g *GridEngine) ForceJoinParty() {
 func (g *GridEngine) openVendorMenu(npc *game.Actor) {
     itemsToSell := npc.GetItemsToSell()
     if len(itemsToSell) == 0 {
-        g.openIconWindow(npc.Icon(0), oneLine("Unfortunately, I have nothing left to sell."), func() {})
+        window := g.openIconWindow(npc.Icon(0), oneLine("I have nothing left to sell."), func() {})
+        window.SetAutoCloseOnConfirm()
         return
     }
 
@@ -259,8 +310,9 @@ func (g *GridEngine) openVendorMenu(npc *game.Actor) {
         itemLine := util.TableLine(labelWidth, colWidth, offer.Item.Name(), strconv.Itoa(offer.Price))
         //itemLine := fmt.Sprintf("%s (%d)", offer.Item.Name(), offer.Price)
         menuItems = append(menuItems, renderer.MenuItem{
-            Text:     itemLine,
-            CharIcon: offer.Item.InventoryIcon(),
+            Text:      itemLine,
+            CharIcon:  offer.Item.InventoryIcon(),
+            TextColor: offer.Item.TintColor(),
             Action: func() {
                 g.TryBuyItem(npc, offer)
             },
@@ -287,7 +339,7 @@ func (g *GridEngine) openTrainerMenu(npc *game.Actor, maxLevel int) {
     }
 
     if len(eligibleMembers) == 0 {
-        g.openIconWindow(npc.Icon(0), oneLine("Unfortunately, no member of your party can be trained here."), func() {})
+        g.openIconWindow(npc.Icon(0), oneLine("No member of your party can be trained here."), func() {})
         return
     }
 
@@ -344,6 +396,7 @@ func getLineLengthInfoActors(actors []*game.Actor) (int, int) {
 func (g *GridEngine) TryBuyItem(npc *game.Actor, offer game.SalesOffer) {
     if g.playerParty.GetGold() < offer.Price {
         g.openIconWindow(npc.Icon(0), oneLine("You don't have enough gold."), func() {})
+        g.openVendorMenu(npc)
         return
     }
     npc.RemoveItem(offer.Item)
@@ -352,6 +405,7 @@ func (g *GridEngine) TryBuyItem(npc *game.Actor, offer game.SalesOffer) {
     g.playerParty.RemoveGold(offer.Price)
     g.AddItem(offer.Item)
     g.openIconWindow(npc.Icon(0), oneLine("Thank you for your business."), func() {})
+    g.openVendorMenu(npc)
 }
 
 func (g *GridEngine) TryRestParty() {
@@ -513,14 +567,15 @@ func (g *GridEngine) ShowContainer(container game.ItemContainer) {
     for _, i := range containerItems {
         item := i
         menuItems = append(menuItems, renderer.MenuItem{
-            CharIcon: i.InventoryIcon(),
-            Text:     i.Name(),
+            CharIcon:  item.InventoryIcon(),
+            TextColor: item.TintColor(),
+            Text:      item.Name(),
             Action: func() {
                 g.moveItemToParty(item, container)
             },
         })
     }
-    g.openMenu(menuItems)
+    g.OpenMenu(menuItems)
 }
 
 func oneLine(text string) [][]string {

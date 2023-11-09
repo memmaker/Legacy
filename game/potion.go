@@ -10,6 +10,14 @@ type Potion struct {
     isEmpty bool
 }
 
+func (b *Potion) GetTooltipLines() []string {
+    if b.isEmpty {
+        return []string{"Empty potion"}
+    } else {
+        return []string{"Magic potion"}
+    }
+}
+
 func (b *Potion) InventoryIcon() int32 {
     return 173
 }

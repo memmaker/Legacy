@@ -26,19 +26,20 @@ func (g *GridEngine) openSpeechWindow(npc *game.Actor, textPages [][]string, onL
     g.modalElement = multipageWindow
 }
 
-func (g *GridEngine) openIconWindow(icon int32, textPages [][]string, onLastPage func()) {
+func (g *GridEngine) openIconWindow(icon int32, textPages [][]string, onLastPage func()) *renderer.MultiPageWindow {
     if len(textPages) == 0 {
-        return
+        return nil
     }
     multipageWindow := renderer.NewMultiPageWindow(g.gridRenderer, onLastPage)
     multipageWindow.InitWithFixedText(textPages)
     multipageWindow.SetIcon(icon)
     multipageWindow.PositionAtY(3)
     g.modalElement = multipageWindow
+    return multipageWindow
 }
 
 func (g *GridEngine) openConversationMenu(topLeft geometry.Point, items []renderer.MenuItem) {
-    g.inputElement = renderer.NewGridDialogueMenu(g.gridRenderer, topLeft, items)
+    g.switchInputElement(renderer.NewGridDialogueMenu(g.gridRenderer, topLeft, items))
     g.inputElement.OnMouseMoved(g.lastMousePosX, g.lastMousePosY)
 }
 func (g *GridEngine) StartConversation(npc *game.Actor, loadedDialogue *game.Dialogue) {
@@ -100,14 +101,14 @@ func (g *GridEngine) openMenuForDialogue(items []renderer.MenuItem) {
     // geometry.Point{X: 3, Y: 13},
     gridMenu := renderer.NewGridMenuAtY(g.gridRenderer, items, 13)
     //gridMenu.SetAutoClose()
-    g.inputElement = gridMenu
+    g.switchInputElement(gridMenu)
     g.inputElement.OnMouseMoved(g.lastMousePosX, g.lastMousePosY)
 }
 func (g *GridEngine) openMenuForVendor(items []renderer.MenuItem) *renderer.GridMenu {
     // geometry.Point{X: 3, Y: 13},
     gridMenu := renderer.NewGridMenuAtY(g.gridRenderer, items, 10)
     gridMenu.SetAutoClose()
-    g.inputElement = gridMenu
+    g.switchInputElement(gridMenu)
     g.inputElement.OnMouseMoved(g.lastMousePosX, g.lastMousePosY)
     return gridMenu
 }
@@ -159,17 +160,21 @@ func (g *GridEngine) handleDialogueChoice(dialogue *game.Dialogue, followUp stri
             g.AddItem(game.NewItemFromString(item))
         }
     }
-    g.inputElement = nil
+    g.closeInputElement()
     g.flags.SetFlags(response.FlagsSet)
-    quitsDialogue := len(response.Effects) > 0
+
+    flow := ConversationFlowContinue
+
     for _, effect := range response.Effects {
-        effectDoesQuit := g.handleDialogueEffect(npc, effect)
-        quitsDialogue = quitsDialogue && effectDoesQuit
+        effectFlow := g.handleDialogueEffect(npc, effect)
+        flow = effectFlow
     }
 
-    if quitsDialogue {
+    if flow == ConversationFlowQuit {
         g.openSpeechWindow(npc, response.Text, func() { g.modalElement = nil })
-    } else {
+    } else if flow == ConversationFlowCloseInputOnly {
+        g.openSpeechWindow(npc, response.Text, func() {})
+    } else if flow == ConversationFlowContinue {
         g.openSpeechWindow(npc, response.Text, func() {
             var optionsMenuItems []renderer.MenuItem
 
@@ -186,16 +191,24 @@ func (g *GridEngine) handleDialogueChoice(dialogue *game.Dialogue, followUp stri
     }
 }
 
-func (g *GridEngine) handleDialogueEffect(npc *game.Actor, effect string) bool {
+type ConversationFlow int
+
+const (
+    ConversationFlowContinue ConversationFlow = iota
+    ConversationFlowQuit
+    ConversationFlowCloseInputOnly
+)
+
+func (g *GridEngine) handleDialogueEffect(npc *game.Actor, effect string) ConversationFlow {
     switch effect {
     case "quits":
-        return true
+        return ConversationFlowQuit
     case "joins":
         g.AddToParty(npc)
-        return true
+        return ConversationFlowQuit
     case "sells":
         g.openVendorMenu(npc)
-        return true
+        return ConversationFlowCloseInputOnly
     }
     effectPredicate := recfile.StrPredicate(effect)
     if effectPredicate != nil {
@@ -203,7 +216,7 @@ func (g *GridEngine) handleDialogueEffect(npc *game.Actor, effect string) bool {
         case "trainsToLevel":
             maxLevel := effectPredicate.GetInt(0)
             g.openTrainerMenu(npc, maxLevel)
-            return true
+            return ConversationFlowQuit
         case "giveFood":
             amount := effectPredicate.GetInt(0)
             g.AddFood(amount)
@@ -226,5 +239,5 @@ func (g *GridEngine) handleDialogueEffect(npc *game.Actor, effect string) bool {
             g.AddBuff(g.GetAvatar(), name, buffType, strength)
         }
     }
-    return false
+    return ConversationFlowContinue
 }

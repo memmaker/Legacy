@@ -19,6 +19,10 @@ type Tool struct {
     kind ToolType
 }
 
+func (t *Tool) GetTooltipLines() []string {
+    return []string{}
+}
+
 func (t *Tool) InventoryIcon() int32 {
     if t.kind == ToolTypePickaxe {
         return 176

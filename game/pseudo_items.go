@@ -21,6 +21,10 @@ type PseudoItem struct {
     amount   int
 }
 
+func (p *PseudoItem) GetTooltipLines() []string {
+    return []string{}
+}
+
 func (p *PseudoItem) InventoryIcon() int32 {
     return 169
 }

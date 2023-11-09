@@ -12,6 +12,10 @@ type FlavorItem struct {
     description []string
 }
 
+func (f *FlavorItem) GetTooltipLines() []string {
+    return f.description
+}
+
 func (f *FlavorItem) InventoryIcon() int32 {
     return 169
 }

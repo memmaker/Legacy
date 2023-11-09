@@ -44,7 +44,9 @@ func (g *GridEngine) Init() {
 
     smallScreenSize := g.gridRenderer.GetSmallGridScreenSize()
     g.foodButton = geometry.Point{X: 1, Y: smallScreenSize.Y - 2}
-    g.goldButton = geometry.Point{X: smallScreenSize.X - 2, Y: smallScreenSize.Y - 2}
+    g.bagButton = geometry.Point{X: smallScreenSize.X - 2, Y: smallScreenSize.Y - 2}
+    g.goldButton = geometry.Point{X: smallScreenSize.X - 4, Y: smallScreenSize.Y - 2}
+
     g.defenseBuffsButton = geometry.Point{X: 15, Y: 0}
     g.offenseBuffsButton = geometry.Point{X: 24, Y: 0}
 
@@ -56,6 +58,7 @@ func (g *GridEngine) Init() {
 
     //g.currentMap = g.loadMap("WorldMap")
     g.currentMap = g.loadMap("Bed_Room")
+    g.initMapWindow(g.currentMap.MapWidth, g.currentMap.MapHeight)
     //g.currentMap = g.loadMap("Tauci_Castle")
     g.PlaceParty(g.spawnPosition)
 }
@@ -299,11 +302,6 @@ func (g *GridEngine) loadMap(mapName string) *gridmap.GridMap[*game.Actor, game.
         loadedMap.AddActor(npc, pos)
     }
 
-    mapWidth := environmentLayer.CellWidth
-    mapHeight := environmentLayer.CellHeight
-
-    g.initMapWindow(mapWidth, mapHeight)
-
     return loadedMap
 }
 
@@ -381,7 +379,6 @@ func (g *GridEngine) PlaceParty(startPos geometry.Point) {
             }
         }
     }
-
     g.onViewedActorMoved(startPos)
 }
 func (g *GridEngine) PlacePartyBackOnCurrentMap() {

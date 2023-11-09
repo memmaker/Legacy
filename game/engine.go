@@ -12,14 +12,6 @@ type ItemContainer interface {
     RemoveItem(item Item)
 }
 
-type Wearable interface {
-    Item
-    GetWearer() ItemWearer
-    SetWearer(wearer ItemWearer)
-    Unequip()
-    IsEquipped() bool
-}
-
 type Engine interface {
     StartConversation(a *Actor, conversation *Dialogue)
     ShowScrollableText(text []string, textcolor color.Color, autolayout bool) *renderer.ScrollableTextWindow
@@ -51,7 +43,7 @@ type Engine interface {
     ShowMultipleChoiceDialogue(icon int32, text [][]string, choices []renderer.MenuItem)
     RemoveItem(item Item)
     GetPartyMembers() []*Actor
-    ShowEquipMenu(a Wearable)
+    ShowEquipMenu(a Equippable)
     StartCombat(opponents *Actor)
     GetAoECircle(pos geometry.Point, radius int) []geometry.Point
     HitAnimation(pos geometry.Point, atlasName renderer.AtlasName, icon int32, tintColor color.Color, whenDone func())
@@ -76,4 +68,9 @@ type Engine interface {
     GetActorByInternalName(internalName string) *Actor
     GetDialogueFromFile(conversationId string) *Dialogue
     GetVisibleMap() geometry.Rect
+    GetParty() *Party
+    OpenMenu(items []renderer.MenuItem)
+    OpenEquipmentDetails(actor *Actor)
+    EquipItem(actor *Actor, item Equippable)
+    OpenPartyInventoryOnPage(page int)
 }

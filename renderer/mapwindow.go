@@ -56,6 +56,29 @@ func (m *MapWindow) CenterOn(pos geometry.Point) {
     m.setScrollOffset(newScrollX, newScrollY)
 }
 
+func (m *MapWindow) EnsurePositionIsInview(pos geometry.Point, borderSize int) {
+    screenMapWidth := m.windowSize.X
+    screenMapHeight := m.windowSize.Y
+
+    newPositionOnScreen := m.GetScreenGridPositionFromMapGridPosition(pos)
+
+    moveDelta := geometry.Point{X: 0, Y: 0}
+    if newPositionOnScreen.X < borderSize {
+        moveDelta.X = newPositionOnScreen.X - borderSize
+    } else if newPositionOnScreen.X >= screenMapWidth-borderSize {
+        moveDelta.X = newPositionOnScreen.X - (screenMapWidth - borderSize)
+    }
+    if newPositionOnScreen.Y < borderSize {
+        moveDelta.Y = newPositionOnScreen.Y - borderSize
+    } else if newPositionOnScreen.Y >= screenMapHeight-borderSize {
+        moveDelta.Y = newPositionOnScreen.Y - (screenMapHeight - borderSize)
+    }
+
+    if moveDelta.X != 0 || moveDelta.Y != 0 {
+        m.ScrollBy(moveDelta)
+    }
+}
+
 func (m *MapWindow) setScrollOffset(newScrollX, newScrollY int) {
     if newScrollX > m.mapSize.X-m.windowSize.X {
         newScrollX = m.mapSize.X - m.windowSize.X

@@ -14,6 +14,10 @@ type MultiPageWindow struct {
     gridRenderer *DualGridRenderer
 }
 
+func (m *MultiPageWindow) OnAvatarSwitched() {
+
+}
+
 func (m *MultiPageWindow) OnMouseClicked(x int, y int) bool {
     if m.window.OnMouseClicked(x, y) {
         return true

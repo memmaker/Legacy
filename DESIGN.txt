@@ -21,6 +21,7 @@
  - Someone will definitely try to type "Your Bedroom" into a mirror to get home. We should react to that.
  - ?? Require reading a scroll for one time, to "discover" the associated spell.
  - Inventory doesn't scroll when it gets too long
+ - Dropping items doesn't unequip them
 
 # Next Steps
  - Leveling System

@@ -57,6 +57,15 @@ func (p *Party) AddItem(item Item) {
     item.SetHolder(p)
 }
 
+func (p *Party) onItemEquipStatusChanged(items []Item) {
+    for _, item := range items {
+        p.RemoveItem(item)
+    }
+    for _, item := range items {
+        p.AddItem(item)
+    }
+}
+
 func (p *Party) addToInventory(item Item) {
     for i, it := range p.partyInventory {
         if it[0].CanStackWith(item) {
@@ -139,7 +148,7 @@ func (p *Party) GetMember(index int) *Actor {
     return p.members[index]
 }
 
-func (p *Party) GetStackedInventory() [][]Item {
+func (p *Party) GetInventory() [][]Item {
     return p.partyInventory
 }
 
@@ -379,6 +388,14 @@ func (p *Party) GetKeys() []*Key {
     return result
 }
 
+func (p *Party) GetKeysAsItems() []Item {
+    var result []Item
+    for _, key := range p.keys {
+        result = append(result, key)
+    }
+    return result
+}
+
 func (p *Party) SetFood(foodCount int) {
     p.food = foodCount
 }
@@ -464,6 +481,37 @@ func (p *Party) GetNameOfBreakingTool() string {
         }
     }
     return ""
+}
+
+func (p *Party) GetMemberIcon(wearer ItemWearer) int32 {
+    wearerIcons := []rune{'Ⅰ', 'Ⅱ', 'Ⅲ', 'Ⅳ'}
+    return wearerIcons[p.GetMemberIndex(wearer)]
+}
+
+func (p *Party) GetFilteredInventory(keep func(item Item) bool) []Item {
+    var result []Item
+    for _, itemStack := range p.partyInventory {
+        firstItemOfStack := itemStack[0]
+        if keep(firstItemOfStack) {
+            result = append(result, firstItemOfStack)
+        }
+    }
+    return result
+}
+
+func (p *Party) GetFilteredStackedInventory(keep func(item Item) bool) [][]Item {
+    var result [][]Item
+    for _, itemStack := range p.partyInventory {
+        firstItemOfStack := itemStack[0]
+        if keep(firstItemOfStack) {
+            result = append(result, itemStack)
+        }
+    }
+    return result
+}
+
+func (p *Party) HasItems() bool {
+    return len(p.partyInventory) > 0
 }
 
 func moneyFormat(value int) string {

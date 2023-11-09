@@ -15,6 +15,10 @@ type Key struct {
     importance int
 }
 
+func (k *Key) GetTooltipLines() []string {
+    return []string{}
+}
+
 func (k *Key) InventoryIcon() int32 {
     return 172
 }

@@ -167,7 +167,16 @@ func (g *DualGridRenderer) DrawOnBigGridWithColor(screen *ebiten.Image, cellPos,
     g.op.GeoM.Translate(g.BigCellToScreen(cellPos.X, cellPos.Y))
     screen.DrawImage(ExtractSubImageFromAtlas(textureIndex, g.bigGridSize, g.bigGridSize, g.atlasMap[atlasName]), g.op)
 }
+func (g *DualGridRenderer) DrawBigOnScreenWithAtlasNameAndTint(screen *ebiten.Image, xPos, yPos float64, atlasName AtlasName, textureIndex int32, tintColor color.Color) {
+    g.op.ColorScale.Reset()
+    g.op.ColorScale.ScaleWithColor(tintColor)
+    g.op.GeoM.Reset()
+    g.op.GeoM.Scale(g.scale, g.scale)
+    g.op.GeoM.Translate(xPos, yPos)
 
+    subImageFromAtlas := ExtractSubImageFromAtlas(textureIndex, g.bigGridSize, g.bigGridSize, g.atlasMap[atlasName])
+    screen.DrawImage(subImageFromAtlas, g.op)
+}
 func (g *DualGridRenderer) DrawBigOnScreenWithAtlasAndTint(screen *ebiten.Image, xPos, yPos float64, atlas *ebiten.Image, textureIndex int32, tintColor color.Color) {
     g.op.ColorScale.Reset()
     g.op.ColorScale.ScaleWithColor(tintColor)

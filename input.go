@@ -2,6 +2,8 @@ package main
 
 import (
     "Legacy/geometry"
+    "Legacy/recfile"
+    "Legacy/util"
     "fmt"
     "github.com/hajimehoshi/ebiten/v2"
     "github.com/hajimehoshi/ebiten/v2/inpututil"
@@ -57,7 +59,7 @@ func (g *GridEngine) handleInput() {
         } else if g.modalElement != nil {
             g.modalElement.ActionConfirm()
         } else if transition, ok := g.currentMap.GetTransitionAt(g.avatar.Pos()); ok {
-            g.transition(transition.TargetMap, transition.TargetLocation)
+            g.transitionToNamedLocation(transition.TargetMap, transition.TargetLocation)
         } else {
             g.openContextMenu()
         }
@@ -72,15 +74,18 @@ func (g *GridEngine) handleInput() {
     // (D)ivide party
     // (T)ry to join party
     // (L)og
+    // (C)enter camera on avatar
     // Space - Party menu
     // Enter - Context menu
 
     // A - repeat last selected (a)ction
     // Q - repeat last (q)uote
 
-    // 1-4         - Character details (1-4)
+    // 1-4             - Character equipment (1-4)
+    // 5               - Party overview
+    // D + 1-4         - Character details (1-4)
     // Shift + 1-4 - Switch control to character (1-4)
-    // E + 1-4     - Auto equip character (1-4)
+    // O + 1-4     - Optimize equip for character (1-4)
     // U + 1-4     - Strip gear from character (1-4)
     // F9 - Toggle fullscreen
 
@@ -90,7 +95,8 @@ func (g *GridEngine) handleInput() {
             g.PickUpItem(item)
         }
     } else if inpututil.IsKeyJustPressed(ebiten.KeyI) {
-        g.openPartyInventory()
+        //g.openSimpleInventory()
+        g.openExtendedInventory()
     } else if inpututil.IsKeyJustPressed(ebiten.KeyJ) {
         g.openJournal()
     } else if inpututil.IsKeyJustPressed(ebiten.KeyL) {
@@ -107,7 +113,7 @@ func (g *GridEngine) handleInput() {
         g.openPartyMenu()
     } else if inpututil.IsKeyJustPressed(ebiten.KeyD) {
         if g.playerParty.HasFollowers() {
-            g.openMenu(g.playerParty.GetSplitActions(g))
+            g.OpenMenu(g.playerParty.GetSplitActions(g))
         } else {
             g.ShowText([]string{"You don't have any followers."})
         }
@@ -118,7 +124,9 @@ func (g *GridEngine) handleInput() {
             g.ShowText([]string{"You don't have any followers."})
         }
     }
-
+    if inpututil.IsKeyJustPressed(ebiten.KeyC) {
+        g.mapWindow.CenterOn(g.avatar.Pos())
+    }
     if inpututil.IsKeyJustPressed(ebiten.KeyA) {
         g.lastSelectedAction()
     }
@@ -127,7 +135,7 @@ func (g *GridEngine) handleInput() {
     }
     if inpututil.IsKeyJustPressed(ebiten.KeyEscape) {
         if g.inputElement != nil {
-            g.inputElement = nil
+            g.closeInputElement()
         }
         if g.modalElement != nil {
             g.modalElement = nil
@@ -146,8 +154,17 @@ func (g *GridEngine) handleInput() {
         g.openPartyOverView()
     }
 
+    if inpututil.IsKeyJustPressed(ebiten.KeyTab) {
+        if g.playerParty.HasFollowers() {
+            currentPartyMemberIndex := g.playerParty.GetMemberIndex(g.GetAvatar())
+            nextPartyMemberIndex := (currentPartyMemberIndex + 1) % len(g.playerParty.GetMembers())
+            member := g.playerParty.GetMember(nextPartyMemberIndex)
+            g.SwitchAvatarTo(member)
+        }
+    }
+
     if charIndex >= 0 && charIndex < len(g.playerParty.GetMembers()) {
-        if ebiten.IsKeyPressed(ebiten.KeyE) {
+        if ebiten.IsKeyPressed(ebiten.KeyO) {
             g.playerParty.GetMember(charIndex).AutoEquip(g)
             g.Print(fmt.Sprintf("Equipped %s", g.playerParty.GetMember(charIndex).Name()))
         } else if ebiten.IsKeyPressed(ebiten.KeyU) {
@@ -163,8 +180,11 @@ func (g *GridEngine) handleInput() {
             g.openCharSkills(charIndex)
         } else if ebiten.IsKeyPressed(ebiten.KeyF) {
             g.openCharBuffs(charIndex)
+        } else if ebiten.IsKeyPressed(ebiten.KeyD) {
+            g.openCharDetails(g.playerParty.GetMember(charIndex))
         } else {
-            g.openCharDetails(charIndex)
+            member := g.playerParty.GetMember(charIndex)
+            g.OpenEquipmentDetails(member)
         }
     }
 
@@ -172,6 +192,15 @@ func (g *GridEngine) handleInput() {
         ebiten.SetFullscreen(!ebiten.IsFullscreen())
     } else if inpututil.IsKeyJustPressed(ebiten.KeyF10) {
         g.openDebugMenu()
+    } else if inpututil.IsKeyJustPressed(ebiten.KeyF11) {
+        util.Persist("debug_map_pos", g.GetMapName()+g.avatar.Pos().Encode())
+        g.Print(fmt.Sprintf("Saved map position: %s", g.avatar.Pos().Encode()))
+    } else if inpututil.IsKeyJustPressed(ebiten.KeyF12) {
+        mapPosPred := recfile.StrPredicate(util.Get("debug_map_pos"))
+        mapName := mapPosPred.Name()
+        xPos := mapPosPred.GetInt(0)
+        yPos := mapPosPred.GetInt(1)
+        g.transitionToLocation(mapName, geometry.Point{X: xPos, Y: yPos})
     }
 
     cellX, cellY := g.gridRenderer.ScreenToSmallCell(ebiten.CursorPosition())
@@ -184,4 +213,17 @@ func (g *GridEngine) handleInput() {
     if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
         g.onMouseClick(cellX, cellY)
     }
+
+    /* TODO: implement mouse wheel
+       _, dy := ebiten.Wheel()
+          //g.wheel += dx
+          g.wheelYVelocity += dy
+          if math.Abs(dy) > 0.1 && g.inputElement != nil {
+              if dy > 0 {
+                  g.inputElement.ActionDown()
+              } else {
+                  g.inputElement.ActionUp()
+              }
+          }
+    */
 }

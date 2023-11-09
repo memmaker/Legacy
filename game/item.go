@@ -38,6 +38,7 @@ type Item interface {
     SetValue(asInt int)
     SetPickupEvent(name string)
     GetPickupEvent() string
+    GetTooltipLines() []string
 }
 
 type BaseItem struct {

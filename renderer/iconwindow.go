@@ -43,6 +43,10 @@ type IconWindow struct {
     allowedIcons []int32
 }
 
+func (i *IconWindow) OnAvatarSwitched() {
+
+}
+
 func (i *IconWindow) ActionConfirm() {
     i.shouldClose = true
     if i.onClose != nil {
@@ -111,7 +115,7 @@ func (i *IconWindow) AddTextActionButton(icon int32, action func(currentText []s
     startPosX := i.bottomRight.X - 3
     yPos := i.topLeft.Y
     iconPos := geometry.Point{X: startPosX, Y: yPos}
-    i.AddButton(iconPos, icon, func() {
+    i.AddIconButton(iconPos, icon, func() {
         action(i.text)
     })
 }

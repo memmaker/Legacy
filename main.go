@@ -9,6 +9,7 @@ import (
     "Legacy/ldtk_go"
     "Legacy/recfile"
     "Legacy/renderer"
+    "Legacy/ui"
     "errors"
     "fmt"
     "github.com/hajimehoshi/ebiten/v2"
@@ -24,6 +25,10 @@ import (
     "strings"
 )
 
+type EngineConfiguration struct {
+    AlwaysCenter bool
+}
+
 type GridEngine struct {
     // Basic Game Engine
     wantsToQuit bool
@@ -31,6 +36,9 @@ type GridEngine struct {
 
     // Rules
     rules *game.Rules
+
+    // config
+    config EngineConfiguration
 
     // Game State & Bookkeeping
     avatar          *game.Actor
@@ -53,17 +61,22 @@ type GridEngine struct {
     animationRoutine gocoro.Coroutine
 
     // UI
-    deviceDPIScale float64
-    tileScale      float64
-    internalWidth  int
-    internalHeight int
-    textInput      *renderer.TextInput
-    modalElement   Modal
-    inputElement   UIWidget
-    uiOverlay      map[int]int32
+    deviceDPIScale           float64
+    tileScale                float64
+    internalWidth            int
+    internalHeight           int
+    textInput                *renderer.TextInput
+    modalElement             Modal
+    inputElement             UIWidget
+    currentTooltip           renderer.Tooltip
+    ticksUntilTooltipAppears int
 
-    foodButton         geometry.Point
-    goldButton         geometry.Point
+    uiOverlay map[int]int32
+
+    foodButton geometry.Point
+    goldButton geometry.Point
+    bagButton  geometry.Point
+
     defenseBuffsButton geometry.Point
     offenseBuffsButton geometry.Point
 
@@ -88,6 +101,11 @@ type GridEngine struct {
     allowedPartyIcons    []int32
     onMoveSubscribers    []func(newPosition geometry.Point) bool
     isGameOver           bool
+    wheelYVelocity       float64
+}
+
+func (g *GridEngine) GetParty() *game.Party {
+    return g.playerParty
 }
 
 func (g *GridEngine) GetVisibleMap() geometry.Rect {
@@ -158,7 +176,7 @@ func (g *GridEngine) TeleportTo(mirrorText string) {
     if mapName == "" || locationName == "" {
         return
     }
-    g.transition(mapName, locationName)
+    g.transitionToNamedLocation(mapName, locationName)
 }
 
 func (g *GridEngine) GetBreakingToolName() string {
@@ -296,7 +314,13 @@ func (g *GridEngine) QuitGame() {
 // onMouseMoved receives the coordinates as character cells
 func (g *GridEngine) onMouseMoved(x int, y int) {
     if g.inputElement != nil {
-        g.inputElement.OnMouseMoved(x, y)
+        tooltip := g.inputElement.OnMouseMoved(x, y)
+        if tooltip.IsNull() {
+            g.currentTooltip = nil
+        } else {
+            g.currentTooltip = tooltip
+            g.ticksUntilTooltipAppears = int(ebiten.ActualTPS() * 0.5)
+        }
     }
 }
 
@@ -330,17 +354,35 @@ func (g *GridEngine) onMouseClick(x int, y int) {
             g.TryRestParty()
         } else if x == g.goldButton.X {
             g.openFinanceOverview()
+        } else if x == g.bagButton.X {
+            g.openExtendedInventory()
         }
     } else if y == screenSize.Y-1 {
         // each 1/4 of the screen is a different UI
         if x < oneFourth {
-            g.openCharDetails(0)
+            if x == 0 {
+                g.openCharDetails(g.playerParty.GetMember(0))
+            } else {
+                g.OpenEquipmentDetails(g.playerParty.GetMember(0))
+            }
         } else if x < oneFourth*2 {
-            g.openCharDetails(1)
+            if x == oneFourth {
+                g.openCharDetails(g.playerParty.GetMember(1))
+            } else {
+                g.OpenEquipmentDetails(g.playerParty.GetMember(1))
+            }
         } else if x < oneFourth*3 {
-            g.openCharDetails(2)
+            if x == oneFourth*2 {
+                g.openCharDetails(g.playerParty.GetMember(2))
+            } else {
+                g.OpenEquipmentDetails(g.playerParty.GetMember(2))
+            }
         } else {
-            g.openCharDetails(3)
+            if x == oneFourth*3 {
+                g.openCharDetails(g.playerParty.GetMember(3))
+            } else {
+                g.OpenEquipmentDetails(g.playerParty.GetMember(3))
+            }
         }
     } else if g.inputElement != nil && g.inputElement.OnMouseClicked(x, y) {
         return
@@ -350,9 +392,13 @@ func (g *GridEngine) onMouseClick(x int, y int) {
 }
 
 func (g *GridEngine) onViewedActorMoved(newPosition geometry.Point) {
-    g.mapWindow.CenterOn(newPosition)
-    g.updateContextActions()
+    if g.config.AlwaysCenter {
+        g.mapWindow.CenterOn(newPosition)
+    } else {
+        g.mapWindow.EnsurePositionIsInview(newPosition, 5)
+    }
     g.currentMap.UpdateFieldOfView(g.playerParty.GetFoV(), newPosition)
+    g.updateContextActions()
 }
 
 func (g *GridEngine) drawPrintMessage(screen *ebiten.Image, upper bool) {
@@ -478,10 +524,8 @@ func (g *GridEngine) createWeapons(level int, amount int) []game.Item {
     return weapons
 }
 
-func (g *GridEngine) EquipItem(actor *game.Actor, a game.Wearable) {
-    g.playerParty.RemoveItem(a)
+func (g *GridEngine) EquipItem(actor *game.Actor, a game.Equippable) {
     actor.Equip(a)
-    g.playerParty.AddItem(a)
 }
 
 func (g *GridEngine) RunAnimationScript(script func(exe *gocoro.Execution)) error {
@@ -541,7 +585,7 @@ func (g *GridEngine) openJournal() {
         g.ShowText([]string{"You don't have any journal entries."})
         return
     }
-    g.openMenu([]renderer.MenuItem{
+    g.OpenMenu([]renderer.MenuItem{
         {
             Text: "Chronological",
             Action: func() {
@@ -552,7 +596,7 @@ func (g *GridEngine) openJournal() {
             Text: "By Source",
             Action: func() {
                 sources := g.playerKnowledge.GetJournalSources()
-                g.openMenu(g.toJournalMenu(sources))
+                g.OpenMenu(g.toJournalMenu(sources))
             },
         },
     })
@@ -628,7 +672,7 @@ func (g *GridEngine) openDismissMenu() {
             },
         })
     }
-    g.openMenu(menuItems)
+    g.OpenMenu(menuItems)
 }
 
 func (g *GridEngine) openFinanceOverview() {
@@ -701,14 +745,14 @@ func (g *GridEngine) goBackToBed() {
         {
             Text: "Stay awake",
             Action: func() {
-                g.inputElement = nil
+                g.closeInputElement()
                 g.modalElement = nil
             },
         },
         {
             Text: "Go back to bed",
             Action: func() {
-                g.inputElement = nil
+                g.closeInputElement()
                 g.modalElement = nil
                 g.setGameOver()
             },
@@ -741,6 +785,11 @@ func (g *GridEngine) getTombstoneFromEntity(entity *ldtk_go.Entity) game.Object 
     tombstone := game.NewTombstone(isHoly)
     tombstone.SetDescription(strings.Split(inscriptionProperty.AsString(), "\n"))
     return tombstone
+}
+
+func (g *GridEngine) OpenEquipmentDetails(actor *game.Actor) {
+    g.modalElement = nil
+    g.switchInputElement(ui.NewEquipmentWindow(g, actor, g.gridRenderer))
 }
 func secondsToTicks(seconds float64) int {
     return int(ebiten.ActualTPS() * seconds)
