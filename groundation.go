@@ -60,7 +60,7 @@ func (g *GridEngine) LayoutF(outsideWidth, outsideHeight float64) (screenWidth, 
 }
 
 func (g *GridEngine) drawUIOverlay(screen *ebiten.Image) {
-    screenW := 40 // in 8x8 cells
+    screenW := g.gridRenderer.GetSmallGridScreenSize().X // in 8x8 cells
     for cellIndex, tileIndex := range g.uiOverlay {
         cellX := cellIndex % screenW
         cellY := cellIndex / screenW

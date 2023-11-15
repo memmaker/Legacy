@@ -83,6 +83,19 @@ const (
     AccessorySlotAmuletTwo ArmorSlot = "amulet two"
 )
 
+func GetAllArmorSlots() []ArmorSlot {
+    return []ArmorSlot{
+        ArmorSlotHelmet,
+        ArmorSlotBreastPlate,
+        ArmorSlotShoes,
+        AccessorySlotRobe,
+        AccessorySlotRingLeft,
+        AccessorySlotRingRight,
+        AccessorySlotAmuletOne,
+        AccessorySlotAmuletTwo,
+    }
+}
+
 type Equippable interface {
     Item
     GetWearer() ItemWearer
@@ -138,10 +151,11 @@ type Actor struct {
     experiencePoints int
     level            int
 
-    skillset SkillSet
-    buffs    map[BuffType][]Buff
-    color    color.Color
-    isTinted bool
+    skillset      SkillSet
+    buffs         map[BuffType][]Buff
+    color         color.Color
+    isTinted      bool
+    combatFaction string
 }
 
 func NewActor(name string, icon int32) *Actor {
@@ -189,6 +203,18 @@ func NewActorFromFile(file io.ReadCloser, icon int32, toPages func(height int, i
         equippedAccessories: make(map[ArmorSlot]*Armor),
     }
 
+    if armorString, hasArmor := coreRecord["Torso"]; hasArmor {
+        newActor.equippedArmor[ArmorSlotBreastPlate] = NewArmorFromPredicate(recfile.StrPredicate(armorString))
+    }
+
+    if armorString, hasArmor := coreRecord["Head"]; hasArmor {
+        newActor.equippedArmor[ArmorSlotHelmet] = NewArmorFromPredicate(recfile.StrPredicate(armorString))
+    }
+
+    if weaponString, hasWeapon := coreRecord["RightHand"]; hasWeapon {
+        newActor.equippedRightHand = NewWeaponFromPredicate(recfile.StrPredicate(weaponString))
+    }
+
     if recordsForInventory, hasInventory := actorData["Inventory"]; hasInventory && len(recordsForInventory) > 0 {
         inventory := recordsForInventory[0].ToValueList()
         newActor.inventory = toInventory(newActor, itemsFromStrings(inventory))
@@ -212,7 +238,7 @@ func NewActorFromRecord(record recfile.Record) *Actor {
             a.internalName = field.Value
         case "position":
             a.SetPos(geometry.MustDecodePoint(field.Value))
-        case "unlitIcon":
+        case "icon":
             a.icon = field.AsInt32()
         case "iconFrames":
             a.iconFrameCount = field.AsInt()
@@ -246,7 +272,7 @@ func (a *Actor) ToRecord() recfile.Record {
         recfile.Field{Name: "name", Value: a.Name()},
         recfile.Field{Name: "internalName", Value: a.GetInternalName()},
         recfile.Field{Name: "position", Value: a.Pos().Encode()},
-        recfile.Field{Name: "unlitIcon", Value: recfile.Int32Str(a.Icon(0))},
+        recfile.Field{Name: "icon", Value: recfile.Int32Str(a.Icon(0))},
         recfile.Field{Name: "iconFrames", Value: strconv.Itoa(a.GetIconFrameCount())},
 
         recfile.Field{Name: "isHuman", Value: recfile.BoolStr(a.IsHuman())},
@@ -428,32 +454,32 @@ func (a *Actor) LookDescription() []string {
     return description
 }
 
-func (a *Actor) GetContextActions(engine Engine) []renderer.MenuItem {
-    var items []renderer.MenuItem
+func (a *Actor) GetContextActions(engine Engine) []util.MenuItem {
+    var items []util.MenuItem
     if a != engine.GetAvatar() {
-        talkTo := renderer.MenuItem{
+        talkTo := util.MenuItem{
             Text: "Talk",
             Action: func() {
                 engine.StartConversation(a, a.GetDialogue())
             },
         }
-        lookAt := renderer.MenuItem{
+        lookAt := util.MenuItem{
             Text: "Look",
             Action: func() {
                 engine.ShowScrollableText(a.LookDescription(), color.White, false)
             },
         }
-        steal := renderer.MenuItem{
+        steal := util.MenuItem{
             Text:   "Steal",
             Action: func() { engine.OpenPickpocketMenu(a) },
         }
-        attack := renderer.MenuItem{
+        attack := util.MenuItem{
             Text: "Attack",
             Action: func() {
-                engine.StartCombat(a)
+                engine.PlayerStartsCombat(a)
             },
         }
-        push := renderer.MenuItem{
+        push := util.MenuItem{
             Text: "Prod",
             Action: func() {
                 if engine.GetAvatar().IsRightNextTo(a) {
@@ -533,16 +559,22 @@ func (a *Actor) appendOffer(offer map[Loot][]SalesOffer, lootType Loot, item Ite
     return offer
 }
 
-func (a *Actor) RemoveItem(item Item) {
+func (a *Actor) RemoveItem(item Item) bool {
+    if item.GetHolder() != a {
+        return false
+    }
+    ownedItemUntilNow := false
     for i, inventoryItem := range a.inventory {
         if inventoryItem == item {
             a.inventory = append(a.inventory[:i], a.inventory[i+1:]...)
+            ownedItemUntilNow = true
             break
         }
     }
-    if item.GetHolder() == a {
+    if ownedItemUntilNow {
         item.SetHolder(nil)
     }
+    return ownedItemUntilNow
 }
 
 func (a *Actor) CanEquip(item Item) bool {
@@ -1033,6 +1065,9 @@ func (a *Actor) SetIcon(icon int32) {
 }
 
 func (a *Actor) SetVendorInventory(items []Item) {
+    for _, item := range items {
+        item.SetHolder(a)
+    }
     a.inventory = append(a.inventory, items...)
 }
 
@@ -1111,4 +1146,30 @@ func (a *Actor) chooseAccessorySlot(armor *Armor) ArmorSlot {
         return AccessorySlotAmuletTwo
     }
     return armor.GetSlot()
+}
+
+func (a *Actor) SetCombatFaction(faction string) {
+    a.combatFaction = faction
+}
+func (a *Actor) GetCombatFaction() string {
+    return a.combatFaction
+}
+
+func (a *Actor) HasRangedWeaponEquipped() bool {
+    return a.equippedRanged != nil
+}
+
+func (a *Actor) GetItemByName(name string) (Item, bool) {
+    for _, item := range a.inventory {
+        if item.Name() == name {
+            return item, true
+        }
+    }
+    return nil, false
+}
+
+func (a *Actor) UsedKey(key string) {
+    if a.party != nil {
+        a.party.UsedKey(key)
+    }
 }

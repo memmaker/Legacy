@@ -1,27 +1,14 @@
 # Annoyances
- - The dialogue dilemma
-   - Adding the "join" keyword to the player knowledge base means every NPC can be asked this now
-   - Otoh, learning about the "murder in town" should allow asking all NPCs about this
- - Saving / Loading
-   - We cannot load from the LDTK when we visited an area before
-   - Instead, when leaving a map, that map state has to be saved to disk
- - The intro dialogue seems random (and maybe remove "job" & "name"?)
- - I cannot click on equipment in the inventory screen and just select something different
- - Encounters need a definition in text files, like conversations
+ - Saving / Loading a bit rough
  - It's not possible to have a conversation with your followers
  - Dialogue options will only depend on the skills of the Avatar, not the whole party
  - Dialogue missing from NPCs after loading
- - No tooltips for Weapons, Armor, Spells and Menu Options in general
  - Combat will magically end, when block a doorway with a party member
  - Skill checks in dialogues are a bit rough, only works for the first option, if at all
- - Cannot look at stats during combat
- - If the player does not trigger the door event in the bed room, it will stay in memory forever
- - Trying to cast a targeted spell from a container or the ground doesnt work
- - Not sure if raise undead does remove the downed actor correctly
  - Someone will definitely try to type "Your Bedroom" into a mirror to get home. We should react to that.
- - ?? Require reading a scroll for one time, to "discover" the associated spell.
- - Inventory doesn't scroll when it gets too long
- - Dropping items doesn't unequip them
+ - Allow scrolling with the mouse
+ - Multiple Choice dialogue is broken
+
 
 # Next Steps
  - Leveling System

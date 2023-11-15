@@ -14,7 +14,7 @@ import (
 )
 
 func (g *GridEngine) openPartyMenu() {
-    partyOptions := []renderer.MenuItem{
+    partyOptions := []util.MenuItem{
         {
             Text:   "Search",
             Action: g.searchForHiddenObjects,
@@ -24,10 +24,12 @@ func (g *GridEngine) openPartyMenu() {
             Action: g.openExtendedInventory,
         },
         {
-            Text: "Ranged",
-            Action: func() {
-                g.combatManager.PlayerStartsRangedAttack()
-            },
+            Text:   "Keys",
+            Action: g.openKeyInventory,
+        },
+        {
+            Text:   "Ranged",
+            Action: g.combatManager.PlayerStartsRangedAttack,
         },
         {
             Text:   "Magic",
@@ -47,27 +49,25 @@ func (g *GridEngine) openPartyMenu() {
         },
     }
     if g.playerParty.HasFollowers() {
-        partyRanged := renderer.MenuItem{
-            Text: "Party Ranged",
-            Action: func() {
-                g.combatManager.OrchestratedRangedAttack()
-            },
+        partyRanged := util.MenuItem{
+            Text:   "Party Ranged",
+            Action: g.combatManager.OrchestratedRangedAttack,
         }
         //insert at index 3
-        partyOptions = append(partyOptions[:3], append([]renderer.MenuItem{partyRanged}, partyOptions[3:]...)...)
-        partyOptions = append(partyOptions, renderer.MenuItem{
+        partyOptions = append(partyOptions[:3], append([]util.MenuItem{partyRanged}, partyOptions[3:]...)...)
+        partyOptions = append(partyOptions, util.MenuItem{
             Text: "Split",
             Action: func() {
                 g.OpenMenu(g.playerParty.GetSplitActions(g))
             },
         })
-        if g.splitControlled != nil {
-            partyOptions = append(partyOptions, renderer.MenuItem{
+        if g.playerParty.IsSplit() {
+            partyOptions = append(partyOptions, util.MenuItem{
                 Text:   "Join",
                 Action: g.TryJoinParty,
             })
         }
-        partyOptions = append(partyOptions, renderer.MenuItem{
+        partyOptions = append(partyOptions, util.MenuItem{
             Text:   "Dismiss",
             Action: g.openDismissMenu,
         })
@@ -80,7 +80,7 @@ func (g *GridEngine) openCharDetails(actor *game.Actor) {
     if actor == nil {
         return
     }
-    g.closeInputElement()
+    g.CloseAllModals()
     window := g.ShowFixedFormatText(actor.GetDetails(g))
     window.SetTitle(actor.Name())
 }
@@ -104,48 +104,50 @@ func (g *GridEngine) openExtendedInventory() {
     g.OpenPartyInventoryOnPage(0)
 }
 func (g *GridEngine) OpenPartyInventoryOnPage(page int) {
+    g.CloseAllModals()
     if !g.playerParty.HasItems() {
         g.ShowText([]string{"Your party has no items."})
         return
     }
     inventoryWindow := ui.NewInventoryWindow(g, g.gridRenderer)
     inventoryWindow.SwitchPageTo(ui.InventoryPage(page))
-    g.switchInputElement(inventoryWindow)
+    g.PushModal(inventoryWindow)
 }
 
-func (g *GridEngine) openSimpleInventory() {
-    //header := []string{"Inventory", "---------"}
-    partyInventory := g.playerParty.GetInventory()
-    if len(partyInventory) == 0 {
-        g.ShowText([]string{"Your party has no items."})
+func (g *GridEngine) openKeyInventory() {
+    playerKeys := g.playerParty.GetKeys()
+    if len(playerKeys) == 0 {
+        g.Print("Your party has no keys.")
         return
     }
-    var menuItems []renderer.MenuItem
-
-    g.sortInventory(partyInventory)
-
-    for _, i := range partyInventory {
-        itemStack := i
-        firstItemInStack := itemStack[0]
-        stackLabel := fmt.Sprintf("%s (x%d)", firstItemInStack.Name(), len(itemStack))
-        if len(itemStack) == 1 {
-            stackLabel = firstItemInStack.Name()
+    g.CloseAllModals()
+    keyListByLocation := make(map[string][]*game.Key)
+    var listOfLocations []string
+    for _, i := range playerKeys {
+        key := i
+        keyLocation := key.KeySource()
+        if _, ok := keyListByLocation[keyLocation]; !ok {
+            keyListByLocation[keyLocation] = []*game.Key{}
+            listOfLocations = append(listOfLocations, keyLocation)
         }
-        if wornItem, ok := firstItemInStack.(game.Equippable); ok && wornItem.IsEquipped() {
-            wearer := wornItem.GetWearer()
-            wearerIcon := g.playerParty.GetMemberIcon(wearer)
-            stackLabel = fmt.Sprintf("%s (%s)", stackLabel, string(wearerIcon))
-        }
-        menuItems = append(menuItems, renderer.MenuItem{
-            Text:      stackLabel,
-            CharIcon:  firstItemInStack.InventoryIcon(),
-            TextColor: firstItemInStack.TintColor(),
-            Action: func() {
-                g.OpenMenu(firstItemInStack.GetContextActions(g))
-            },
-        })
+        keyListByLocation[keyLocation] = append(keyListByLocation[keyLocation], key)
     }
-    g.OpenMenu(menuItems)
+    sort.Strings(listOfLocations)
+    var asText []string
+    for i, location := range listOfLocations {
+        if i > 0 {
+            asText = append(asText, "")
+        }
+        asText = append(asText, fmt.Sprintf("%s:", location))
+        for _, key := range keyListByLocation[location] {
+            prefix := "  "
+            if g.playerParty.HasUsedKey(key.GetKeyString()) {
+                prefix = " ө"
+            }
+            asText = append(asText, fmt.Sprintf("%s%s", prefix, key.Name()))
+        }
+    }
+    g.ShowScrollableText(asText, color.White, false)
 }
 
 func (g *GridEngine) sortInventory(partyInventory [][]game.Item) {
@@ -176,22 +178,28 @@ func (g *GridEngine) ShowText(text []string) {
     g.ShowScrollableText(text, color.White, true)
 }
 
-func (g *GridEngine) ShowFixedFormatText(text []string) *renderer.ScrollableTextWindow {
-    return g.ShowScrollableText(text, color.White, false)
+func (g *GridEngine) ShowFixedFormatText(text []string) *ui.ScrollableTextWindow {
+    return g.showScrollText(text, color.White, false)
 }
 
-func (g *GridEngine) ShowScrollableText(text []string, textcolor color.Color, autolayoutText bool) *renderer.ScrollableTextWindow {
+func (g *GridEngine) ShowScrollableText(text []string, textcolor color.Color, autolayoutText bool) {
+    g.showScrollText(text, textcolor, autolayoutText)
+}
+
+func (g *GridEngine) showScrollText(text []string, textcolor color.Color, autolayoutText bool) *ui.ScrollableTextWindow {
     if len(text) == 0 {
         return nil
     }
-    var textWindow *renderer.ScrollableTextWindow
+    g.CloseAllModals()
+
+    var textWindow *ui.ScrollableTextWindow
     if autolayoutText {
-        textWindow = renderer.NewAutoTextWindow(g.gridRenderer, text)
+        textWindow = ui.NewAutoTextWindow(g.gridRenderer, text)
     } else {
-        textWindow = renderer.NewFixedTextWindow(g.gridRenderer, text)
+        textWindow = ui.NewFixedTextWindow(g.gridRenderer, text)
     }
     textWindow.SetTextColor(textcolor)
-    g.modalElement = textWindow
+    g.PushModal(textWindow)
     g.lastShownText = text
     return textWindow
 }
@@ -199,18 +207,15 @@ func (g *GridEngine) ShowScrollableText(text []string, textcolor color.Color, au
 func (g *GridEngine) PickPocketItem(item game.Item, owner *game.Actor) {
     owner.RemoveItem(item)
     g.takeItem(item)
-    g.updateContextActions()
 }
 
 func (g *GridEngine) PickUpItem(item game.Item) {
     g.currentMap.RemoveItem(item)
     g.takeItem(item)
-    g.updateContextActions()
 }
 func (g *GridEngine) moveItemToParty(item game.Item, container game.ItemContainer) {
     container.RemoveItem(item)
     g.takeItem(item)
-    g.updateContextActions()
 }
 
 func (g *GridEngine) takeItem(item game.Item) {
@@ -232,7 +237,6 @@ func (g *GridEngine) DropItem(item game.Item) {
     destPos := g.avatar.Pos()
     if g.TryPlaceItem(item, destPos) {
         g.Print(fmt.Sprintf("Dropped \"%s\"", item.Name()))
-        g.updateContextActions()
     }
 }
 
@@ -254,17 +258,19 @@ func (g *GridEngine) TryPlaceItem(item game.Item, destPos geometry.Point) bool {
 }
 
 func (g *GridEngine) SwitchAvatarTo(actor *game.Actor) {
+    if g.IsInConversation() {
+        g.Print("You can't do that right now.")
+        return
+    }
     if !g.playerParty.IsMember(actor) {
         g.Print(fmt.Sprintf("\"%s\" is not in your party", actor.Name()))
         return
     }
-    g.splitControlled = actor
+    g.playerParty.SwitchControlTo(actor)
     g.onViewedActorMoved(actor.Pos())
-    if g.inputElement != nil {
-        g.inputElement.OnAvatarSwitched()
-    }
-    if g.modalElement != nil {
-        g.modalElement.OnAvatarSwitched()
+
+    if g.IsModalOpen() {
+        g.topModal().OnAvatarSwitched()
     }
 }
 func (g *GridEngine) AddToParty(npc *game.Actor) {
@@ -288,37 +294,40 @@ func (g *GridEngine) TryJoinParty() {
             return
         }
     }
-    g.splitControlled = nil
+    g.playerParty.ReturnControlToLeader()
 }
 
 func (g *GridEngine) ForceJoinParty() {
-    g.splitControlled = nil
+    g.playerParty.ReturnControlToLeader()
     g.onViewedActorMoved(g.GetAvatar().Pos())
 }
-func (g *GridEngine) openVendorMenu(npc *game.Actor) {
+func (g *GridEngine) openVendorMenu(npc *game.Actor) { // TODO: replace with usage of the dialogue system
     itemsToSell := npc.GetItemsToSell()
     if len(itemsToSell) == 0 {
-        window := g.openIconWindow(npc.Icon(0), oneLine("I have nothing left to sell."), func() {})
-        window.SetAutoCloseOnConfirm()
+        g.conversationModal.SetText(oneLine("I have nothing to sell."))
+        g.conversationModal.SetVendorOptions(nil)
         return
     }
 
     labelWidth, colWidth := getLineLengthInfoItems(itemsToSell)
-    var menuItems []renderer.MenuItem
+    var menuItems []util.MenuItem
     for _, i := range itemsToSell {
         offer := i
         itemLine := util.TableLine(labelWidth, colWidth, offer.Item.Name(), strconv.Itoa(offer.Price))
         //itemLine := fmt.Sprintf("%s (%d)", offer.Item.Name(), offer.Price)
-        menuItems = append(menuItems, renderer.MenuItem{
+        menuItems = append(menuItems, util.MenuItem{
             Text:      itemLine,
             CharIcon:  offer.Item.InventoryIcon(),
             TextColor: offer.Item.TintColor(),
             Action: func() {
                 g.TryBuyItem(npc, offer)
+                g.openVendorMenu(npc)
             },
         })
     }
-    g.openMenuForVendor(menuItems)
+    g.conversationModal.SetVendorOptions(menuItems)
+    g.conversationModal.OnMouseMoved(g.lastMousePosX, g.lastMousePosY)
+    //g.openMenuForVendor(menuItems)
 }
 
 func (g *GridEngine) openTrainerMenu(npc *game.Actor, maxLevel int) {
@@ -339,18 +348,19 @@ func (g *GridEngine) openTrainerMenu(npc *game.Actor, maxLevel int) {
     }
 
     if len(eligibleMembers) == 0 {
-        g.openIconWindow(npc.Icon(0), oneLine("No member of your party can be trained here."), func() {})
+        g.conversationModal.SetText(oneLine("No member of your party can be trained here."))
+        g.conversationModal.SetVendorOptions(nil)
         return
     }
 
     labelWidth, colWidth := getLineLengthInfoActors(eligibleMembers)
-    var menuItems []renderer.MenuItem
+    var menuItems []util.MenuItem
     for _, i := range eligibleMembers {
         member := i
         levelUpCost := g.rules.GetTrainerCost(member.GetLevel())
         itemLine := util.TableLine(labelWidth, colWidth, member.Name(), fmt.Sprintf("(%d)", member.GetLevel()), fmt.Sprintf(" %dg", levelUpCost))
         //itemLine := fmt.Sprintf("%s (%d)", member.Item.Name(), member.Price)
-        menuItems = append(menuItems, renderer.MenuItem{
+        menuItems = append(menuItems, util.MenuItem{
             Text: itemLine,
             Action: func() {
                 if g.playerParty.HasGold(levelUpCost) {
@@ -359,12 +369,14 @@ func (g *GridEngine) openTrainerMenu(npc *game.Actor, maxLevel int) {
                     g.rules.LevelUp(member)
                     g.openTrainerMenu(npc, maxLevel)
                 } else {
-                    g.openIconWindow(npc.Icon(0), oneLine("You don't have enough gold."), func() {})
+                    g.conversationModal.SetText(oneLine("You don't have enough gold."))
+                    g.conversationModal.SetVendorOptions(nil)
                 }
             },
         })
     }
-    g.openMenuForVendor(menuItems)
+    g.conversationModal.SetVendorOptions(menuItems)
+    g.conversationModal.OnMouseMoved(g.lastMousePosX, g.lastMousePosY)
 }
 
 func getLineLengthInfoItems(sell []game.SalesOffer) (int, int) {
@@ -395,17 +407,20 @@ func getLineLengthInfoActors(actors []*game.Actor) (int, int) {
 
 func (g *GridEngine) TryBuyItem(npc *game.Actor, offer game.SalesOffer) {
     if g.playerParty.GetGold() < offer.Price {
-        g.openIconWindow(npc.Icon(0), oneLine("You don't have enough gold."), func() {})
-        g.openVendorMenu(npc)
+        g.conversationModal.SetText(oneLine("You don't have enough gold."))
         return
     }
-    npc.RemoveItem(offer.Item)
+    if !npc.RemoveItem(offer.Item) {
+        g.conversationModal.SetText(oneLine("I don't have that item anymore."))
+        return
+    }
+    g.playerParty.RemoveGold(offer.Price)
+
     npc.AddGold(offer.Price)
 
-    g.playerParty.RemoveGold(offer.Price)
     g.AddItem(offer.Item)
-    g.openIconWindow(npc.Icon(0), oneLine("Thank you for your business."), func() {})
-    g.openVendorMenu(npc)
+
+    g.conversationModal.SetText(oneLine("Thank you for your business."))
 }
 
 func (g *GridEngine) TryRestParty() {
@@ -414,8 +429,17 @@ func (g *GridEngine) TryRestParty() {
         return
     }
     if g.playerParty.TryRest() {
-        pages := g.gridRenderer.AutolayoutArrayToIconPages(5, []string{"You have eaten some food", "and rested the night.", "Your party has been healed."})
-        g.openIconWindow(g.GetAvatar().Icon(0), pages, func() {})
+        g.AdvanceWorldTimeWithMessage(0, 8, 0)
+        time := g.GetWorldTime()
+        pages := g.gridRenderer.AutolayoutArrayToIconPages(5, []string{
+            "You have eaten some food",
+            "and rested the night.",
+            "Your party has been healed.",
+            "It is now:",
+            time.GetTimeAndDate(),
+        })
+        window := g.openIconWindow(g.GetAvatar().Icon(0), pages, func() {})
+        window.SetAutoCloseOnConfirm()
     } else {
         g.Print("Not enough food to rest.")
     }
@@ -481,7 +505,6 @@ func (g *GridEngine) revealHiddenObjectsAt(location geometry.Point) {
     }
     if foundSomething {
         g.Print("Fascinating..")
-        g.updateContextActions()
     }
 }
 
@@ -547,14 +570,14 @@ func (g *GridEngine) CreateLootForContainer(level int, lootType []game.Loot) []g
 }
 
 func (g *GridEngine) ShowContainer(container game.ItemContainer) {
-    var menuItems []renderer.MenuItem
+    var menuItems []util.MenuItem
     containerItems := container.GetItems()
     if len(containerItems) == 0 {
         g.ShowText([]string{"The container is empty."})
         return
     }
     if len(containerItems) > 1 {
-        menuItems = append(menuItems, renderer.MenuItem{
+        menuItems = append(menuItems, util.MenuItem{
             CharIcon: 162,
             Text:     "Take all",
             Action: func() {
@@ -566,7 +589,7 @@ func (g *GridEngine) ShowContainer(container game.ItemContainer) {
     }
     for _, i := range containerItems {
         item := i
-        menuItems = append(menuItems, renderer.MenuItem{
+        menuItems = append(menuItems, util.MenuItem{
             CharIcon:  item.InventoryIcon(),
             TextColor: item.TintColor(),
             Text:      item.Name(),

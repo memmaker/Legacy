@@ -25,7 +25,7 @@ Item: noitem(food, 1)
 
 %rec: Conversation
 
-Key: _first_time
+Key: _opening
 Text: "Look at my fine =wares=! I have the best potions in the whole country!"
 
 Key: wares

@@ -1,7 +1,8 @@
-package renderer
+package ui
 
 import (
     "Legacy/geometry"
+    "Legacy/renderer"
     "github.com/hajimehoshi/ebiten/v2"
     "image/color"
     "slices"
@@ -35,12 +36,42 @@ type IconWindow struct {
     textColor  color.Color
     iconOffset geometry.Point
 
-    gridRenderer *DualGridRenderer
+    gridRenderer *renderer.DualGridRenderer
     title        string
     shouldClose  bool
     onClose      func()
     currentIndex int
     allowedIcons []int32
+}
+
+func (i *IconWindow) OnMouseWheel(x int, y int, dy float64) bool {
+    return false
+}
+
+func (i *IconWindow) OnCommand(command CommandType) bool {
+    switch command {
+    case PlayerCommandCancel:
+        i.ActionCancel()
+    case PlayerCommandConfirm:
+        i.ActionConfirm()
+    case PlayerCommandUp:
+        i.ActionUp()
+    case PlayerCommandDown:
+        i.ActionDown()
+    case PlayerCommandLeft:
+        i.ActionLeft()
+    case PlayerCommandRight:
+        i.ActionRight()
+    }
+    return true
+}
+
+func (i *IconWindow) ActionLeft() {
+
+}
+
+func (i *IconWindow) ActionRight() {
+
 }
 
 func (i *IconWindow) OnAvatarSwitched() {
@@ -79,7 +110,7 @@ func (i *IconWindow) Icon() int32 {
     return i.allowedIcons[i.currentIndex]
 }
 
-func NewIconWindow(dualGrid *DualGridRenderer) *IconWindow {
+func NewIconWindow(dualGrid *renderer.DualGridRenderer) *IconWindow {
     return &IconWindow{
         ButtonHolder: NewButtonHolder(),
         iconOffset:   geometry.Point{X: 2, Y: 2},
@@ -90,7 +121,7 @@ func NewIconWindow(dualGrid *DualGridRenderer) *IconWindow {
 func (i *IconWindow) SetAutoLayoutText(inputText string) {
     screenSize := i.gridRenderer.GetSmallGridScreenSize()
     maxLineLength := screenSize.X - 11
-    text := AutoLayout(inputText, maxLineLength)
+    text := renderer.AutoLayout(inputText, maxLineLength)
     i.SetFixedText(text)
 }
 
@@ -102,14 +133,12 @@ func (i *IconWindow) SetYOffset(yOffset int) {
     bottomRight := geometry.Point{X: endX, Y: yOffset + height}
     i.topLeft = topLeft
     i.bottomRight = bottomRight
-}
-
-func (i *IconWindow) RePosition() {
-    i.SetYOffset(i.topLeft.Y)
+    i.repositionButtons()
 }
 
 func (i *IconWindow) SetFixedText(text []string) {
     i.text = text
+    i.SetYOffset(i.topLeft.Y)
 }
 func (i *IconWindow) AddTextActionButton(icon int32, action func(currentText []string)) {
     startPosX := i.bottomRight.X - 3
@@ -118,6 +147,15 @@ func (i *IconWindow) AddTextActionButton(icon int32, action func(currentText []s
     i.AddIconButton(iconPos, icon, func() {
         action(i.text)
     })
+}
+
+func (i *IconWindow) repositionButtons() {
+    newButtons := make(map[geometry.Point]IconOnlyButton)
+    for _, button := range i.oneCellButtons {
+        newPos := geometry.Point{X: i.bottomRight.X - 3, Y: i.topLeft.Y}
+        newButtons[newPos] = button
+    }
+    i.oneCellButtons = newButtons
 }
 
 func (i *IconWindow) Draw(screen *ebiten.Image) {
@@ -165,4 +203,11 @@ func (i *IconWindow) SetCurrentIcon(icon int32) {
         return
     }
     i.currentIndex = indexOf
+}
+
+func (i *IconWindow) ActionCancel() {
+    i.shouldClose = true
+    if i.onClose != nil {
+        i.onClose()
+    }
 }

@@ -1,8 +1,9 @@
-package renderer
+package ui
 
 import (
     "Legacy/ega"
     "Legacy/geometry"
+    "Legacy/renderer"
     "github.com/hajimehoshi/ebiten/v2"
     "image/color"
 )
@@ -48,17 +49,17 @@ func (i *IconAndTextButton) SetText(text string) {
 func (i *IconAndTextButton) SetIcon(icon int32) {
     i.icon = icon
 }
-func (i *IconAndTextButton) Draw(screen *ebiten.Image, gridRenderer *DualGridRenderer) {
+func (i *IconAndTextButton) Draw(screen *ebiten.Image, gridRenderer *renderer.DualGridRenderer) {
     gridRenderer.DrawOnSmallGrid(screen, i.rect.Min.X, i.rect.Min.Y, i.icon)
     gridRenderer.DrawColoredString(screen, i.rect.Min.X+1, i.rect.Min.Y, i.text, i.textColor)
 }
 
-func (i *IconAndTextButton) DrawHover(screen *ebiten.Image, renderer *DualGridRenderer) {
+func (i *IconAndTextButton) DrawHover(screen *ebiten.Image, renderer *renderer.DualGridRenderer) {
     renderer.DrawOnSmallGrid(screen, i.rect.Min.X, i.rect.Min.Y, i.icon)
     renderer.DrawColoredString(screen, i.rect.Min.X+1, i.rect.Min.Y, i.text, ega.BrightGreen)
 }
 
-func (i *IconAndTextButton) DrawSelected(screen *ebiten.Image, renderer *DualGridRenderer) {
+func (i *IconAndTextButton) DrawSelected(screen *ebiten.Image, renderer *renderer.DualGridRenderer) {
     renderer.DrawOnSmallGrid(screen, i.rect.Min.X, i.rect.Min.Y, i.icon)
     renderer.DrawColoredString(screen, i.rect.Min.X+1, i.rect.Min.Y, i.text, ega.BrightYellow)
 }
@@ -92,7 +93,7 @@ func (b *ButtonHolder) AddIconAndTextButton(rect geometry.Rect, callback func())
 func (b *ButtonHolder) SetSelectedButton(button *IconAndTextButton) {
     b.selectedButton = button
 }
-func (b *ButtonHolder) Draw(gridRenderer *DualGridRenderer, screen *ebiten.Image) {
+func (b *ButtonHolder) Draw(gridRenderer *renderer.DualGridRenderer, screen *ebiten.Image) {
     for pos, button := range b.oneCellButtons {
         gridRenderer.DrawOnSmallGrid(screen, pos.X, pos.Y, button.icon)
     }
@@ -124,14 +125,14 @@ func (b *ButtonHolder) OnMouseClicked(x int, y int) bool {
     return false
 }
 
-func (b *ButtonHolder) OnMouseMoved(x int, y int) Tooltip {
+func (b *ButtonHolder) OnMouseMoved(x int, y int) (bool, Tooltip) {
     b.hoveredButton = nil
     mousePos := geometry.Point{X: x, Y: y}
     for _, button := range b.rectButtons {
         if button.rect.Contains(mousePos) {
             b.hoveredButton = button
-            return NoTooltip{}
+            return true, NoTooltip{}
         }
     }
-    return NoTooltip{}
+    return false, NoTooltip{}
 }

@@ -1,7 +1,8 @@
-package renderer
+package ui
 
 import (
     "Legacy/geometry"
+    "Legacy/renderer"
     "github.com/hajimehoshi/ebiten/v2"
     "image/color"
     "strings"
@@ -23,11 +24,66 @@ type TextInput struct {
     cursorFrames int
     shouldClose  bool
     onClose      func(endedWith EndAction, text string)
-    gridRenderer *DualGridRenderer
+    gridRenderer *renderer.DualGridRenderer
     drawBorder   bool
+    currentTick  uint64
 }
 
-func NewTextInput(gridRenderer *DualGridRenderer, gridPos geometry.Point, maxLength int, cursorIcon int32, cursorFrameCount int, onClose func(endedWith EndAction, text string)) *TextInput {
+func (t *TextInput) OnMouseWheel(x int, y int, dy float64) bool {
+    return false
+}
+
+func (t *TextInput) OnCommand(command CommandType) bool {
+    switch command {
+    case PlayerCommandCancel:
+        t.ActionCancel()
+    case PlayerCommandConfirm:
+        t.ActionConfirm()
+    case PlayerCommandUp:
+        t.ActionUp()
+    case PlayerCommandDown:
+        t.ActionDown()
+    case PlayerCommandLeft:
+        t.ActionLeft()
+    case PlayerCommandRight:
+        t.ActionRight()
+    }
+    return true
+}
+
+func (t *TextInput) ActionUp() {
+
+}
+
+func (t *TextInput) ActionDown() {
+
+}
+
+func (t *TextInput) ActionConfirm() {
+    t.onConfirm()
+}
+
+func (t *TextInput) OnMouseClicked(x int, y int) bool {
+    return false
+}
+
+func (t *TextInput) OnAvatarSwitched() {
+
+}
+
+func (t *TextInput) ActionLeft() {
+
+}
+
+func (t *TextInput) ActionRight() {
+
+}
+
+func (t *TextInput) OnMouseMoved(x int, y int) (bool, Tooltip) {
+    return false, NoTooltip{}
+}
+
+func NewTextInput(gridRenderer *renderer.DualGridRenderer, gridPos geometry.Point, maxLength int, cursorIcon int32, cursorFrameCount int, onClose func(endedWith EndAction, text string)) *TextInput {
     return &TextInput{
         gridPos:      gridPos,
         maxLength:    maxLength,
@@ -57,7 +113,7 @@ func (t *TextInput) SetDrawBorder(drawBorder bool) {
 func (t *TextInput) ShouldClose() bool {
     return t.shouldClose
 }
-func (t *TextInput) Draw(gridRenderer *DualGridRenderer, screen *ebiten.Image, tick uint64) {
+func (t *TextInput) Draw(screen *ebiten.Image) {
     if t.shouldClose {
         return
     }
@@ -65,21 +121,24 @@ func (t *TextInput) Draw(gridRenderer *DualGridRenderer, screen *ebiten.Image, t
     if t.drawBorder {
         borderTopLeft := t.gridPos.Add(geometry.Point{X: -1, Y: -1})
         borderBottomRight := t.gridPos.Add(geometry.Point{X: t.neededWidth() + 1, Y: 2})
-        gridRenderer.DrawFilledBorder(screen, borderTopLeft, borderBottomRight, "")
+        t.gridRenderer.DrawFilledBorder(screen, borderTopLeft, borderBottomRight, "")
     }
 
     yPos := t.gridPos.Y
     xInputStart := t.gridPos.X
     if t.prompt != "" {
-        gridRenderer.DrawColoredString(screen, xInputStart, yPos, t.prompt, color.White)
+        t.gridRenderer.DrawColoredString(screen, xInputStart, yPos, t.prompt, color.White)
         xInputStart += len(t.prompt)
     }
-    gridRenderer.DrawColoredString(screen, xInputStart, yPos, t.currentText, color.White)
+    t.gridRenderer.DrawColoredString(screen, xInputStart, yPos, t.currentText, color.White)
     xCursor := xInputStart + len(t.currentText)
-    gridRenderer.DrawOnSmallGrid(screen, xCursor, yPos, t.cursorFromTick(tick))
+    t.gridRenderer.DrawOnSmallGrid(screen, xCursor, yPos, t.cursorFromTick(t.currentTick))
 
 }
 
+func (t *TextInput) ActionCancel() {
+    t.onCancel()
+}
 func (t *TextInput) OnKeyPressed(key ebiten.Key) {
     if t.shouldClose {
         return
@@ -90,14 +149,12 @@ func (t *TextInput) OnKeyPressed(key ebiten.Key) {
     }
 
     if key == ebiten.KeyEnter {
-        t.onClose(EndActionConfirm, t.currentText)
-        t.shouldClose = true
+        t.onConfirm()
         return
     }
 
     if key == ebiten.KeyEscape {
-        t.onClose(EndActionCancel, "")
-        t.shouldClose = true
+        t.onCancel()
         return
     }
     if key == ebiten.KeySpace {
@@ -122,6 +179,16 @@ func (t *TextInput) OnKeyPressed(key ebiten.Key) {
     }
 }
 
+func (t *TextInput) onCancel() {
+    t.onClose(EndActionCancel, "")
+    t.shouldClose = true
+}
+
+func (t *TextInput) onConfirm() {
+    t.onClose(EndActionConfirm, t.currentText)
+    t.shouldClose = true
+}
+
 func (t *TextInput) cursorFromTick(tick uint64) int32 {
     if t.cursorFrames == 1 {
         return t.cursorIcon
@@ -132,4 +199,8 @@ func (t *TextInput) cursorFromTick(tick uint64) int32 {
 
 func (t *TextInput) SetMaxLength(length int) {
     t.maxLength = length
+}
+
+func (t *TextInput) SetTick(tick uint64) {
+    t.currentTick = tick
 }

@@ -4,20 +4,18 @@ import (
     "Legacy/game"
     "Legacy/geometry"
     "Legacy/gridmap"
-    "Legacy/renderer"
+    "Legacy/ui"
+    "Legacy/util"
     "fmt"
     "github.com/hajimehoshi/ebiten/v2"
+    "github.com/hajimehoshi/ebiten/v2/inpututil"
 )
 
-func (g *GridEngine) MoveAvatarInDirection(direction geometry.Point) {
+func (g *GridEngine) PlayerMovement(direction geometry.Point) {
     oldPos := g.GetAvatar().Pos()
-    if g.splitControlled != nil {
-        g.currentMap.MoveActor(g.splitControlled, g.splitControlled.Pos().Add(direction))
-        g.onViewedActorMoved(g.splitControlled.Pos())
-    } else {
-        g.playerParty.Move(direction)
-        g.onViewedActorMoved(g.avatar.Pos())
-    }
+
+    g.playerParty.Move(direction)
+
     newPos := g.GetAvatar().Pos()
 
     if oldPos == newPos {
@@ -28,7 +26,7 @@ func (g *GridEngine) MoveAvatarInDirection(direction geometry.Point) {
     if g.flags.GetFlag("steps_taken") == 1 {
         g.onVeryFirstStep()
     }
-
+    g.advanceTimeFromMovement()
     if g.playerParty.NeedsRestAfterMovement() {
         for _, actor := range g.playerParty.GetMembers() {
             actor.ClearBuffs()
@@ -36,18 +34,28 @@ func (g *GridEngine) MoveAvatarInDirection(direction geometry.Point) {
             g.AddBuff(actor, "Weak", game.BuffTypeDefense, -3)
         }
     }
-
-    for i := len(g.onMoveSubscribers) - 1; i >= 0; i-- {
-        subscriber := g.onMoveSubscribers[i]
-        if subscriber(newPos) {
-            // remove the subscriber
-            g.onMoveSubscribers = append(g.onMoveSubscribers[:i], g.onMoveSubscribers[i+1:]...)
-        }
+    if g.currentMap.IsObjectAt(newPos) {
+        object := g.currentMap.ObjectAt(newPos)
+        object.OnActorWalkedOn(g.GetAvatar())
     }
+    g.onAvatarMovedOrTeleported(g.GetAvatar().Pos())
 }
 
-func (g *GridEngine) moveActor(npc *game.Actor, dest geometry.Point) {
-    g.currentMap.MoveActor(npc, dest)
+func (g *GridEngine) onAvatarMovedOrTeleported(newLocation geometry.Point) {
+    if trigger, isAtTrigger := g.currentMap.GetNamedTriggerAt(newLocation); isAtTrigger {
+        g.TriggerEvent(trigger.Name)
+        if trigger.OneShot {
+            g.currentMap.RemoveNamedTrigger(trigger.Name)
+        }
+    }
+    g.onViewedActorMoved(newLocation)
+}
+
+func (g *GridEngine) moveActorInCombat(actor *game.Actor, dest geometry.Point) {
+    g.currentMap.MoveActor(actor, dest)
+    if g.IsPlayerControlled(actor) {
+        g.onAvatarMovedOrTeleported(actor.Pos()) // UNCOMMENT FOR CAM FOLLOW BEHAVIOR
+    }
 }
 
 func (g *GridEngine) Update() error {
@@ -66,12 +74,57 @@ func (g *GridEngine) Update() error {
     if g.ticksForPrint > 0 {
         g.ticksForPrint--
     }
-    if g.combatManager.IsInCombat() {
-        g.combatManager.Update()
-        return nil
+
+    g.WorldTicks++
+    g.advanceTimeFromTicks(g.WorldTicks)
+
+    if g.IsModalOpen() { // prio #0 Text Input fields, never pass through
+        textInput, isModalTextInput := g.topModal().(ui.TextInputReceiver)
+        if isModalTextInput {
+            textInput.SetTick(g.CurrentTick())
+            var keys []ebiten.Key
+            keys = inpututil.AppendJustPressedKeys(keys)
+            for _, key := range keys {
+                textInput.OnKeyPressed(key)
+            }
+            return nil
+        }
     }
 
-    g.handleInput()
+    var receivers []ui.InputReceiver
+    // prio #1 conversation
+    if g.IsInConversation() {
+        receivers = append(receivers, g.conversationModal)
+    }
+    // prio #2 modal
+    if g.IsModalOpen() {
+        receivers = append(receivers, g.topModal())
+    }
+
+    if g.IsInCombat() {
+        receivers = append(receivers, g.combatManager)
+    }
+    receivers = append(receivers, g)
+    for _, receiver := range receivers {
+        if g.handleKeyboardInput(receiver) {
+            break
+        }
+    }
+    screenX, screenY := ebiten.CursorPosition()
+    mouseHandled := false
+    for _, receiver := range receivers {
+        if g.handleMouseInput(receiver, screenX, screenY) {
+            mouseHandled = true
+            break
+        }
+    }
+
+    if !mouseHandled && !g.IsInCombat() && !g.IsInConversation() && !g.IsModalOpen() {
+        g.handleMapMouseInput(screenX, screenY) // make this an option? it can be a bit fiddly..
+    }
+
+    g.handleShortcuts()
+    g.handleDebugKeys()
 
     for i := len(g.activeEvents) - 1; i >= 0; i-- {
         event := g.activeEvents[i]
@@ -86,8 +139,9 @@ func (g *GridEngine) Update() error {
         g.animationRoutine.Update()
     }
 
-    g.WorldTicks++
-
+    if g.combatManager.IsInCombat() {
+        g.combatManager.Update()
+    }
     return nil
 }
 
@@ -99,51 +153,50 @@ func (g *GridEngine) Draw(screen *ebiten.Image) {
 
     g.mapRenderer.Draw(g.playerParty.GetFoV(), screen, g.CurrentTick())
 
-    if g.textInput != nil {
-        if g.textInput.ShouldClose() {
-            g.textInput = nil
-            g.updateContextActions()
-        } else {
-            g.textInput.Draw(g.gridRenderer, screen, g.CurrentTick())
-        }
-    } else if g.inputElement != nil {
-        if g.inputElement.ShouldClose() {
-            if gridMenu, ok := g.inputElement.(*renderer.GridMenu); ok && !g.combatManager.IsInCombat() {
-                lastAction := gridMenu.GetLastAction()
-                g.lastSelectedAction = lastAction
-            }
-            g.closeInputElement()
-            g.updateContextActions()
-        } else {
-            g.inputElement.Draw(screen)
-        }
-    }
-    if g.modalElement != nil {
-        if g.modalElement.ShouldClose() && g.inputElement == nil {
-            g.modalElement = nil
-            g.updateContextActions()
-        } else {
-            g.modalElement.Draw(screen)
-        }
-    }
     if g.combatManager.IsInCombat() {
         g.drawWarTimeStatusBar(screen)
         g.combatManager.Draw(screen)
     } else {
         g.drawPeaceTimeStatusBar(screen)
     }
+
+    if g.conversationModal != nil {
+        if g.conversationModal.ShouldClose() {
+            g.conversationModal = nil
+        } else {
+            g.conversationModal.Draw(screen)
+        }
+    }
+
+    if g.IsModalOpen() {
+        if g.topModal().ShouldClose() {
+            g.PopModal()
+        }
+        for _, modal := range g.modalStack {
+            modal.Draw(screen)
+        }
+    }
+
     if g.currentTooltip != nil && g.ticksUntilTooltipAppears == 0 {
         g.currentTooltip.Draw(screen)
     }
 }
 
-func (g *GridEngine) closeInputElement() {
-    g.inputElement = nil
+func (g *GridEngine) CloseAllModals() {
+    g.modalStack = make([]Modal, 0)
     g.currentTooltip = nil
 }
 
-func (g *GridEngine) switchInputElement(nextWidget UIWidget) {
-    g.inputElement = nextWidget
+func (g *GridEngine) PushModal(nextWidget Modal) {
+    if g.IsInConversation() {
+        return
+    }
+    g.modalStack = append(g.modalStack, nextWidget)
+    g.currentTooltip = nil
+}
+
+func (g *GridEngine) PopModal() {
+    g.modalStack = g.modalStack[:len(g.modalStack)-1]
     g.currentTooltip = nil
 }
 
@@ -184,7 +237,12 @@ func (g *GridEngine) ensureMapInMemory(targetMap string) {
     }
 }
 func (g *GridEngine) transitionToLocation(targetMap string, destPos geometry.Point) {
+    if g.playerParty.IsInVehicle() {
+        g.Print("Must exit vehicle first.")
+        return
+    }
     currentMapName := g.currentMap.GetName()
+
     nextMapName := targetMap
 
     // remove the party from the current map
@@ -205,29 +263,29 @@ func (g *GridEngine) transitionToLocation(targetMap string, destPos geometry.Poi
     // add the party to the new map
     g.PlaceParty(destPos)
 }
-func (g *GridEngine) updateContextActions() {
 
-    // NOTE: We need to reverse the dependency here
-    // The objects in the world, should provide us with context actions.
-    // We should not know about them beforehand.
-    breakingTool := g.playerParty.GetNameOfBreakingTool()
+type Interactables struct {
+    Actors       []*game.Actor
+    AllItems     []game.Item
+    UniqueItems  []game.Item
+    Objects      []game.Object
+    SpecialTiles map[geometry.Point]gridmap.MapCell[*game.Actor, game.Item, game.Object]
+    Transitions  []gridmap.Transition
+}
 
-    loc := g.GetAvatar().Pos()
+func (i Interactables) IsEmpty() bool {
+    return len(i.Actors) == 0 && len(i.AllItems) == 0 && len(i.Objects) == 0 && len(i.SpecialTiles) == 0
+}
 
-    g.contextActions = make([]renderer.MenuItem, 0)
-
-    existingNeighbors := g.currentMap.NeighborsCardinal(loc, func(p geometry.Point) bool {
-        return g.currentMap.Contains(p)
-    })
-
-    existingNeighbors = append(existingNeighbors, loc)
-
+func (g *GridEngine) getInteractablesAt(locations []geometry.Point) Interactables {
     var actorsNearby []*game.Actor
     var uniqueItemsNearby []game.Item
     var allItemsNearby []game.Item
     var objectsNearby []game.Object
+    var transitions []gridmap.Transition
+    nearbySpecialTiles := make(map[geometry.Point]gridmap.MapCell[*game.Actor, game.Item, game.Object])
 
-    for _, n := range existingNeighbors {
+    for _, n := range locations {
         neighbor := n
         if g.currentMap.IsActorAt(neighbor) {
             actor := g.currentMap.GetActor(neighbor)
@@ -258,27 +316,33 @@ func (g *GridEngine) updateContextActions() {
             }
         }
         cellAt := g.currentMap.GetCell(neighbor)
-        if cellAt.TileType.IsBreakable() && breakingTool != "" {
-            g.contextActions = append(g.contextActions, renderer.MenuItem{
-                Text: fmt.Sprintf("Break (%s)", breakingTool),
-                Action: func() {
-                    g.breakTileAt(neighbor)
-                },
-            })
-        } else if cellAt.TileType.IsBed() {
-            if g.GetMapName() == "Bed_Room" {
-                g.contextActions = append(g.contextActions, renderer.MenuItem{
-                    Text:   "Your bed",
-                    Action: g.goBackToBed,
-                })
-            } else {
-                g.contextActions = append(g.contextActions, renderer.MenuItem{
-                    Text:   "Rest in bed",
-                    Action: g.TryRestParty,
-                })
-            }
+        if cellAt.TileType.IsBreakable() || cellAt.TileType.IsBed() {
+            nearbySpecialTiles[neighbor] = cellAt
+        } else if g.currentMap.IsSpecialAt(neighbor, gridmap.SpecialTileForest) {
+            nearbySpecialTiles[neighbor] = cellAt
+        } else if transition, ok := g.currentMap.GetTransitionAt(neighbor); ok {
+            transitions = append(transitions, transition)
         }
     }
+    return Interactables{
+        Actors:       actorsNearby,
+        AllItems:     allItemsNearby,
+        UniqueItems:  uniqueItemsNearby,
+        Objects:      objectsNearby,
+        SpecialTiles: nearbySpecialTiles,
+        Transitions:  transitions,
+    }
+}
+func (g *GridEngine) getContextActions() []util.MenuItem {
+    loc := g.GetAvatar().Pos()
+
+    existingNeighbors := g.currentMap.NeighborsCardinal(loc, func(p geometry.Point) bool {
+        return g.currentMap.Contains(p)
+    })
+
+    existingNeighbors = append(existingNeighbors, loc)
+
+    interactables := g.getInteractablesAt(existingNeighbors)
 
     // extended range for talking to NPCs
     twoRangeCardinalRelative := []geometry.Point{
@@ -293,25 +357,42 @@ func (g *GridEngine) updateContextActions() {
         if g.currentMap.Contains(neighbor) && g.currentMap.IsActorAt(neighbor) && g.playerParty.GetFoV().Visible(neighbor) {
             actor := g.currentMap.GetActor(neighbor)
             if !actor.IsHidden() && !g.IsPlayerControlled(actor) {
-                actorsNearby = append(actorsNearby, actor)
+                interactables.Actors = append(interactables.Actors, actor)
             }
         }
     }
 
-    if len(allItemsNearby) > 1 {
-        g.contextActions = append(g.contextActions, renderer.MenuItem{
+    return g.contextActionsFromInteractables(interactables)
+}
+
+func (g *GridEngine) contextActionsFromInteractables(interactables Interactables) []util.MenuItem {
+
+    contextActions := make([]util.MenuItem, 0)
+
+    for _, t := range interactables.Transitions {
+        transition := t
+        contextActions = append(contextActions, util.MenuItem{
+            Text: "Go to",
+            Action: func() {
+                g.transitionToNamedLocation(transition.TargetMap, transition.TargetLocation)
+            },
+        })
+    }
+
+    if len(interactables.AllItems) > 1 {
+        contextActions = append(contextActions, util.MenuItem{
             Text: "Pick up all",
             Action: func() {
-                for _, item := range allItemsNearby {
+                for _, item := range interactables.AllItems {
                     g.PickUpItem(item)
                 }
             },
         })
     }
 
-    for _, a := range actorsNearby {
+    for _, a := range interactables.Actors {
         actor := a
-        g.contextActions = append(g.contextActions, renderer.MenuItem{
+        contextActions = append(contextActions, util.MenuItem{
             Text: actor.Name(),
             Action: func() {
                 g.openMenuWithTitle(actor.Name(), actor.GetContextActions(g))
@@ -319,9 +400,9 @@ func (g *GridEngine) updateContextActions() {
         })
     }
 
-    for _, i := range uniqueItemsNearby {
+    for _, i := range interactables.UniqueItems {
         item := i
-        g.contextActions = append(g.contextActions, renderer.MenuItem{
+        contextActions = append(contextActions, util.MenuItem{
             Text: item.Name(),
             Action: func() {
                 g.openMenuWithTitle(item.Name(), item.GetContextActions(g))
@@ -329,9 +410,9 @@ func (g *GridEngine) updateContextActions() {
         })
     }
 
-    for _, o := range objectsNearby {
+    for _, o := range interactables.Objects {
         object := o
-        g.contextActions = append(g.contextActions, renderer.MenuItem{
+        contextActions = append(contextActions, util.MenuItem{
             Text: object.Name(),
             Action: func() {
                 g.openMenuWithTitle(object.Name(), object.GetContextActions(g))
@@ -339,22 +420,44 @@ func (g *GridEngine) updateContextActions() {
         })
     }
 
-    // worldmap interactions
+    breakingTool := g.playerParty.GetNameOfBreakingTool()
 
-    if g.currentMap.IsSpecialAt(loc, gridmap.SpecialTileForest) {
-        g.contextActions = append(g.contextActions, renderer.MenuItem{
-            Text: "Hunt game",
-            Action: func() {
-                g.AddFood(1)
-            },
-        })
-
-        g.contextActions = append(g.contextActions, renderer.MenuItem{
-            Text: "Gather herbs",
-            Action: func() {
-                g.AddFood(2)
-            },
-        })
+    for m, cell := range interactables.SpecialTiles {
+        mapPos := m
+        if cell.TileType.IsBreakable() && breakingTool != "" {
+            contextActions = append(contextActions, util.MenuItem{
+                Text: fmt.Sprintf("Break (%s)", breakingTool),
+                Action: func() {
+                    g.breakTileAt(mapPos)
+                },
+            })
+        } else if cell.TileType.IsBed() {
+            if g.GetMapName() == "Bed_Room" {
+                contextActions = append(contextActions, util.MenuItem{
+                    Text:   "Your bed",
+                    Action: g.goBackToBed,
+                })
+            } else {
+                contextActions = append(contextActions, util.MenuItem{
+                    Text:   "Rest in bed",
+                    Action: g.TryRestParty,
+                })
+            }
+        } else if cell.TileType.IsForest() {
+            contextActions = append(contextActions, util.MenuItem{
+                Text: "Hunt game",
+                Action: func() {
+                    g.AddFood(1)
+                },
+            })
+            contextActions = append(contextActions, util.MenuItem{
+                Text: "Gather herbs",
+                Action: func() {
+                    g.AddFood(2)
+                },
+            })
+        }
     }
 
+    return contextActions
 }

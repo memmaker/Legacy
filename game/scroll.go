@@ -2,7 +2,7 @@ package game
 
 import (
     "Legacy/recfile"
-    "Legacy/renderer"
+    "Legacy/util"
     "fmt"
     "image/color"
 )
@@ -66,21 +66,27 @@ func (b *Scroll) TintColor() color.Color {
     return color.White
 }
 
-func (b *Scroll) GetContextActions(engine Engine) []renderer.MenuItem {
+func (b *Scroll) GetContextActions(engine Engine) []util.MenuItem {
     actions := inventoryItemActions(b, engine)
-    actions = append(actions, renderer.MenuItem{
+    actions = append(actions, util.MenuItem{
         Text:   fmt.Sprintf("Read \"%s\"", b.name),
         Action: func() { b.read(engine) },
     })
     if b.spell != nil {
-
-        actions = append(actions, renderer.MenuItem{
-            Text:   fmt.Sprintf("Cast \"%s\"", b.spell.name),
-            Action: func() { b.spell.Cast(engine, engine.GetAvatar()) },
-        })
+        if b.spell.IsTargeted() {
+            actions = append(actions, util.MenuItem{
+                Text:   fmt.Sprintf("Cast \"%s\"", b.spell.name),
+                Action: func() { engine.PlayerStartsOffensiveSpell(engine.GetAvatar(), b.spell) },
+            })
+        } else {
+            actions = append(actions, util.MenuItem{
+                Text:   fmt.Sprintf("Cast \"%s\"", b.spell.name),
+                Action: func() { b.spell.Cast(engine, engine.GetAvatar()) },
+            })
+        }
 
         if engine.IsPlayerControlled(b.GetHolder()) {
-            actions = append(actions, renderer.MenuItem{
+            actions = append(actions, util.MenuItem{
                 Text: "Equip",
                 Action: func() {
                     engine.ShowEquipMenu(b)

@@ -1,7 +1,7 @@
 package game
 
 import (
-    "Legacy/renderer"
+    "Legacy/util"
     "fmt"
     "image/color"
 )
@@ -18,11 +18,7 @@ type LightSource struct {
 }
 
 func (b *LightSource) GetTooltipLines() []string {
-    if b.isLit {
-        return []string{fmt.Sprintf("A lit %s", b.name)}
-    } else {
-        return []string{fmt.Sprintf("A %s", b.name)}
-    }
+    return []string{}
 }
 
 func (b *LightSource) InventoryIcon() int32 {
@@ -57,15 +53,15 @@ func (b *LightSource) TintColor() color.Color {
     return color.White
 }
 
-func (b *LightSource) GetContextActions(engine Engine) []renderer.MenuItem {
+func (b *LightSource) GetContextActions(engine Engine) []util.MenuItem {
     actions := inventoryItemActions(b, engine)
     if b.isLit {
-        actions = append(actions, renderer.MenuItem{
+        actions = append(actions, util.MenuItem{
             Text:   "Extinguish",
             Action: func() { b.isLit = false },
         })
     } else {
-        actions = append(actions, renderer.MenuItem{
+        actions = append(actions, util.MenuItem{
             Text:   "Light",
             Action: func() { b.isLit = true },
         })

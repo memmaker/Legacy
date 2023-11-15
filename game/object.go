@@ -3,7 +3,7 @@ package game
 import (
     "Legacy/geometry"
     "Legacy/recfile"
-    "Legacy/renderer"
+    "Legacy/util"
     "image/color"
 )
 
@@ -32,8 +32,8 @@ func (a *BaseObject) IsPassableForProjectile() bool {
 func (a *BaseObject) SetDescription(description []string) {
     a.description = description
 }
-func (a *BaseObject) GetContextActions(engine Engine, implObject Object) []renderer.MenuItem {
-    return []renderer.MenuItem{
+func (a *BaseObject) GetContextActions(engine Engine, implObject Object) []util.MenuItem {
+    return []util.MenuItem{
         {
             Text: "Examine",
             Action: func() {
@@ -42,7 +42,8 @@ func (a *BaseObject) GetContextActions(engine Engine, implObject Object) []rende
         },
     }
 }
-
+func (a *BaseObject) OnActorWalkedOn(actor *Actor) {
+}
 func (a *BaseObject) Name() string {
     return a.name
 }
@@ -57,7 +58,7 @@ type Object interface {
     TintColor() color.Color
     SetPos(geometry.Point)
     Name() string
-    GetContextActions(engine Engine) []renderer.MenuItem
+    GetContextActions(engine Engine) []util.MenuItem
     IsWalkable(person *Actor) bool
     IsTransparent() bool
     IsPassableForProjectile() bool
@@ -65,6 +66,7 @@ type Object interface {
     IsHidden() bool
     Discover() []string
     ToRecordAndType() (recfile.Record, string)
+    OnActorWalkedOn(person *Actor)
 }
 
 func NewObjectFromRecord(record recfile.Record, objectTypeName string) Object {

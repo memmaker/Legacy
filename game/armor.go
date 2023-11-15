@@ -3,7 +3,6 @@ package game
 import (
     "Legacy/ega"
     "Legacy/recfile"
-    "Legacy/renderer"
     "Legacy/util"
     "fmt"
     "image/color"
@@ -47,6 +46,15 @@ const (
     ItemTierLegendary ItemTier = "legendary"
 )
 
+func GetAllTiers() []ItemTier {
+    return []ItemTier{
+        ItemTierCommon,
+        ItemTierUncommon,
+        ItemTierRare,
+        ItemTierLegendary,
+    }
+}
+
 type ArmorModifier string
 
 const (
@@ -56,6 +64,16 @@ const (
     ArmorMaterialPlate   ArmorModifier = "plate"
     ArmorMaterialMagical ArmorModifier = "magical"
 )
+
+func GetAllArmorModifiers() []ArmorModifier {
+    return []ArmorModifier{
+        ArmorMaterialCloth,
+        ArmorMaterialLeather,
+        ArmorMaterialChain,
+        ArmorMaterialPlate,
+        ArmorMaterialMagical,
+    }
+}
 
 type Armor struct {
     BaseItem
@@ -128,20 +146,23 @@ func (a *Armor) GetValue() int {
     return baseValue
 }
 func (a *Armor) Icon(u uint64) int32 {
-    return int32(205)
+    if a.slot == ArmorSlotHelmet {
+        return int32(222)
+    }
+    return int32(221)
 }
-func (a *Armor) GetContextActions(engine Engine) []renderer.MenuItem {
+func (a *Armor) GetContextActions(engine Engine) []util.MenuItem {
     baseActions := inventoryItemActions(a, engine)
     if !engine.IsPlayerControlled(a.GetHolder()) {
         return baseActions
     }
-    equipAction := renderer.MenuItem{
+    equipAction := util.MenuItem{
         Text: "Equip",
         Action: func() {
             engine.ShowEquipMenu(a)
         },
     }
-    equipActions := []renderer.MenuItem{equipAction}
+    equipActions := []util.MenuItem{equipAction}
     return append(equipActions, baseActions...)
 }
 
@@ -182,7 +203,7 @@ func (a *Armor) IsEquipped() bool {
     return a.wearer != nil
 }
 
-func NewArmor(material ArmorModifier, slot ArmorSlot, level ItemTier) *Armor {
+func NewArmor(level ItemTier, slot ArmorSlot, material ArmorModifier) *Armor {
     return &Armor{
         BaseItem: BaseItem{
             name: nameFromSlotAndMaterial(slot, material),
@@ -196,7 +217,7 @@ func NewRandomArmor(lootLevel int) *Armor {
     slot := randomSlot()
     material := materialFromLootLevel(lootLevel)
     randomTier := tierFromLootLevel(lootLevel)
-    return NewArmor(material, slot, randomTier)
+    return NewArmor(randomTier, slot, material)
 }
 
 func tierFromLootLevel(lootLevel int) ItemTier {
@@ -423,15 +444,16 @@ func materialFromLootLevel(level int) ArmorModifier {
 }
 func NewArmorFromPredicate(encoded recfile.StringPredicate) *Armor {
     // extract name, slot, and protection
-    return NewArmor(
-        ArmorModifier(encoded.GetString(0)),
-        ArmorSlot(encoded.GetString(1)),
-        ItemTier(encoded.GetString(2)),
-    )
+    // example: armor(common, helmet, cloth)
+    armor := NewArmor(ItemTier(encoded.GetString(0)), ArmorSlot(encoded.GetString(1)), ArmorModifier(encoded.GetString(2)))
+    if encoded.ParamCount() > 3 {
+        armor.SetName(encoded.GetString(3))
+    }
+    return armor
 }
 
 func (a *Armor) Encode() string {
-    return recfile.ToPredicate("armor", string(a.material), string(a.slot), string(a.GetLevel()))
+    return recfile.ToPredicate("armor", string(a.level), string(a.slot), string(a.material))
 }
 
 func (a *Armor) IsAccessory() bool {

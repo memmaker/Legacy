@@ -10,6 +10,7 @@ import (
     "Legacy/recfile"
     "Legacy/renderer"
     "Legacy/ui"
+    "Legacy/util"
     "errors"
     "fmt"
     "github.com/hajimehoshi/ebiten/v2"
@@ -23,6 +24,7 @@ import (
     "runtime/pprof"
     "sort"
     "strings"
+    "time"
 )
 
 type EngineConfiguration struct {
@@ -41,8 +43,8 @@ type GridEngine struct {
     config EngineConfiguration
 
     // Game State & Bookkeeping
-    avatar          *game.Actor
-    splitControlled *game.Actor
+    avatar *game.Actor
+
     playerParty     *game.Party
     playerKnowledge *game.PlayerKnowledge
     flags           *game.Flags
@@ -61,14 +63,15 @@ type GridEngine struct {
     animationRoutine gocoro.Coroutine
 
     // UI
-    deviceDPIScale           float64
-    tileScale                float64
-    internalWidth            int
-    internalHeight           int
-    textInput                *renderer.TextInput
-    modalElement             Modal
-    inputElement             UIWidget
-    currentTooltip           renderer.Tooltip
+    deviceDPIScale float64
+    tileScale      float64
+    internalWidth  int
+    internalHeight int
+
+    modalStack        []Modal
+    conversationModal *ui.ConversationModal
+
+    currentTooltip           ui.Tooltip
     ticksUntilTooltipAppears int
 
     uiOverlay map[int]int32
@@ -80,12 +83,12 @@ type GridEngine struct {
     defenseBuffsButton geometry.Point
     offenseBuffsButton geometry.Point
 
-    gridRenderer       *renderer.DualGridRenderer
-    mapRenderer        *renderer.MapRenderer
-    mapWindow          *renderer.MapWindow
-    lastMousePosX      int
-    lastMousePosY      int
-    contextActions     []renderer.MenuItem
+    gridRenderer  *renderer.DualGridRenderer
+    mapRenderer   *renderer.MapRenderer
+    mapWindow     *renderer.MapWindow
+    lastMousePosX int
+    lastMousePosY int
+
     lastSelectedAction func()
     lastShownText      []string
 
@@ -99,9 +102,86 @@ type GridEngine struct {
     printLog             []string
     grayScaleEntityTiles *ebiten.Image
     allowedPartyIcons    []int32
-    onMoveSubscribers    []func(newPosition geometry.Point) bool
-    isGameOver           bool
-    wheelYVelocity       float64
+
+    isGameOver              bool
+    wheelYVelocity          float64
+    allTransitions          map[string][]NamedLocation
+    worldTime               game.WorldTime
+    lastInteractionWasMouse bool
+}
+
+func (g *GridEngine) OnMouseWheel(x int, y int, dy float64) bool {
+    return false
+}
+
+func (g *GridEngine) GetWorldTime() game.WorldTime {
+    return g.worldTime
+}
+
+func (g *GridEngine) AdvanceWorldTime(days, hours, minutes int) {
+    g.worldTime = g.worldTime.WithAddedDays(days).WithAddedMinutes(hours*game.MinutesPerHour + minutes)
+}
+
+func (g *GridEngine) AdvanceWorldTimeWithMessage(days, hours, minutes int) {
+    g.worldTime = g.worldTime.WithAddedDays(days).WithAddedMinutes(hours*game.MinutesPerHour + minutes)
+    g.printTimePassedMessage(days, hours, minutes)
+}
+
+func (g *GridEngine) printTimePassedMessage(days int, hours int, minutes int) {
+    if days == 0 {
+        if hours == 0 {
+            g.Print(fmt.Sprintf("%d minutes passed", minutes))
+        } else {
+            if minutes == 0 {
+                g.Print(fmt.Sprintf("%d hours passed", hours))
+            } else {
+                g.Print(fmt.Sprintf("%d hours, %d minutes passed", hours, minutes))
+            }
+        }
+    } else {
+        if hours == 0 {
+            if minutes == 0 {
+                g.Print(fmt.Sprintf("%d days passed", days))
+            } else {
+                g.Print(fmt.Sprintf("%d days, %d minutes passed", days, minutes))
+            }
+        } else {
+            if minutes == 0 {
+                g.Print(fmt.Sprintf("%d days, %d hours passed", days, hours))
+            } else {
+                g.Print(fmt.Sprintf("%d days, %d hours, %d minutes passed", days, hours, minutes))
+            }
+        }
+    }
+}
+
+func (g *GridEngine) PlayerStartsOffensiveSpell(caster *game.Actor, spell *game.Spell) {
+    if !caster.HasMana(spell.ManaCost()) {
+        g.Print("Not enough mana!")
+        return
+    }
+    g.combatManager.PlayerStartsOffensiveSpell(caster, spell)
+}
+
+func (g *GridEngine) OnCommand(command ui.CommandType) bool {
+    if g.IsInCombat() {
+        return false
+    }
+    switch command {
+    case ui.PlayerCommandUp:
+        g.ActionUp()
+    case ui.PlayerCommandDown:
+        g.ActionDown()
+    case ui.PlayerCommandLeft:
+        g.ActionLeft()
+    case ui.PlayerCommandRight:
+        g.ActionRight()
+    case ui.PlayerCommandConfirm:
+        g.ActionConfirm()
+    case ui.PlayerCommandCancel:
+        g.ActionCancel()
+    }
+    return true
 }
 
 func (g *GridEngine) GetParty() *game.Party {
@@ -172,7 +252,7 @@ func (g *GridEngine) TeleportTo(mirrorText string) {
     if mirrorText == "" {
         return
     }
-    mapName, locationName := g.rules.GetTargetLocation(mirrorText)
+    mapName, locationName := g.rules.GetTargetTravelLocation(mirrorText)
     if mapName == "" || locationName == "" {
         return
     }
@@ -251,8 +331,12 @@ func (g *GridEngine) SpellDamageAt(caster *game.Actor, pos geometry.Point, amoun
     }
 }
 
-func (g *GridEngine) StartCombat(opponents *game.Actor) {
-    g.combatManager.PlayerStartsMeleeAttack(g.GetAvatar(), opponents)
+func (g *GridEngine) PlayerStartsCombat(opponent *game.Actor) {
+    g.combatManager.PlayerStartsMeleeAttack(g.GetAvatar(), opponent)
+}
+
+func (g *GridEngine) EnemyStartsCombat(opponent *game.Actor) {
+    g.combatManager.EnemyStartsAttack(opponent, g.GetAvatar())
 }
 
 func main() {
@@ -311,16 +395,17 @@ func (g *GridEngine) QuitGame() {
     g.wantsToQuit = true
 }
 
-// onMouseMoved receives the coordinates as character cells
-func (g *GridEngine) onMouseMoved(x int, y int) {
-    if g.inputElement != nil {
-        tooltip := g.inputElement.OnMouseMoved(x, y)
-        if tooltip.IsNull() {
-            g.currentTooltip = nil
-        } else {
-            g.currentTooltip = tooltip
-            g.ticksUntilTooltipAppears = int(ebiten.ActualTPS() * 0.5)
-        }
+// OnMouseMoved receives the coordinates as character cells
+func (g *GridEngine) OnMouseMoved(x int, y int) (bool, ui.Tooltip) {
+    return false, ui.NoTooltip{}
+}
+
+func (g *GridEngine) handleTooltip(tooltip ui.Tooltip) {
+    if tooltip.IsNull() {
+        g.currentTooltip = nil
+    } else {
+        g.currentTooltip = tooltip
+        g.ticksUntilTooltipAppears = int(ebiten.ActualTPS() * 0.5)
     }
 }
 
@@ -328,8 +413,8 @@ func (g *GridEngine) MapToScreenCoordinates(pos geometry.Point) geometry.Point {
     return g.mapWindow.GetScreenGridPositionFromMapGridPosition(pos)
 }
 
-// onMouseClick receives the coordinates as character cells
-func (g *GridEngine) onMouseClick(x int, y int) {
+// OnMouseClicked receives the coordinates as character cells
+func (g *GridEngine) OnMouseClicked(x int, y int) bool {
     screenSize := g.gridRenderer.GetSmallGridScreenSize()
     oneFourth := screenSize.X / 4
 
@@ -338,7 +423,7 @@ func (g *GridEngine) onMouseClick(x int, y int) {
         if len(offBuffs) > 0 {
             g.ShowFixedFormatText(offBuffs)
         }
-        return
+        return true
     }
 
     if x == g.defenseBuffsButton.X && y == g.defenseBuffsButton.Y {
@@ -346,16 +431,19 @@ func (g *GridEngine) onMouseClick(x int, y int) {
         if len(defBuffs) > 0 {
             g.ShowFixedFormatText(defBuffs)
         }
-        return
+        return true
     }
 
     if y == screenSize.Y-2 {
         if x == g.foodButton.X {
             g.TryRestParty()
+            return true
         } else if x == g.goldButton.X {
             g.openFinanceOverview()
+            return true
         } else if x == g.bagButton.X {
             g.openExtendedInventory()
+            return true
         }
     } else if y == screenSize.Y-1 {
         // each 1/4 of the screen is a different UI
@@ -384,11 +472,9 @@ func (g *GridEngine) onMouseClick(x int, y int) {
                 g.OpenEquipmentDetails(g.playerParty.GetMember(3))
             }
         }
-    } else if g.inputElement != nil && g.inputElement.OnMouseClicked(x, y) {
-        return
-    } else if g.modalElement != nil {
-        g.modalElement.OnMouseClicked(x, y)
+        return true
     }
+    return false
 }
 
 func (g *GridEngine) onViewedActorMoved(newPosition geometry.Point) {
@@ -398,7 +484,6 @@ func (g *GridEngine) onViewedActorMoved(newPosition geometry.Point) {
         g.mapWindow.EnsurePositionIsInview(newPosition, 5)
     }
     g.currentMap.UpdateFieldOfView(g.playerParty.GetFoV(), newPosition)
-    g.updateContextActions()
 }
 
 func (g *GridEngine) drawPrintMessage(screen *ebiten.Image, upper bool) {
@@ -412,7 +497,13 @@ func (g *GridEngine) drawPrintMessage(screen *ebiten.Image, upper bool) {
     textLen := len(g.textToPrint)
     xOffsetForCenter := (width - textLen) / 2
 
+    xBeforeText := xOffsetForCenter - 1
+    xAfterText := xOffsetForCenter + textLen
     g.gridRenderer.DrawColoredString(screen, xOffsetForCenter, yPos, g.textToPrint, color.White)
+    if upper {
+        g.gridRenderer.DrawOnSmallGrid(screen, xBeforeText, yPos, 16)
+        g.gridRenderer.DrawOnSmallGrid(screen, xAfterText, yPos, 17)
+    }
 }
 
 func (g *GridEngine) DrinkPotion(potion *game.Potion, member *game.Actor) {
@@ -482,7 +573,6 @@ func (g *GridEngine) breakTileAt(loc geometry.Point) {
             goldItem := game.NewPseudoItemFromTypeAndAmount(game.PseudoItemTypeGold, 200)
             g.currentMap.AddItem(goldItem, loc)
         }
-        g.updateContextActions()
     }
 }
 
@@ -570,9 +660,15 @@ func (g *GridEngine) setGameOver() {
     g.isGameOver = true
     g.ShowText([]string{"Game Over"})
 }
-
+func (g *GridEngine) topModal() Modal {
+    return g.modalStack[len(g.modalStack)-1]
+}
 func (g *GridEngine) IsWindowOpen() bool {
-    return g.modalElement != nil || g.inputElement != nil
+    return g.IsModalOpen() || g.IsInConversation()
+}
+
+func (g *GridEngine) IsModalOpen() bool {
+    return g.modalStack != nil && len(g.modalStack) > 0
 }
 
 func (g *GridEngine) addToJournal(npc *game.Actor, text []string) {
@@ -585,7 +681,7 @@ func (g *GridEngine) openJournal() {
         g.ShowText([]string{"You don't have any journal entries."})
         return
     }
-    g.OpenMenu([]renderer.MenuItem{
+    g.OpenMenu([]util.MenuItem{
         {
             Text: "Chronological",
             Action: func() {
@@ -603,11 +699,11 @@ func (g *GridEngine) openJournal() {
 
 }
 
-func (g *GridEngine) toJournalMenu(sources []string) []renderer.MenuItem {
-    var items []renderer.MenuItem
+func (g *GridEngine) toJournalMenu(sources []string) []util.MenuItem {
+    var items []util.MenuItem
     for _, s := range sources {
         source := s
-        items = append(items, renderer.MenuItem{
+        items = append(items, util.MenuItem{
             Text: source,
             Action: func() {
                 g.ShowFixedFormatText(g.playerKnowledge.GetJournalBySource(source))
@@ -653,13 +749,13 @@ func (g *GridEngine) DeliverSpellDamage(attacker *game.Actor, victim *game.Actor
 }
 
 func (g *GridEngine) openDismissMenu() {
-    var menuItems []renderer.MenuItem
+    var menuItems []util.MenuItem
     for _, m := range g.playerParty.GetMembers() {
         if m == g.avatar {
             continue
         }
         member := m
-        menuItems = append(menuItems, renderer.MenuItem{
+        menuItems = append(menuItems, util.MenuItem{
             Text: member.Name(),
             Action: func() {
                 if g.IsPlayerControlled(member) {
@@ -700,14 +796,14 @@ func (g *GridEngine) AddBuff(actor *game.Actor, name string, buffType game.BuffT
 }
 
 func (g *GridEngine) AskUserForString(prompt string, maxLength int, onConfirm func(text string)) {
-    textInput := g.gridRenderer.NewTextInputAtY(10, prompt, func(endedWith renderer.EndAction, text string) {
-        if endedWith == renderer.EndActionConfirm {
+    textInput := g.NewTextInputAtY(10, prompt, func(endedWith ui.EndAction, text string) {
+        if endedWith == ui.EndActionConfirm {
             onConfirm(text)
         }
     })
     textInput.SetMaxLength(maxLength)
     textInput.CenterHorizontallyAtY(10)
-    g.textInput = textInput
+    g.PushModal(textInput)
 }
 
 func (g *GridEngine) loadPartyIcons() {
@@ -736,24 +832,18 @@ func (g *GridEngine) CreateItemsForVendor(lootType game.Loot, level int) []game.
     return []game.Item{}
 }
 
-func (g *GridEngine) subscribeToMovement(subscriber func(pos geometry.Point) bool) {
-    g.onMoveSubscribers = append(g.onMoveSubscribers, subscriber)
-}
-
 func (g *GridEngine) goBackToBed() {
-    g.ShowMultipleChoiceDialogue(g.GetAvatar().Icon(0), g.gridRenderer.AutolayoutArrayToIconPages(5, []string{"You are sure your walls and the mirror will be back to normal, if you just go back to sleep"}), []renderer.MenuItem{
+    g.ShowMultipleChoiceDialogue(g.GetAvatar().Icon(0), g.gridRenderer.AutolayoutArrayToIconPages(5, []string{"You are sure your walls and the mirror will be back to normal, if you just go back to sleep"}), []util.MenuItem{
         {
             Text: "Stay awake",
             Action: func() {
-                g.closeInputElement()
-                g.modalElement = nil
+                g.CloseAllModals()
             },
         },
         {
             Text: "Go back to bed",
             Action: func() {
-                g.closeInputElement()
-                g.modalElement = nil
+                g.CloseAllModals()
                 g.setGameOver()
             },
         },
@@ -788,9 +878,89 @@ func (g *GridEngine) getTombstoneFromEntity(entity *ldtk_go.Entity) game.Object 
 }
 
 func (g *GridEngine) OpenEquipmentDetails(actor *game.Actor) {
-    g.modalElement = nil
-    g.switchInputElement(ui.NewEquipmentWindow(g, actor, g.gridRenderer))
+    g.CloseAllModals()
+    g.PushModal(ui.NewEquipmentWindow(g, actor, g.gridRenderer))
 }
+
+func (g *GridEngine) giveAllArmorsAndWeapons() {
+    allTiers := game.GetAllTiers()
+    allWeaponTypes := game.GetAllWeaponTypes()
+    allWeaponMaterials := game.GetAllWeaponMaterials()
+    allArmorTypes := game.GetAllArmorSlots()
+    allArmorMaterials := game.GetAllArmorModifiers()
+
+    for _, tier := range allTiers {
+        for _, weaponType := range allWeaponTypes {
+            for _, weaponMaterial := range allWeaponMaterials {
+                g.playerParty.AddItem(game.NewWeapon(tier, weaponType, weaponMaterial))
+            }
+        }
+        for _, armorType := range allArmorTypes {
+            for _, armorMaterial := range allArmorMaterials {
+                g.playerParty.AddItem(game.NewArmor(tier, armorType, armorMaterial))
+            }
+        }
+    }
+}
+
+func (g *GridEngine) IsInConversation() bool {
+    return g.conversationModal != nil
+}
+
+func (g *GridEngine) closeConversation() {
+    g.conversationModal = nil
+}
+
+func (g *GridEngine) IsInCombat() bool {
+    return g.combatManager != nil && g.combatManager.IsInCombat()
+}
+
+func (g *GridEngine) TryMoveAvatarWithPathfinding(pos geometry.Point) {
+    currentMap := g.currentMap
+    ourActor := g.GetAvatar()
+    currentPath := currentMap.GetJPSPath(ourActor.Pos(), pos, func(point geometry.Point) bool {
+        return currentMap.Contains(point) && currentMap.IsWalkableFor(point, ourActor)
+    })
+    // remove the first element, which is the current position
+    if len(currentPath) > 0 {
+        currentPath = currentPath[1:]
+    }
+    if len(currentPath) == 0 {
+        return
+    }
+    g.animationRoutine.Run(func(exe *gocoro.Execution) {
+        for _, dest := range currentPath {
+            direction := dest.Sub(g.playerParty.Pos())
+
+            g.playerParty.Move(direction)
+            if g.playerParty.Pos() == dest {
+                g.onAvatarMovedOrTeleported(dest)
+            }
+
+            _ = exe.YieldTime(200 * time.Millisecond)
+        }
+    })
+}
+
+func (g *GridEngine) advanceTimeFromMovement() {
+    if g.currentMap.GetName() != "WorldMap" {
+        g.AdvanceWorldTime(0, 0, g.rules.GetMinutesPerStepInLevels())
+    } else {
+        g.AdvanceWorldTime(0, 0, g.playerParty.GetMinutesPerStepOnWorldmap())
+    }
+}
+
+func (g *GridEngine) advanceTimeFromTicks(ticks uint64) {
+    delayInSeconds := 60.0
+    actualTPS := ebiten.ActualTPS()
+    if actualTPS == 0 {
+        return
+    }
+    if ticks%uint64(actualTPS*delayInSeconds) == 0 {
+        g.AdvanceWorldTime(0, 0, 1)
+    }
+}
+
 func secondsToTicks(seconds float64) int {
     return int(ebiten.ActualTPS() * seconds)
 }

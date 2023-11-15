@@ -13,9 +13,9 @@ Item: potion()
 Item: noitem(gold, 10)
 Item: noitem(food, 1)
 
-%rec:  Conversation
+%rec: Conversation
 
-Key: _first_time
+Key: _opening
 Text: "Cool, you are here. Can I =join= you?"
 
 Key: name

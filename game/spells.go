@@ -62,11 +62,12 @@ func NewSpellFromName(name string) *Spell {
 }
 
 type Spell struct {
-    manaCost       int
-    effect         func(engine Engine, caster *Actor)
-    targetedEffect func(engine Engine, caster *Actor, pos geometry.Point)
-    name           string
-    color          color.Color
+    manaCost             int
+    effect               func(engine Engine, caster *Actor)
+    targetedEffect       func(engine Engine, caster *Actor, pos geometry.Point)
+    name                 string
+    color                color.Color
+    closeModalsForEffect bool
 }
 
 func (s *Spell) SetSpellColor(c color.Color) {
@@ -83,9 +84,10 @@ func NewSpell(name string, cost int, effect func(engine Engine, caster *Actor)) 
 
 func NewTargetedSpell(name string, cost int, effect func(engine Engine, caster *Actor, pos geometry.Point)) *Spell {
     return &Spell{
-        name:           name,
-        targetedEffect: effect,
-        manaCost:       cost,
+        name:                 name,
+        targetedEffect:       effect,
+        manaCost:             cost,
+        closeModalsForEffect: true,
     }
 }
 
@@ -96,6 +98,9 @@ func (s *Spell) Cast(engine Engine, caster *Actor) {
     }
     engine.ManaSpent(caster, s.manaCost)
     if s.effect != nil {
+        if s.closeModalsForEffect {
+            engine.CloseAllModals()
+        }
         s.effect(engine, caster)
     }
 }
@@ -107,6 +112,9 @@ func (s *Spell) CastOnTarget(engine Engine, caster *Actor, pos geometry.Point) {
     }
     caster.RemoveMana(s.manaCost)
     if s.targetedEffect != nil {
+        if s.closeModalsForEffect {
+            engine.CloseAllModals()
+        }
         s.targetedEffect(engine, caster, pos)
     }
 }

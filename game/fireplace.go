@@ -3,7 +3,7 @@ package game
 import (
     "Legacy/geometry"
     "Legacy/recfile"
-    "Legacy/renderer"
+    "Legacy/util"
     "fmt"
     "image/color"
 )
@@ -24,7 +24,7 @@ func (s *FirePlace) Name() string {
 func (s *FirePlace) ToRecordAndType() (recfile.Record, string) {
     return recfile.Record{
         {Name: "name", Value: s.name},
-        {Name: "unlitIcon", Value: recfile.Int32Str(s.icon)},
+        {Name: "icon", Value: recfile.Int32Str(s.icon)},
         {Name: "pos", Value: s.Pos().Encode()},
         {Name: "isHidden", Value: recfile.BoolStr(s.isHidden)},
         {Name: "foodCount", Value: recfile.IntStr(s.foodCount)},
@@ -37,7 +37,7 @@ func NewFireplaceFromRecord(record recfile.Record) *FirePlace {
         switch field.Name {
         case "name":
             firePlace.name = field.Value
-        case "unlitIcon":
+        case "icon":
             firePlace.icon = field.AsInt32()
         case "pos":
             firePlace.SetPos(geometry.MustDecodePoint(field.Value))
@@ -85,12 +85,12 @@ func (s *FirePlace) IsTransparent() bool {
     return true
 }
 
-func (s *FirePlace) GetContextActions(engine Engine) []renderer.MenuItem {
+func (s *FirePlace) GetContextActions(engine Engine) []util.MenuItem {
     actions := s.BaseObject.GetContextActions(engine, s)
     if s.foodCount > 0 {
         partySize := engine.GetPartySize()
         actions = append(actions,
-            renderer.MenuItem{
+            util.MenuItem{
                 Text: fmt.Sprintf("Take 1 ration"),
                 Action: func() {
                     s.foodCount--
@@ -99,7 +99,7 @@ func (s *FirePlace) GetContextActions(engine Engine) []renderer.MenuItem {
             })
         if s.foodCount >= partySize {
             actions = append(actions,
-                renderer.MenuItem{
+                util.MenuItem{
                     Text: fmt.Sprintf("Take enough rations for the party"),
                     Action: func() {
                         engine.AddFood(partySize)
@@ -108,7 +108,7 @@ func (s *FirePlace) GetContextActions(engine Engine) []renderer.MenuItem {
                 })
 
             actions = append(actions,
-                renderer.MenuItem{
+                util.MenuItem{
                     Text: fmt.Sprintf("Take half of the rations"),
                     Action: func() {
                         amount := s.foodCount / 2
@@ -118,7 +118,7 @@ func (s *FirePlace) GetContextActions(engine Engine) []renderer.MenuItem {
                 })
         }
         actions = append(actions,
-            renderer.MenuItem{
+            util.MenuItem{
                 Text: fmt.Sprintf("Take all of the rations"),
                 Action: func() {
                     engine.AddFood(s.foodCount)

@@ -1,0 +1,52 @@
+# order of option fields is important..
+# The option field itself must come last
+
+
+Key: _opening
+CannotBeClosed: true
+Text:
++ You see some orcs surrounding a bound
++ human. They are arguing about something.
++ One of them notices you and shouts:
++ "Hey, you! What are you doing here?"
+#
+OnOptionSuccess: _ignore
+Option: "Don't mind us, we're just passing through."
+#
+OnOptionSuccess: _asking
+Option: "Interesting, I was about to ask you the same thing."
+#
+OnOptionSuccess: _threaten
+Option: "Let this man go, or you'll regret it!"
+#
+OnOptionSuccess: _participate
+Option: "We'd like to join you."
+
+Key: _ignore
+Effect: quits
+Text:
++ "Oh, sure. Just go right
++ on through."
+
+Key: _threaten
+Effect: combat
+Effect: removeTrigger(wood_orc_prisoner)
+Text:
++ "Oh, really? You and what army?"
++ The orcs draw their weapons.
+
+Key: _asking
+Effect: quits
+Text:
++ "Ah, you still don't know your way
++ around? Right, next round is on you, pal."
+
+Key: _participate
+Effect: quits
+Effect: removeTrigger(wood_orc_prisoner)
+Text:
++ "Great! We could use some help
++ with this guy here."
++ Together you prepare the human for
++ the sacrifice. The orcs are pleased
++ with your help and let you go.

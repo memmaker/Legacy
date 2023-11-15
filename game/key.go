@@ -3,16 +3,18 @@ package game
 import (
     "Legacy/ega"
     "Legacy/recfile"
-    "Legacy/renderer"
+    "Legacy/util"
     "image/color"
     "strconv"
 )
 
 type Key struct {
     BaseItem
-    icon       int32
-    key        string
-    importance int
+    icon           int32
+    key            string
+    importance     int
+    FoundInMap     string
+    firstOwnerName string
 }
 
 func (k *Key) GetTooltipLines() []string {
@@ -31,7 +33,7 @@ func (k *Key) TintColor() color.Color {
     return keyColor(k.importance)
 }
 
-func (k *Key) GetContextActions(engine Engine) []renderer.MenuItem {
+func (k *Key) GetContextActions(engine Engine) []util.MenuItem {
     return inventoryItemActions(k, engine)
 }
 
@@ -41,6 +43,26 @@ func (k *Key) Icon(uint64) int32 {
 func (k *Key) Encode() string {
     // encode name, key, and importance
     return recfile.ToPredicate("key", k.name, k.key, strconv.Itoa(k.importance))
+}
+func (k *Key) SetHolder(holder ItemHolder) {
+    k.BaseItem.SetHolder(holder)
+    if k.firstOwnerName == "" && holder.Name() != "Party" {
+        k.firstOwnerName = holder.Name()
+    }
+}
+
+func (k *Key) KeySource() string {
+    if k.firstOwnerName != "" {
+        return k.firstOwnerName
+    }
+    if k.FoundInMap != "" {
+        return k.FoundInMap
+    }
+    return "unknown"
+}
+
+func (k *Key) GetKeyString() string {
+    return k.key
 }
 func NewKeyFromPredicate(encoded recfile.StringPredicate) *Key {
     return NewKeyFromImportance(

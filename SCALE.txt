@@ -1,0 +1,5 @@
+What should the max level of the player and the monsters be?
+What is the maximum HP, Mana, Armor and Damage, that is achievable?
+
+What are prices of items and how much money can be acquired?
+Basically, what is the progression curve like?

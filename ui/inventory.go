@@ -10,7 +10,7 @@ import (
 )
 
 type InventoryWindow struct {
-    renderer.ButtonHolder
+    ButtonHolder
     engine       game.Engine
     gridRenderer *renderer.DualGridRenderer
     currentPage  InventoryPage
@@ -22,8 +22,46 @@ type InventoryWindow struct {
     upIndicator   int32
 
     currentSelection int
-    scrollOffset     int
+    scrollOffset     float64
     filterMap        map[InventoryPage]func(item game.Item) bool
+    shouldClose      bool
+}
+
+func (i *InventoryWindow) gridScrollOffset() int {
+    return int(i.scrollOffset)
+}
+func (i *InventoryWindow) OnMouseWheel(x int, y int, dy float64) bool {
+    sensitity := 0.2
+    i.scrollOffset += -dy * sensitity
+    if i.scrollOffset < 0 {
+        i.scrollOffset = 0
+    } else if i.scrollOffset > float64(i.neededHeightForContent()-i.availableHeightForContent()) {
+        i.scrollOffset = float64(i.neededHeightForContent() - i.availableHeightForContent())
+    }
+    i.OnMouseMoved(x, y)
+    return true
+}
+
+func (i *InventoryWindow) OnCommand(command CommandType) bool {
+    switch command {
+    case PlayerCommandUp:
+        i.ActionUp()
+    case PlayerCommandDown:
+        i.ActionDown()
+    case PlayerCommandLeft:
+        i.ActionLeft()
+    case PlayerCommandRight:
+        i.ActionRight()
+    case PlayerCommandConfirm:
+        i.ActionConfirm()
+    case PlayerCommandCancel:
+        i.ActionCancel()
+    }
+    return true
+}
+
+func (i *InventoryWindow) CanBeClosed() bool {
+    return true
 }
 
 func (i *InventoryWindow) canScrollUp() bool {
@@ -36,7 +74,7 @@ func (i *InventoryWindow) canScrollDown() bool {
     if !i.needsScroll() {
         return false
     }
-    return i.scrollOffset < i.neededHeightForContent()-i.availableHeightForContent()
+    return i.gridScrollOffset() < i.neededHeightForContent()-i.availableHeightForContent()
 }
 func (i *InventoryWindow) needsScroll() bool {
     return i.neededHeightForContent() > i.availableHeightForContent()
@@ -59,8 +97,8 @@ func (i *InventoryWindow) ActionUp() {
     i.currentSelection--
     if i.currentSelection < 0 {
         i.currentSelection = len(i.items) - 1
-        i.scrollOffset = i.neededHeightForContent() - i.availableHeightForContent()
-    } else if i.currentSelection < i.scrollOffset {
+        i.scrollOffset = float64(i.neededHeightForContent() - i.availableHeightForContent())
+    } else if i.currentSelection < i.gridScrollOffset() {
         i.scrollOffset--
     }
 }
@@ -70,7 +108,7 @@ func (i *InventoryWindow) ActionDown() {
     if i.currentSelection >= len(i.items) {
         i.currentSelection = 0
         i.scrollOffset = 0
-    } else if i.currentSelection >= i.scrollOffset+i.availableHeightForContent() {
+    } else if i.currentSelection >= i.gridScrollOffset()+i.availableHeightForContent() {
         i.scrollOffset++
     }
 }
@@ -84,7 +122,7 @@ func (i *InventoryWindow) ActionConfirm() {
 }
 
 func (i *InventoryWindow) ShouldClose() bool {
-    return false
+    return i.shouldClose
 }
 
 func (i *InventoryWindow) OnAvatarSwitched() {
@@ -99,30 +137,29 @@ func (i *InventoryWindow) ActionRight() {
 
 }
 
-func (i *InventoryWindow) OnMouseMoved(x int, y int) renderer.Tooltip {
+func (i *InventoryWindow) OnMouseMoved(x int, y int) (bool, Tooltip) {
     if y == i.topLeft.Y {
-        i.ButtonHolder.OnMouseMoved(x, y)
-        return renderer.NoTooltip{}
+        return i.ButtonHolder.OnMouseMoved(x, y)
     }
 
     if y < i.topLeft.Y+2 || y > i.bottomRight.Y-2 {
-        return renderer.NoTooltip{}
+        return false, NoTooltip{}
     }
 
     if x < i.topLeft.X+2 || x > i.bottomRight.X-3 {
-        return renderer.NoTooltip{}
+        return false, NoTooltip{}
     }
 
-    relativeOffset := y - i.topLeft.Y - 2 + i.scrollOffset
+    relativeOffset := y - i.topLeft.Y - 2 + i.gridScrollOffset()
 
     if relativeOffset >= len(i.items) || relativeOffset < 0 {
-        return renderer.NoTooltip{}
+        return false, NoTooltip{}
     }
 
     i.currentSelection = relativeOffset
 
     item := i.items[i.currentSelection][0]
-    return NewItemTooltip(i.gridRenderer, item, geometry.Point{X: x, Y: y})
+    return true, NewItemTooltip(i.gridRenderer, item, geometry.Point{X: x, Y: y})
 }
 
 func (i *InventoryWindow) OnMouseClicked(x int, y int) bool {
@@ -139,7 +176,8 @@ func (i *InventoryWindow) OnMouseClicked(x int, y int) bool {
 
     i.OnMouseMoved(x, y)
     if i.isValidItemSelected() {
-        i.ActionConfirm()
+        item := i.items[i.currentSelection]
+        i.activateItemContextMenu(item[0])
         return true
     }
     return false
@@ -149,12 +187,13 @@ func (i *InventoryWindow) activateItemContextMenu(item game.Item) {
     if item == nil {
         return
     }
+
     itemActions := item.GetContextActions(i.engine)
     for index, action := range itemActions {
         oldAction := action.Action
         newAction := func() {
             oldAction()
-            i.engine.OpenPartyInventoryOnPage(int(i.currentPage))
+            i.updateItemList()
         }
         action.Action = newAction
         itemActions[index] = action
@@ -220,7 +259,7 @@ func (i *InventoryWindow) createButtons() {
        keyButton := i.ButtonHolder.AddIconAndTextButton(keyButtonRect, func() {
            i.showListOfKeys()
        })
-       keyButton.SetText("Key")
+       keyButton.SetFixedText("Key")
        keyButton.SetIcon(172)
        buttonPositionStart.X += buttonWidth + 1
     */
@@ -237,6 +276,8 @@ func (i *InventoryWindow) createButtons() {
 
 func (i *InventoryWindow) SwitchPageTo(page InventoryPage) {
     i.currentPage = page
+    i.currentSelection = 0
+    i.scrollOffset = 0
     i.updateItemList()
 }
 
@@ -250,7 +291,7 @@ func (i *InventoryWindow) updateItemList() {
 
 func (i *InventoryWindow) drawItems(screen *ebiten.Image) {
     for y := i.topLeft.Y + 2; y < i.bottomRight.Y-2; y++ {
-        relativeItemOffset := y - i.topLeft.Y - 2 + i.scrollOffset
+        relativeItemOffset := y - i.topLeft.Y - 2 + i.gridScrollOffset()
         if relativeItemOffset >= len(i.items) {
             break
         }
@@ -277,10 +318,10 @@ func (i *InventoryWindow) drawItems(screen *ebiten.Image) {
 func (i *InventoryWindow) drawScrollIndicators(screen *ebiten.Image) {
     if i.needsScroll() {
         if i.canScrollUp() {
-            i.gridRenderer.DrawOnSmallGrid(screen, i.bottomRight.X-1, i.topLeft.Y+2, i.upIndicator)
+            i.gridRenderer.DrawOnSmallGrid(screen, i.bottomRight.X-2, i.topLeft.Y+2, i.upIndicator)
         }
         if i.canScrollDown() {
-            i.gridRenderer.DrawOnSmallGrid(screen, i.bottomRight.X-1, i.bottomRight.Y-3, i.downIndicator)
+            i.gridRenderer.DrawOnSmallGrid(screen, i.bottomRight.X-2, i.bottomRight.Y-3, i.downIndicator)
         }
     }
 }
@@ -364,10 +405,14 @@ func (i *InventoryWindow) loadFilter() {
     i.filterMap = filtermap
 }
 
+func (i *InventoryWindow) ActionCancel() {
+    i.shouldClose = true
+}
+
 func NewInventoryWindow(engine game.Engine, gridRenderer *renderer.DualGridRenderer) *InventoryWindow {
     smallScreenSize := gridRenderer.GetSmallGridScreenSize()
     i := &InventoryWindow{
-        ButtonHolder:  renderer.NewButtonHolder(),
+        ButtonHolder:  NewButtonHolder(),
         engine:        engine,
         gridRenderer:  gridRenderer,
         topLeft:       geometry.Point{X: 2, Y: 2},

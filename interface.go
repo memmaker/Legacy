@@ -3,6 +3,7 @@ package main
 import (
     "Legacy/game"
     "Legacy/renderer"
+    "fmt"
     "github.com/hajimehoshi/ebiten/v2"
     "image/color"
     "path"
@@ -24,6 +25,10 @@ func (g *GridEngine) DamageAvatar(amount int) {
 
 func (g *GridEngine) TriggerEvent(event string) {
     gameEvent := game.CreateGameEvent(g, event)
+    if gameEvent == nil {
+        return
+    }
+    g.flags.IncrementFlag(fmt.Sprintf("event_triggered_%s", event))
     g.activeEvents = append(g.activeEvents, gameEvent)
 }
 
@@ -69,10 +74,7 @@ func (g *GridEngine) GetScrollFile(filename string) []string {
 }
 
 func (g *GridEngine) GetAvatar() *game.Actor {
-    if g.splitControlled != nil {
-        return g.splitControlled
-    }
-    return g.avatar
+    return g.playerParty.GetControlledActor()
 }
 
 func (g *GridEngine) Print(text string) {

@@ -1,0 +1,20 @@
+%rec: Details
+
+Name: a grey rat
+Health: 10
+Description: A grey rat. It looks hungry.
+
+%rec: Inventory
+
+Item: flavor(cheese, 5, a bit of cheese)
+
+%rec: Conversation
+
+Key: _opening
+AddsKeyword: bye
+Text:
++ "You should talk to our leader."
+
+Key: bye
+Effect: quits
+Text: "We'll meet again."

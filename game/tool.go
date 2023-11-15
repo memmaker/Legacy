@@ -2,7 +2,7 @@ package game
 
 import (
     "Legacy/recfile"
-    "Legacy/renderer"
+    "Legacy/util"
     "fmt"
     "image/color"
 )
@@ -12,6 +12,7 @@ type ToolType string
 const (
     ToolTypePickaxe ToolType = "pickaxe"
     ToolTypeShovel  ToolType = "shovel"
+    ToolTypeRope    ToolType = "rope"
 )
 
 type Tool struct {
@@ -43,7 +44,7 @@ func (t *Tool) TintColor() color.Color {
     return color.White
 }
 
-func (t *Tool) GetContextActions(engine Engine) []renderer.MenuItem {
+func (t *Tool) GetContextActions(engine Engine) []util.MenuItem {
     return inventoryItemActions(t, engine)
 }
 

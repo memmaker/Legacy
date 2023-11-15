@@ -115,6 +115,10 @@ func (t Tile) GetDebrisTile() int32 {
     }
 }
 
+func (t Tile) IsForest() bool {
+    return t.Special == SpecialTileForest
+}
+
 type MapCell[ActorType interface {
     comparable
     MapActor
@@ -175,6 +179,12 @@ func (c MapCell[ActorType, ItemType, ObjectType]) WithObject(obj ObjectType) Map
 func (c MapCell[ActorType, ItemType, ObjectType]) WithActorHereRemoved(actorHere ActorType) MapCell[ActorType, ItemType, ObjectType] {
     if c.Actor != nil && *c.Actor == actorHere {
         c.Actor = nil
+    }
+    return c
+}
+func (c MapCell[ActorType, ItemType, ObjectType]) WithDownedActorHereRemoved(actorHere ActorType) MapCell[ActorType, ItemType, ObjectType] {
+    if c.DownedActor != nil && *c.DownedActor == actorHere {
+        c.DownedActor = nil
     }
     return c
 }

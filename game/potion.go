@@ -1,7 +1,7 @@
 package game
 
 import (
-    "Legacy/renderer"
+    "Legacy/util"
     "image/color"
 )
 
@@ -34,9 +34,9 @@ func (b *Potion) TintColor() color.Color {
     return color.White
 }
 
-func (b *Potion) GetContextActions(engine Engine) []renderer.MenuItem {
+func (b *Potion) GetContextActions(engine Engine) []util.MenuItem {
     actions := inventoryItemActions(b, engine)
-    actions = append(actions, renderer.MenuItem{
+    actions = append(actions, util.MenuItem{
         Text: "Quaff",
         Action: func() {
             if !b.isEmpty {

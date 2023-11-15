@@ -2,6 +2,7 @@ package renderer
 
 import (
     "Legacy/geometry"
+    "Legacy/util"
     "github.com/hajimehoshi/ebiten/v2"
     "image"
     "image/color"
@@ -201,7 +202,7 @@ func (g *DualGridRenderer) GetAutoFitRect(text []string) (geometry.Point, geomet
 }
 
 func (g *DualGridRenderer) GetAutoFitRectWithExtraSpace(text []string, padding geometry.Point) (geometry.Point, geometry.Point) {
-    width := min(maxLen(text)+4+padding.X, 36)
+    width := min(util.MaxLen(text)+4+padding.X, 36)
     height := min(len(text)+4+padding.Y, 18)
     screenSize := g.GetSmallGridScreenSize()
 
@@ -219,8 +220,8 @@ func (g *DualGridRenderer) GetAutoFitRectWithExtraSpace(text []string, padding g
 func (g *DualGridRenderer) GetXPosAndHeightForIconText(text []string) (int, int, int) {
     screenSize := g.GetSmallGridScreenSize()
 
-    maxWidth := screenSize.X - 4 // 2*4 for the borders(incl. 1 padding each) + 2 for icon + 1 for padding
-    minWidth := maxLen(text) + 7 // 2*2 for the borders(incl. 1 padding each) + 2 for icon + 1 for padding
+    maxWidth := screenSize.X - 4      // 2*4 for the borders(incl. 1 padding each) + 2 for icon + 1 for padding
+    minWidth := util.MaxLen(text) + 7 // 2*2 for the borders(incl. 1 padding each) + 2 for icon + 1 for padding
     width := min(minWidth, maxWidth)
 
     minHeight := max(len(text)+4, 6)    // 2*2 for the borders(incl. 1 padding each) but we need at least 6 for the icon
@@ -243,16 +244,6 @@ func (g *DualGridRenderer) AutolayoutArrayToIconPages(height int, inputText []st
     screenSize := g.GetSmallGridScreenSize()
     width := screenSize.X - 11
     return AutoLayoutPages(strings.Join(inputText, " "), width, height)
-}
-
-func (g *DualGridRenderer) NewTextInputAtY(yPos int, prompt string, onClose func(endedWith EndAction, text string)) *TextInput {
-    cursorIcon := int32(28)
-    cursorFrameCount := 4
-    input := NewTextInput(g, geometry.Point{}, 15, cursorIcon, cursorFrameCount, onClose)
-    input.SetDrawBorder(true)
-    input.SetPrompt(prompt)
-    input.CenterHorizontallyAtY(yPos)
-    return input
 }
 
 func (g *DualGridRenderer) SetFontIndexForBigGrid(index map[rune]uint16) {

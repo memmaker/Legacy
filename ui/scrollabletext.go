@@ -1,7 +1,9 @@
-package renderer
+package ui
 
 import (
     "Legacy/geometry"
+    "Legacy/renderer"
+    "Legacy/util"
     "github.com/hajimehoshi/ebiten/v2"
     "image/color"
 )
@@ -16,13 +18,62 @@ type ScrollableTextWindow struct {
     textColor color.Color
 
     scrollOffset int
-    gridRenderer *DualGridRenderer
+    gridRenderer *renderer.DualGridRenderer
 
     shouldClose bool
     title       string
 
     upIndicator, downIndicator int32
     upDownIndicator            int32
+}
+
+func (r *ScrollableTextWindow) OnMouseWheel(x int, y int, dy float64) bool {
+    if dy < 0 {
+        r.ActionDown()
+    } else {
+        r.ActionUp()
+    }
+    return true
+}
+
+func (r *ScrollableTextWindow) OnCommand(command CommandType) bool {
+    switch command {
+    case PlayerCommandCancel:
+        r.ActionCancel()
+    case PlayerCommandConfirm:
+        r.ActionConfirm()
+    case PlayerCommandUp:
+        r.ActionUp()
+    case PlayerCommandDown:
+        r.ActionDown()
+    case PlayerCommandLeft:
+        r.ActionLeft()
+    case PlayerCommandRight:
+        r.ActionRight()
+    }
+    return true
+}
+
+func (r *ScrollableTextWindow) ActionLeft() {
+    // page up
+    if r.CanScroll() {
+        pageSize := r.bottomRight.Y - r.topLeft.Y - 4
+        r.scrollOffset -= pageSize
+        if r.scrollOffset < 0 {
+            r.scrollOffset = 0
+        }
+    }
+}
+
+func (r *ScrollableTextWindow) ActionRight() {
+    // page down
+    if r.CanScroll() {
+        pageSize := r.bottomRight.Y - r.topLeft.Y - 4
+        r.scrollOffset += pageSize
+        if r.scrollOffset > len(r.text)-pageSize {
+            r.scrollOffset = len(r.text) - pageSize
+        }
+    }
 }
 
 func (r *ScrollableTextWindow) OnAvatarSwitched() {
@@ -48,33 +99,23 @@ func (r *ScrollableTextWindow) ActionConfirm() {
     r.shouldClose = true
 }
 
-func maxLen(text []string) int {
-    maxLength := 0
-    for _, line := range text {
-        if len(line) > maxLength {
-            maxLength = len(line)
-        }
-    }
-    return maxLength
-}
-
-func NewAutoTextWindow(gridRenderer *DualGridRenderer, text []string) *ScrollableTextWindow {
+func NewAutoTextWindow(gridRenderer *renderer.DualGridRenderer, text []string) *ScrollableTextWindow {
     screenSize := gridRenderer.GetSmallGridScreenSize()
     borderNeeded := 4 * 2
     widthAvailable := screenSize.X - borderNeeded
-    text = AutoLayoutArray(text, min(maxLen(text), widthAvailable))
+    text = renderer.AutoLayoutArray(text, min(util.MaxLen(text), widthAvailable))
     topLeft, bottomRight := gridRenderer.GetAutoFitRect(text)
     modal := NewScrollableTextWindow(gridRenderer, topLeft, bottomRight)
     modal.SetText(text)
     return modal
 }
-func NewFixedTextWindow(gridRenderer *DualGridRenderer, text []string) *ScrollableTextWindow {
+func NewFixedTextWindow(gridRenderer *renderer.DualGridRenderer, text []string) *ScrollableTextWindow {
     topLeft, bottomRight := gridRenderer.GetAutoFitRect(text)
     modal := NewScrollableTextWindow(gridRenderer, topLeft, bottomRight)
     modal.SetText(text)
     return modal
 }
-func NewScrollableTextWindow(gridRenderer *DualGridRenderer, topLeft, bottomRight geometry.Point) *ScrollableTextWindow {
+func NewScrollableTextWindow(gridRenderer *renderer.DualGridRenderer, topLeft, bottomRight geometry.Point) *ScrollableTextWindow {
     return &ScrollableTextWindow{
         ButtonHolder:    NewButtonHolder(),
         gridRenderer:    gridRenderer,
@@ -142,4 +183,8 @@ func (r *ScrollableTextWindow) Draw(screen *ebiten.Image) {
 
 func (r *ScrollableTextWindow) SetTitle(name string) {
     r.title = name
+}
+
+func (r *ScrollableTextWindow) ActionCancel() {
+    r.shouldClose = true
 }

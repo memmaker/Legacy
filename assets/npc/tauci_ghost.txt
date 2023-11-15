@@ -10,7 +10,7 @@ Item: armor(clothes, torso, 0)
 
 %rec: Conversation
 
-Key: _first_time
+Key: _opening
 Text: "Boooohhh..."
 
 Key: name

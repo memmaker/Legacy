@@ -10,7 +10,7 @@ Description: He clearly wants to sell weaponry.
 
 %rec: Conversation
 
-Key: _first_time
+Key: _opening
 Text: "Look at my fine =wares=! I have the best weapons in the whole country!"
 
 Key: wares

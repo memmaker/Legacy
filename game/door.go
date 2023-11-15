@@ -3,7 +3,7 @@ package game
 import (
     "Legacy/geometry"
     "Legacy/recfile"
-    "Legacy/renderer"
+    "Legacy/util"
     "fmt"
     "image/color"
     "math/rand"
@@ -25,14 +25,18 @@ type Door struct {
 func (d *Door) TintColor() color.Color {
     return color.White
 }
-
+func (d *Door) OnActorWalkedOn(actor *Actor) {
+    if d.isLocked && actor.HasKey(d.key) {
+        actor.UsedKey(d.key)
+    }
+}
 func (d *Door) Name() string {
     return "a door"
 }
 func (d *Door) ToRecordAndType() (recfile.Record, string) {
     return recfile.Record{
         {Name: "name", Value: d.name},
-        {Name: "unlitIcon", Value: recfile.Int32Str(d.icon)},
+        {Name: "icon", Value: recfile.Int32Str(d.icon)},
         {Name: "pos", Value: d.Pos().Encode()},
         {Name: "isHidden", Value: recfile.BoolStr(d.isHidden)},
         {Name: "key", Value: d.key},
@@ -53,7 +57,7 @@ func NewDoorFromRecord(record recfile.Record) *Door {
         switch field.Name {
         case "name":
             door.name = field.Value
-        case "unlitIcon":
+        case "icon":
             door.icon = field.AsInt32()
         case "pos":
             door.SetPos(geometry.MustDecodePoint(field.Value))
@@ -161,10 +165,10 @@ func (d *Door) IsTransparent() bool {
     return !d.isLocked
 }
 
-func (d *Door) GetContextActions(engine Engine) []renderer.MenuItem {
+func (d *Door) GetContextActions(engine Engine) []util.MenuItem {
     actions := d.BaseObject.GetContextActions(engine, d)
     if !d.isBroken {
-        actions = append(actions, renderer.MenuItem{
+        actions = append(actions, util.MenuItem{
             Text: "Listen",
             Action: func() {
                 if !d.isBroken {
@@ -176,7 +180,7 @@ func (d *Door) GetContextActions(engine Engine) []renderer.MenuItem {
                 }
             },
         })
-        actions = append(actions, renderer.MenuItem{
+        actions = append(actions, util.MenuItem{
             Text: "Knock",
             Action: func() {
                 if !d.isBroken {
@@ -190,7 +194,7 @@ func (d *Door) GetContextActions(engine Engine) []renderer.MenuItem {
         })
     }
     if d.isLocked && !d.isMagicallyLocked && !d.isBroken {
-        actions = append(actions, renderer.MenuItem{
+        actions = append(actions, util.MenuItem{
             Text: "Break",
             Action: func() {
                 if d.isLocked && !d.isMagicallyLocked && !d.isBroken {
@@ -210,7 +214,7 @@ func (d *Door) GetContextActions(engine Engine) []renderer.MenuItem {
             },
         })
         if breakingTool := engine.GetBreakingToolName(); breakingTool != "" {
-            actions = append(actions, renderer.MenuItem{
+            actions = append(actions, util.MenuItem{
                 Text: fmt.Sprintf("Break (%s)", breakingTool),
                 Action: func() {
                     if d.isLocked && !d.isMagicallyLocked && !d.isBroken {
@@ -228,21 +232,23 @@ func (d *Door) GetContextActions(engine Engine) []renderer.MenuItem {
                 },
             })
         }
-        if engine.PartyHasKey(d.key) {
-            actions = append(actions, renderer.MenuItem{
+        party := engine.GetParty()
+        if party.HasKey(d.key) {
+            actions = append(actions, util.MenuItem{
                 Text: "Unlock",
                 Action: func() {
-                    if d.isLocked && !d.isMagicallyLocked && !d.isBroken && engine.PartyHasKey(d.key) {
+                    if d.isLocked && !d.isMagicallyLocked && !d.isBroken && party.HasKey(d.key) {
                         d.isLocked = false
+                        engine.GetParty().UsedKey(d.key)
                         engine.Print("You unlocked the door.")
                     }
                 },
             })
-        } else if engine.PartyHasLockpick() {
-            actions = append(actions, renderer.MenuItem{
+        } else if party.GetLockpicks() > 0 {
+            actions = append(actions, util.MenuItem{
                 Text: "Pick lock",
                 Action: func() {
-                    if d.isLocked && !d.isMagicallyLocked && !d.isBroken && engine.PartyHasLockpick() {
+                    if d.isLocked && !d.isMagicallyLocked && !d.isBroken && party.GetLockpicks() > 0 {
                         if rand.Float64() > d.lockStrength {
                             d.isLocked = false
                             engine.Print("You picked the lock.")

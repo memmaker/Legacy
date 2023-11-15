@@ -321,3 +321,7 @@ func (s *SkillSet) HasSkills(skills map[string]int) bool {
     }
     return true
 }
+
+func (s *SkillSet) HasSkillAt(skill string, level int) bool {
+    return s.GetSkillLevel(SkillName(skill)) >= level
+}

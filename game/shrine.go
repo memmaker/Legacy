@@ -3,7 +3,7 @@ package game
 import (
     "Legacy/geometry"
     "Legacy/recfile"
-    "Legacy/renderer"
+    "Legacy/util"
     "fmt"
     "image/color"
     "strings"
@@ -33,7 +33,7 @@ func (s *Shrine) Name() string {
 func (s *Shrine) ToRecordAndType() (recfile.Record, string) {
     return recfile.Record{
         {Name: "name", Value: s.name},
-        {Name: "unlitIcon", Value: recfile.Int32Str(s.icon)},
+        {Name: "icon", Value: recfile.Int32Str(s.icon)},
         {Name: "pos", Value: s.Pos().Encode()},
         {Name: "isHidden", Value: recfile.BoolStr(s.isHidden)},
         {Name: "principle", Value: string(s.principle)},
@@ -46,7 +46,7 @@ func NewShrineFromRecord(record recfile.Record) *Shrine {
         switch field.Name {
         case "name":
             shrine.name = field.Value
-        case "unlitIcon":
+        case "icon":
             shrine.icon = field.AsInt32()
         case "pos":
             shrine.SetPos(geometry.MustDecodePoint(field.Value))
@@ -87,9 +87,9 @@ func (s *Shrine) IsTransparent() bool {
     return true
 }
 
-func (s *Shrine) GetContextActions(engine Engine) []renderer.MenuItem {
+func (s *Shrine) GetContextActions(engine Engine) []util.MenuItem {
     actions := s.BaseObject.GetContextActions(engine, s)
-    actions = append(actions, renderer.MenuItem{
+    actions = append(actions, util.MenuItem{
         Text: "Meditate",
         Action: func() {
             engine.Flags().IncrementFlag(fmt.Sprintf("meditated_for_%s", strings.ToLower(string(s.principle))))

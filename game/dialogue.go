@@ -3,6 +3,7 @@ package game
 import (
     "Legacy/recfile"
     "fmt"
+    "github.com/Knetic/govaluate"
     "regexp"
     "sort"
     "strings"
@@ -24,19 +25,14 @@ type DialogueChoice struct {
     Text                string
     TransitionOnSuccess string
     TransitionOnFail    string
-    NeededFlags         []string
-    NeededSkills        map[string]int
+    Conditionals        []string
 }
 type ConversationNode struct {
     Text         [][]string
-    FlagsSet     []string
     AddsKeywords []string
     Effects      []string
     ForcedChoice []DialogueChoice
-    NeededFlags  []string
-    NeededSkills map[string]int
-    TriggerEvent string
-    AddsItems    []string
+    Conditionals []string
 }
 type Dialogue struct {
     triggers        map[string]ConversationNode
@@ -65,48 +61,22 @@ func NewDialogueFromRecords(records []recfile.Record, toPages func(height int, i
             switch fieldName {
             case "Key":
                 currentTrigger = fieldValue
+            case "AddsKeyword":
+                currentNode.AddsKeywords = append(currentNode.AddsKeywords, fieldValue)
+            case "Condition":
+                currentNode.Conditionals = append(currentNode.Conditionals, fieldValue)
             case "Text":
                 currentText = strings.Split(fieldValue, "\n")
             case "Effect":
                 currentNode.Effects = append(currentNode.Effects, fieldValue)
-            case "GiveItem":
-                currentNode.AddsItems = append(currentNode.AddsItems, fieldValue)
-            case "NeedsFlag":
-                currentNode.NeededFlags = append(currentNode.NeededFlags, fieldValue)
-            case "TriggerEvent":
-                currentNode.TriggerEvent = fieldValue
-            case "SetsFlag":
-                currentNode.FlagsSet = append(currentNode.FlagsSet, fieldValue)
-            case "NeedsSkill":
-                pred := recfile.StrPredicate(fieldValue)
-                if pred != nil {
-                    skillName := pred.Name()
-                    skillLevel := pred.GetInt(0)
-                    if currentNode.NeededSkills == nil {
-                        currentNode.NeededSkills = make(map[string]int)
-                    }
-                    currentNode.NeededSkills[skillName] = skillLevel
-                } else {
-                    println(fmt.Sprintf("ERR: invalid skill: %s", fieldValue))
-                }
-            case "OptionNeedsFlag":
-                currentOption.NeededFlags = append(currentOption.NeededFlags, fieldValue)
-            case "OptionNeedsSkill":
-                pred := recfile.StrPredicate(fieldValue)
-                if pred != nil {
-                    skillName := pred.Name()
-                    skillLevel := pred.GetInt(0)
-                    if currentOption.NeededSkills == nil {
-                        currentOption.NeededSkills = make(map[string]int)
-                    }
-                    currentOption.NeededSkills[skillName] = skillLevel
-                } else {
-                    println(fmt.Sprintf("ERR: invalid skill: %s", fieldValue))
-                }
+            case "OptionCondition":
+                currentOption.Conditionals = append(currentOption.Conditionals, fieldValue)
             case "Option":
                 currentOption.Text = strings.TrimSpace(fieldValue)
                 currentNode.ForcedChoice = append(currentNode.ForcedChoice, currentOption)
                 currentOption = DialogueChoice{}
+            case "Target":
+                fallthrough
             case "OnOptionSuccess":
                 currentOption.TransitionOnSuccess = fieldValue
             case "OnOptionFail":
@@ -115,11 +85,14 @@ func NewDialogueFromRecords(records []recfile.Record, toPages func(height int, i
         }
         addedKeyWords, strippedText := parseKeywords(currentText)
         currentNode.Text = toPages(5, strippedText)
-        currentNode.AddsKeywords = addedKeyWords
+        currentNode.AddsKeywords = append(currentNode.AddsKeywords, addedKeyWords...)
         if currentOption.Text != "" {
             currentNode.ForcedChoice = append(currentNode.ForcedChoice, currentOption)
         }
         triggers[currentTrigger] = currentNode
+    }
+    if _, exists := triggers["_opening"]; !exists {
+        println("ERR: Dialogue has no opening")
     }
     return NewDialogue(triggers)
 }
@@ -150,20 +123,36 @@ func toSpeechPages(lines []string) []string {
     }
     return pages
 }
+
+func EvalConditionals(speaker *Actor, flags *Flags, cond []string) bool {
+    functions := map[string]govaluate.ExpressionFunction{
+        "isFlagSet": func(args ...interface{}) (interface{}, error) {
+            flagName := args[0].(string)
+            return (bool)(flags.HasFlag(flagName)), nil
+        },
+        "hasSkill": func(args ...interface{}) (interface{}, error) {
+            skillName := args[0].(string)
+            skillLevel := args[1].(int)
+            return (bool)(speaker.GetSkills().HasSkillAt(skillName, skillLevel)), nil
+        },
+    }
+    if len(cond) > 0 {
+        for _, expString := range cond {
+            expression, _ := govaluate.NewEvaluableExpressionWithFunctions(expString, functions)
+            result, _ := expression.Evaluate(nil)
+            if !result.(bool) {
+                return false
+            }
+        }
+    }
+    return true
+}
 func (d *Dialogue) GetOptions(speaker *Actor, pk *PlayerKnowledge, flags *Flags) []string {
     var options []string
-
     for k, _ := range pk.knowsAbout {
         if node, ok := d.triggers[k]; ok {
-            if len(node.NeededFlags) > 0 {
-                if !flags.AllSet(node.NeededFlags) {
-                    continue
-                }
-            }
-            if len(node.NeededSkills) > 0 {
-                if !speaker.GetSkills().HasSkills(node.NeededSkills) {
-                    continue
-                }
+            if !EvalConditionals(speaker, flags, node.Conditionals) {
+                continue
             }
             options = append(options, k)
         }
@@ -172,19 +161,7 @@ func (d *Dialogue) GetOptions(speaker *Actor, pk *PlayerKnowledge, flags *Flags)
     sort.SliceStable(options, func(i, j int) bool {
         return options[i] < options[j]
     })
-    // prepend "name", "job"
-    defaultOptions := []string{"job", "name"}
-    for _, k := range defaultOptions {
-        if node, ok := d.triggers[k]; ok {
-            if len(node.NeededFlags) > 0 {
-                if !flags.AllSet(node.NeededFlags) {
-                    continue
-                }
-            }
-            // prepend to the slice
-            options = append([]string{k}, options...)
-        }
-    }
+
     return options
 }
 

@@ -1,23 +1,18 @@
-package renderer
+package ui
 
 import (
     "Legacy/ega"
     "Legacy/geometry"
+    "Legacy/renderer"
+    "Legacy/util"
     "github.com/hajimehoshi/ebiten/v2"
     "image/color"
 )
 
-type MenuItem struct {
-    Text      string
-    Action    func()
-    TextColor color.Color
-    CharIcon  int32
-}
-
 type GridMenu struct {
     topLeft          geometry.Point
-    menuItems        []MenuItem
-    gridRenderer     *DualGridRenderer
+    menuItems        []util.MenuItem
+    gridRenderer     *renderer.DualGridRenderer
     bottomRight      geometry.Point
     currentSelection int
     scrollOffset     int
@@ -31,6 +26,41 @@ type GridMenu struct {
 
     upIndicator   int32
     downIndicator int32
+}
+
+func (g *GridMenu) OnMouseWheel(x int, y int, dy float64) bool {
+    if dy < 0 {
+        g.ActionUp()
+    } else {
+        g.ActionDown()
+    }
+    return true
+}
+
+func (g *GridMenu) OnCommand(command CommandType) bool {
+    switch command {
+    case PlayerCommandCancel:
+        g.ActionCancel()
+    case PlayerCommandConfirm:
+        g.ActionConfirm()
+    case PlayerCommandUp:
+        g.ActionUp()
+    case PlayerCommandDown:
+        g.ActionDown()
+    case PlayerCommandLeft:
+        g.ActionLeft()
+    case PlayerCommandRight:
+        g.ActionRight()
+    }
+    return true
+}
+
+func (g *GridMenu) ActionCancel() {
+    g.shouldClose = true
+}
+
+func (g *GridMenu) CanBeClosed() bool {
+    return true
 }
 
 func (g *GridMenu) OnAvatarSwitched() {
@@ -53,16 +83,16 @@ func (g *GridMenu) GetLastAction() func() {
     return g.lastAction
 }
 
-func (g *GridMenu) OnMouseMoved(x int, y int) Tooltip {
+func (g *GridMenu) OnMouseMoved(x int, y int) (bool, Tooltip) {
     relativeLine := y - g.topLeft.Y - 1
     if relativeLine < 0 || relativeLine >= len(g.menuItems) {
-        return NoTooltip{}
+        return false, NoTooltip{}
     }
     if x < g.topLeft.X+1 || x >= g.bottomRight.X-1 {
-        return NoTooltip{}
+        return false, NoTooltip{}
     }
     g.currentSelection = relativeLine
-    return NoTooltip{}
+    return true, NoTooltip{}
 }
 
 func (g *GridMenu) OnMouseClicked(x int, y int) bool {
@@ -128,7 +158,7 @@ func (g *GridMenu) CanScrollDown() bool {
     }
     return g.scrollOffset < len(g.menuItems)-13
 }
-func NewGridMenu(gridRenderer *DualGridRenderer, menuItems []MenuItem) *GridMenu {
+func NewGridMenu(gridRenderer *renderer.DualGridRenderer, menuItems []util.MenuItem) *GridMenu {
     topLeft, bottomRight := positionGridMenu(gridRenderer, menuItems, "")
     return &GridMenu{
         gridRenderer:  gridRenderer,
@@ -140,7 +170,7 @@ func NewGridMenu(gridRenderer *DualGridRenderer, menuItems []MenuItem) *GridMenu
     }
 }
 
-func positionGridMenu(gridRenderer *DualGridRenderer, menuItems []MenuItem, title string) (geometry.Point, geometry.Point) {
+func positionGridMenu(gridRenderer *renderer.DualGridRenderer, menuItems []util.MenuItem, title string) (geometry.Point, geometry.Point) {
     height := min(len(menuItems)+2, 15)
     width := min(max(maxLenOfItems(menuItems)+2, len(title)+4), 36)
     screenGridSize := gridRenderer.GetSmallGridScreenSize()
@@ -152,7 +182,7 @@ func positionGridMenu(gridRenderer *DualGridRenderer, menuItems []MenuItem, titl
     bottomRight := geometry.Point{X: topLeft.X + width, Y: topLeft.Y + height}
     return topLeft, bottomRight
 }
-func NewGridMenuAtY(gridRenderer *DualGridRenderer, menuItems []MenuItem, yOffset int) *GridMenu {
+func NewGridMenuAtY(gridRenderer *renderer.DualGridRenderer, menuItems []util.MenuItem, yOffset int) *GridMenu {
     height := min(len(menuItems)+2, 15)
     width := min(maxLenOfItems(menuItems)+2, 36)
     screenGridSize := gridRenderer.GetSmallGridScreenSize()
@@ -213,7 +243,50 @@ func (g *GridMenu) SetTitle(title string) {
     g.topLeft, g.bottomRight = positionGridMenu(g.gridRenderer, g.menuItems, title)
 }
 
-func maxLenOfItems(items []MenuItem) int {
+func (g *GridMenu) PositionNearMouse(x int, y int) {
+    smallScreenSize := g.gridRenderer.GetSmallGridScreenSize()
+    width := g.bottomRight.X - g.topLeft.X
+    height := g.bottomRight.Y - g.topLeft.Y
+
+    // try position the rect so that the mouse is at an 1,1 offset relative to the topleft
+    newTopLeft := geometry.Point{
+        X: x - 1,
+        Y: y - 1,
+    }
+    newBottomRight := geometry.Point{
+        X: newTopLeft.X + width,
+        Y: newTopLeft.Y + height,
+    }
+
+    // make sure we are within the screen, if not adjust slightly
+
+    if newBottomRight.X > smallScreenSize.X {
+        newTopLeft.X = smallScreenSize.X - width
+        newBottomRight.X = smallScreenSize.X
+    }
+    if newBottomRight.Y > smallScreenSize.Y {
+        newTopLeft.Y = smallScreenSize.Y - height
+        newBottomRight.Y = smallScreenSize.Y
+    }
+
+    if newTopLeft.X < 0 {
+        newTopLeft.X = 0
+        newBottomRight.X = width
+    }
+    if newTopLeft.Y < 0 {
+        newTopLeft.Y = 0
+        newBottomRight.Y = height
+    }
+
+    g.topLeft = newTopLeft
+    g.bottomRight = newBottomRight
+}
+
+func (g *GridMenu) DisableAutoClose() {
+    g.autoCloseOnConfirm = false
+}
+
+func maxLenOfItems(items []util.MenuItem) int {
     maxLength := 0
     hasIcons := false
     for _, item := range items {

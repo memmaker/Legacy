@@ -1,44 +1,58 @@
 package main
 
 import (
-    "Legacy/ega"
     "Legacy/game"
-    "Legacy/renderer"
+    "Legacy/geometry"
+    "Legacy/ui"
+    "Legacy/util"
     "fmt"
     "github.com/hajimehoshi/ebiten/v2"
     "image/color"
     "os"
 )
 
-func (g *GridEngine) openContextMenu() {
-    if len(g.contextActions) == 0 {
+func (g *GridEngine) openContextMenu(menu []util.MenuItem) {
+    if len(menu) == 0 {
         return
     }
-    if len(g.contextActions) == 1 {
-        g.contextActions[0].Action()
+    if len(menu) == 1 {
+        menu[0].Action()
         return
     }
-    g.OpenMenu(g.contextActions)
+    g.OpenMenu(menu)
 }
 
-func (g *GridEngine) OpenMenu(items []renderer.MenuItem) {
+func (g *GridEngine) OpenMenu(items []util.MenuItem) {
     g.openMenuWithTitle("", items)
 }
-func (g *GridEngine) openMenuWithTitle(title string, items []renderer.MenuItem) {
+
+func (g *GridEngine) openMenuWithTitle(title string, items []util.MenuItem) *ui.GridMenu {
     if len(items) == 0 {
-        return
+        return nil
     }
-    gridMenu := renderer.NewGridMenu(g.gridRenderer, items)
+    gridMenu := ui.NewGridMenu(g.gridRenderer, items)
+    gridMenu.OnMouseMoved(g.lastMousePosX, g.lastMousePosY)
     gridMenu.SetAutoClose()
     if title != "" {
         gridMenu.SetTitle(title)
     }
-    g.switchInputElement(gridMenu)
-    g.inputElement.OnMouseMoved(g.lastMousePosX, g.lastMousePosY)
+    if g.lastInteractionWasMouse {
+        gridMenu.PositionNearMouse(g.lastMousePosX, g.lastMousePosY)
+    }
+    g.PushModal(gridMenu)
+    return gridMenu
 }
-
+func (g *GridEngine) NewTextInputAtY(yPos int, prompt string, onClose func(endedWith ui.EndAction, text string)) *ui.TextInput {
+    cursorIcon := int32(28)
+    cursorFrameCount := 4
+    input := ui.NewTextInput(g.gridRenderer, geometry.Point{}, 15, cursorIcon, cursorFrameCount, onClose)
+    input.SetDrawBorder(true)
+    input.SetPrompt(prompt)
+    input.CenterHorizontallyAtY(yPos)
+    return input
+}
 func (g *GridEngine) openSpellMenu() {
-    var menuItems []renderer.MenuItem
+    var menuItems []util.MenuItem
     spells := g.playerParty.GetSpells()
     if len(spells) == 0 {
         g.ShowText([]string{"You don't have any spells."})
@@ -50,11 +64,11 @@ func (g *GridEngine) openSpellMenu() {
             continue
         }
         label := fmt.Sprintf("%s (%d)", spell.Name(), spell.ManaCost())
-        menuItems = append(menuItems, renderer.MenuItem{
+        menuItems = append(menuItems, util.MenuItem{
             Text: label,
             Action: func() {
                 if spell.IsTargeted() {
-                    g.combatManager.PlayerStartsOffensiveSpell(spell)
+                    g.combatManager.PlayerStartsOffensiveSpell(g.GetAvatar(), spell)
                 } else {
                     spell.Cast(g, g.GetAvatar())
                 }
@@ -69,7 +83,7 @@ func (g *GridEngine) openSpellMenu() {
 }
 
 func (g *GridEngine) openCombatSpellMenu(member *game.Actor) {
-    var menuItems []renderer.MenuItem
+    var menuItems []util.MenuItem
     spells := member.GetEquippedSpells()
     if len(spells) == 0 {
         g.ShowText([]string{"You don't have any spells."})
@@ -81,10 +95,11 @@ func (g *GridEngine) openCombatSpellMenu(member *game.Actor) {
             continue
         }
         label := fmt.Sprintf("%s (%d)", spell.Name(), spell.ManaCost())
-        menuItems = append(menuItems, renderer.MenuItem{
+        menuItems = append(menuItems, util.MenuItem{
             Text: label,
             Action: func() {
                 if spell.IsTargeted() {
+                    g.CloseAllModals()
                     g.combatManager.SelectSpellTarget(member, spell)
                 } else {
                     spell.Cast(g, member)
@@ -100,10 +115,10 @@ func (g *GridEngine) openCombatSpellMenu(member *game.Actor) {
 }
 
 func (g *GridEngine) ShowDrinkPotionMenu(potion *game.Potion) {
-    var menuItems []renderer.MenuItem
+    var menuItems []util.MenuItem
     for _, m := range g.playerParty.GetMembers() {
         member := m
-        menuItems = append(menuItems, renderer.MenuItem{
+        menuItems = append(menuItems, util.MenuItem{
             Text: fmt.Sprintf("%s", member.Name()),
             Action: func() {
                 if !potion.IsEmpty() {
@@ -117,11 +132,11 @@ func (g *GridEngine) ShowDrinkPotionMenu(potion *game.Potion) {
 }
 
 func (g *GridEngine) OpenPickpocketMenu(victim *game.Actor) {
-    var itemList []renderer.MenuItem
+    var itemList []util.MenuItem
     items := victim.GetItemsToSteal()
     for _, i := range items {
         item := i
-        itemList = append(itemList, renderer.MenuItem{
+        itemList = append(itemList, util.MenuItem{
             Text: item.Name(),
             Action: func() {
                 if item.GetHolder() == victim {
@@ -139,11 +154,11 @@ func (g *GridEngine) ShowEquipMenu(a game.Equippable) {
             g.EquipItem(g.GetAvatar(), a)
             return
         }
-        var equipMenuItems []renderer.MenuItem
+        var equipMenuItems []util.MenuItem
         for _, m := range g.GetPartyMembers() {
             partyMember := m
             if partyMember.CanEquip(a) {
-                equipMenuItems = append(equipMenuItems, renderer.MenuItem{
+                equipMenuItems = append(equipMenuItems, util.MenuItem{
                     Text: partyMember.Name(),
                     Action: func() {
                         g.EquipItem(partyMember, a)
@@ -156,7 +171,7 @@ func (g *GridEngine) ShowEquipMenu(a game.Equippable) {
 }
 
 func (g *GridEngine) openDebugMenu() {
-    g.OpenMenu([]renderer.MenuItem{
+    g.OpenMenu([]util.MenuItem{
         {
             Text: "Toggle NoClip",
             Action: func() {
@@ -165,10 +180,13 @@ func (g *GridEngine) openDebugMenu() {
             },
         },
         {
-            Text: "Color Test",
+            Text:   "Teleport",
+            Action: g.openTransportMenu,
+        },
+        {
+            Text: "Damage to Avatar",
             Action: func() {
-                g.avatar.SetTintColor(ega.Red)
-                g.avatar.SetTinted(true)
+                g.avatar.Damage(10)
             },
         },
         {
@@ -194,6 +212,7 @@ func (g *GridEngine) openDebugMenu() {
                 g.playerParty.AddXPForEveryone(1000000)
                 g.playerParty.AddItem(game.NewTool(game.ToolTypePickaxe, "a pickaxe"))
                 g.playerParty.AddItem(game.NewTool(game.ToolTypeShovel, "a shovel"))
+                g.giveAllArmorsAndWeapons()
                 g.Print("DEBUG(impulse 9)")
             },
         },
@@ -252,7 +271,7 @@ func (g *GridEngine) openDebugMenu() {
 }
 
 func (g *GridEngine) ChangeAppearance() {
-    iconWindow := renderer.NewIconWindow(g.gridRenderer)
+    iconWindow := ui.NewIconWindow(g.gridRenderer)
     iconWindow.SetOnClose(func() {
         g.GetAvatar().SetIcon(iconWindow.Icon())
     })
@@ -260,7 +279,7 @@ func (g *GridEngine) ChangeAppearance() {
     iconWindow.SetCurrentIcon(g.GetAvatar().Icon(0))
     iconWindow.SetFixedText([]string{"What do you see?"})
     iconWindow.SetYOffset(10)
-    g.modalElement = iconWindow
+    g.PushModal(iconWindow)
 }
 
 func (g *GridEngine) saveGameToDirectory(directory string) {
@@ -295,18 +314,11 @@ func (g *GridEngine) loadGameFromDirectory(directory string) {
 
 type Modal interface {
     Draw(screen *ebiten.Image)
-    ActionUp()
-    ActionDown()
-    ActionConfirm()
     ShouldClose() bool
-    OnMouseClicked(x int, y int) bool
     OnAvatarSwitched()
-}
 
-type UIWidget interface {
-    Modal
-    ActionLeft()
-    ActionRight()
+    OnCommand(command ui.CommandType) bool
+    OnMouseMoved(x int, y int) (bool, ui.Tooltip)
     OnMouseClicked(x int, y int) bool
-    OnMouseMoved(x int, y int) renderer.Tooltip
+    OnMouseWheel(x int, y int, dy float64) bool
 }

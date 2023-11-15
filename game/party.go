@@ -4,7 +4,6 @@ import (
     "Legacy/ega"
     "Legacy/geometry"
     "Legacy/gridmap"
-    "Legacy/renderer"
     "Legacy/util"
     "fmt"
     "image/color"
@@ -14,7 +13,7 @@ import (
 type Party struct {
     members         []*Actor
     partyInventory  [][]Item
-    keys            map[string]*Key
+    keys            map[string][]*Key
     gridMap         *gridmap.GridMap[*Actor, Item, Object]
     fov             *geometry.FOV
     gold            int
@@ -22,6 +21,14 @@ type Party struct {
     lockpicks       int
     stepsBeforeRest int
     rules           *Rules
+    prevPositions   []geometry.Point
+    currentVehicle  *Vehicle
+    splitControlled *Actor
+    usedKeys        map[string]bool
+}
+
+func (p *Party) Name() string {
+    return "Party"
 }
 
 func (p *Party) Pos() geometry.Point {
@@ -32,7 +39,8 @@ func NewParty(leader *Actor) *Party {
     p := &Party{
         members:        []*Actor{leader},
         partyInventory: [][]Item{},
-        keys:           make(map[string]*Key),
+        keys:           make(map[string][]*Key),
+        usedKeys:       make(map[string]bool),
         fov:            geometry.NewFOV(geometry.NewRect(-6, -6, 6, 6)),
     }
     leader.SetParty(p)
@@ -50,7 +58,10 @@ func (p *Party) SetRules(rules *Rules) {
 }
 func (p *Party) AddItem(item Item) {
     if key, ok := item.(*Key); ok {
-        p.keys[key.key] = key
+        if _, keyExists := p.keys[key.key]; !keyExists {
+            p.keys[key.key] = []*Key{}
+        }
+        p.keys[key.key] = append(p.keys[key.key], key)
     } else {
         p.addToInventory(item)
     }
@@ -76,10 +87,11 @@ func (p *Party) addToInventory(item Item) {
     p.partyInventory = append(p.partyInventory, []Item{item})
 }
 
-func (p *Party) RemoveItem(item Item) {
+func (p *Party) RemoveItem(item Item) bool {
     if key, ok := item.(*Key); ok {
         delete(p.keys, key.key)
         item.SetHolder(nil)
+        return true
     } else {
         for i, it := range p.partyInventory {
             if it[0] == item {
@@ -88,19 +100,20 @@ func (p *Party) RemoveItem(item Item) {
                     p.partyInventory = append(p.partyInventory[:i], p.partyInventory[i+1:]...)
                 }
                 item.SetHolder(nil)
-                return
-            }
+                return true
+            } // this looks weird..
             if it[0].CanStackWith(item) {
                 for j, stackItem := range it {
                     if stackItem == item {
                         p.partyInventory[i] = append(it[:j], it[j+1:]...)
                         item.SetHolder(nil)
-                        return
+                        return true
                     }
                 }
             }
         }
     }
+    return false
 }
 
 type MemberStatus struct {
@@ -171,9 +184,21 @@ func (p *Party) AddMember(npc *Actor) {
 }
 
 func (p *Party) Move(relativeMovement geometry.Point) {
+    if p.splitControlled != nil {
+        p.gridMap.MoveActor(p.splitControlled, p.splitControlled.Pos().Add(relativeMovement))
+    } else if p.IsInVehicle() {
+        p.vehicleMovement(relativeMovement)
+    } else {
+        p.walkMovement(relativeMovement)
+    }
+}
+
+func (p *Party) walkMovement(relativeMovement geometry.Point) {
+    p.updatePreviousPositions()
     leader := p.members[0]
     leaderPos := leader.Pos()
     newPos := leaderPos.Add(relativeMovement)
+
     if !p.gridMap.Contains(newPos) {
         return
     }
@@ -192,6 +217,17 @@ func (p *Party) Move(relativeMovement geometry.Point) {
         followerPos := follower.Pos()
         p.gridMap.MoveActor(follower, leaderPos)
         leaderPos = followerPos
+    }
+}
+func (p *Party) resetToPreviousPositions() {
+    for i, pos := range p.prevPositions {
+        p.gridMap.MoveActor(p.members[i], pos)
+    }
+}
+func (p *Party) updatePreviousPositions() {
+    p.prevPositions = make([]geometry.Point, len(p.members))
+    for i, member := range p.members {
+        p.prevPositions[i] = member.Pos()
     }
 }
 
@@ -225,12 +261,12 @@ func (p *Party) GetFoV() *geometry.FOV {
     return p.fov
 }
 
-func (p *Party) GetSplitActions(g Engine) []renderer.MenuItem {
-    var items []renderer.MenuItem
+func (p *Party) GetSplitActions(g Engine) []util.MenuItem {
+    var items []util.MenuItem
     if p.HasFollowers() {
         for _, m := range p.members {
             member := m
-            items = append(items, renderer.MenuItem{
+            items = append(items, util.MenuItem{
                 Text:   fmt.Sprintf("Control \"%s\"", member.Name()),
                 Action: func() { g.SwitchAvatarTo(member) },
             })
@@ -382,16 +418,10 @@ func (p *Party) GetFinanceOverview(engine Engine) []string {
 
 func (p *Party) GetKeys() []*Key {
     var result []*Key
-    for _, key := range p.keys {
-        result = append(result, key)
-    }
-    return result
-}
-
-func (p *Party) GetKeysAsItems() []Item {
-    var result []Item
-    for _, key := range p.keys {
-        result = append(result, key)
+    for _, keys := range p.keys {
+        for _, key := range keys {
+            result = append(result, key)
+        }
     }
     return result
 }
@@ -514,6 +544,109 @@ func (p *Party) HasItems() bool {
     return len(p.partyInventory) > 0
 }
 
+func (p *Party) EnterVehicle(v *Vehicle) {
+    // remove everyone from the map, TODO: nice animation
+    for _, member := range p.members {
+        p.gridMap.RemoveActor(member)
+    }
+    p.currentVehicle = v
+}
+
+func (p *Party) IsInVehicle() bool {
+    return p.currentVehicle != nil
+}
+
+func (p *Party) vehicleMovement(movement geometry.Point) {
+    if p.currentVehicle == nil {
+        return
+    }
+    destPosition := p.currentVehicle.Pos().Add(movement)
+    // TODO: check if allowed..
+    p.gridMap.MoveObject(p.currentVehicle, destPosition)
+    for _, member := range p.members {
+        member.SetPos(p.currentVehicle.Pos())
+    }
+}
+
+func (p *Party) TryExitVehicle() bool {
+    if p.currentVehicle == nil {
+        return false
+    }
+    freeNeighbor := p.gridMap.GetRandomFreeNeighbor(p.currentVehicle.Pos())
+    if freeNeighbor == p.currentVehicle.Pos() {
+        return false
+    }
+    p.spawnPartyAt(freeNeighbor)
+    p.currentVehicle = nil
+    return true
+}
+
+func (p *Party) PlaceOnMap(currentMap *gridmap.GridMap[*Actor, Item, Object], spawnPos geometry.Point) {
+    p.SetGridMap(currentMap)
+    p.spawnPartyAt(spawnPos)
+}
+
+func (p *Party) spawnPartyAt(spawnPos geometry.Point) {
+    p.gridMap.AddActor(p.members[0], spawnPos)
+
+    if p.HasFollowers() {
+        followerCount := len(p.GetMembers()) - 1
+        freeCells := p.gridMap.GetFreeCellsForDistribution(spawnPos, followerCount, func(pos geometry.Point) bool {
+            return p.gridMap.Contains(pos) && p.gridMap.IsCurrentlyPassable(pos)
+        })
+        if len(freeCells) < followerCount {
+            println(fmt.Sprintf("ERROR: not enough free cells for followers at %v", spawnPos))
+        } else {
+            for i, follower := range p.GetMembers()[1:] {
+                followerPos := freeCells[i]
+                p.gridMap.AddActor(follower, followerPos)
+            }
+        }
+    }
+}
+
+func (p *Party) GetControlledActor() *Actor {
+    if p.splitControlled != nil {
+        return p.splitControlled
+    }
+    return p.members[0]
+}
+
+func (p *Party) IsSplit() bool {
+    return p.splitControlled != nil
+}
+
+func (p *Party) SwitchControlTo(actor *Actor) {
+    p.splitControlled = actor
+}
+
+func (p *Party) ReturnControlToLeader() {
+    p.splitControlled = nil
+}
+
+func (p *Party) GetMinutesPerStepOnWorldmap() int {
+    if p.IsInVehicle() {
+        return p.currentVehicle.GetMinutesPerStep()
+    }
+    return p.rules.GetMinutesPerStepOnWorldmap()
+}
+
+func (p *Party) HasAnyRangedWeaponsEquipped() bool {
+    for _, member := range p.members {
+        if member.HasRangedWeaponEquipped() {
+            return true
+        }
+    }
+    return false
+}
+
+func (p *Party) UsedKey(key string) {
+    p.usedKeys[key] = true
+}
+func (p *Party) HasUsedKey(key string) bool {
+    _, exists := p.usedKeys[key]
+    return exists
+}
 func moneyFormat(value int) string {
     return strconv.Itoa(value) + "g"
 }

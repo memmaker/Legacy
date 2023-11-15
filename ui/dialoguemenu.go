@@ -1,15 +1,17 @@
-package renderer
+package ui
 
 import (
     "Legacy/ega"
     "Legacy/geometry"
+    "Legacy/renderer"
+    "Legacy/util"
     "github.com/hajimehoshi/ebiten/v2"
     "image/color"
 )
 
 type GridDialogueMenu struct {
     topLeft      geometry.Point
-    gridRenderer *DualGridRenderer
+    gridRenderer *renderer.DualGridRenderer
     bottomRight  geometry.Point
 
     currentSelection int
@@ -18,6 +20,33 @@ type GridDialogueMenu struct {
 
     shouldClose bool
     title       string
+    canBeClosed bool
+}
+
+func (g *GridDialogueMenu) OnCommand(command CommandType) bool {
+    switch command {
+    case PlayerCommandCancel:
+        g.ActionCancel()
+    case PlayerCommandConfirm:
+        g.ActionConfirm()
+    case PlayerCommandUp:
+        g.ActionUp()
+    case PlayerCommandDown:
+        g.ActionDown()
+    case PlayerCommandLeft:
+        g.ActionLeft()
+    case PlayerCommandRight:
+        g.ActionRight()
+    }
+    return true
+}
+
+func (g *GridDialogueMenu) ActionCancel() {
+
+}
+
+func (g *GridDialogueMenu) CanBeClosed() bool {
+    return g.canBeClosed
 }
 
 func (g *GridDialogueMenu) OnAvatarSwitched() {
@@ -45,7 +74,7 @@ type ButtonHotspot struct {
     TextColor color.Color
 }
 
-func NewGridDialogueMenu(gridRenderer *DualGridRenderer, topLeft geometry.Point, menuItems []MenuItem) *GridDialogueMenu {
+func NewGridDialogueMenu(gridRenderer *renderer.DualGridRenderer, topLeft geometry.Point, menuItems []util.MenuItem) *GridDialogueMenu {
     width := gridRenderer.GetSmallGridScreenSize().X - 6
 
     hotspotLayout := layoutMenuItems(menuItems, width)
@@ -57,6 +86,7 @@ func NewGridDialogueMenu(gridRenderer *DualGridRenderer, topLeft geometry.Point,
         bottomRight:   geometry.Point{X: topLeft.X + width, Y: topLeft.Y + height},
         hotspotLayout: hotspotLayout,
         lastIndex:     len(menuItems) - 1,
+        canBeClosed:   true,
     }
 }
 
@@ -92,20 +122,20 @@ func (g *GridDialogueMenu) OnMouseClicked(x, y int) bool {
     return false
 }
 
-func (g *GridDialogueMenu) OnMouseMoved(x, y int) Tooltip {
+func (g *GridDialogueMenu) OnMouseMoved(x, y int) (bool, Tooltip) {
     relativeLine := y - g.topLeft.Y - 2
     if relativeLine < 0 || relativeLine >= len(g.hotspotLayout) {
-        return NoTooltip{}
+        return false, NoTooltip{}
     }
     line := g.hotspotLayout[relativeLine]
 
     for _, hotspot := range line {
         if x >= hotspot.StartX && x < hotspot.EndX {
             g.currentSelection = hotspot.ItemIndex
-            return NoTooltip{}
+            return true, NoTooltip{}
         }
     }
-    return NoTooltip{}
+    return false, NoTooltip{}
 }
 
 func (g *GridDialogueMenu) ActionConfirm() {
@@ -132,7 +162,12 @@ func (g *GridDialogueMenu) ActionDown() {
     }
 }
 
-func layoutMenuItems(items []MenuItem, width int) [][]ButtonHotspot {
+func (g *GridDialogueMenu) SetCannotBeClosed() {
+    g.shouldClose = false
+    g.canBeClosed = false
+}
+
+func layoutMenuItems(items []util.MenuItem, width int) [][]ButtonHotspot {
     result := make([][]ButtonHotspot, 0)
     currentLine := make([]ButtonHotspot, 0)
     xOffset := 5
@@ -146,12 +181,12 @@ func layoutMenuItems(items []MenuItem, width int) [][]ButtonHotspot {
         currentLine = append(currentLine, ButtonHotspot{
             ItemIndex: i,
             StartX:    xOffset + currentLineWidth,
-            EndX:      xOffset + currentLineWidth + len(item.Text),
-            Label:     item.Text,
+            EndX:      xOffset + currentLineWidth + len(item.Text) + 1,
+            Label:     string(append([]rune{'ө'}, []rune(item.Text)...)),
             Action:    item.Action,
             TextColor: item.TextColor,
         })
-        currentLineWidth += len(item.Text) + 1
+        currentLineWidth += len(item.Text) + 2
     }
     if len(currentLine) > 0 {
         result = append(result, currentLine)

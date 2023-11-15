@@ -10,7 +10,7 @@ Item: armor(a cloak, torso, 1)
 
 %rec: Conversation
 
-Key: _first_time
+Key: _opening
 Text: "Öffne dich für ein Training, das dich auf ein neues Level bringt."
 + "Übung macht den Meister, und ich bin ein Meister der Übung."
 + "Ältere Menschen kommen zu mir, um sich zu trainieren."

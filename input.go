@@ -3,67 +3,165 @@ package main
 import (
     "Legacy/geometry"
     "Legacy/recfile"
+    "Legacy/ui"
     "Legacy/util"
     "fmt"
     "github.com/hajimehoshi/ebiten/v2"
     "github.com/hajimehoshi/ebiten/v2/inpututil"
 )
 
-func (g *GridEngine) handleInput() {
-    if g.textInput != nil {
-        var keys []ebiten.Key
-        keys = inpututil.AppendJustPressedKeys(keys)
-        for _, key := range keys {
-            g.textInput.OnKeyPressed(key)
-        }
-        return
-    }
+func (g *GridEngine) ActionUp() {
 
-    windowsOpen := g.inputElement != nil || g.modalElement != nil
+    g.PlayerMovement(geometry.Point{X: 0, Y: -1})
+}
+
+func (g *GridEngine) ActionDown() {
+    g.PlayerMovement(geometry.Point{X: 0, Y: 1})
+}
+
+func (g *GridEngine) ActionRight() {
+    g.PlayerMovement(geometry.Point{X: 1, Y: 0})
+}
+
+func (g *GridEngine) ActionLeft() {
+    g.PlayerMovement(geometry.Point{X: -1, Y: 0})
+}
+
+func (g *GridEngine) ActionConfirm() {
+    g.openContextMenu(g.getContextActions())
+}
+
+func (g *GridEngine) ActionCancel() {
+    /* should each modal decide if it can be closed?
+       if g.IsModalOpen() {
+
+           //g.CloseAllModals()
+           g.PopModal()
+       }
+
+    */
+}
+func (g *GridEngine) handleKeyboardInput(actionReceiver ui.InputReceiver) bool {
+
     if inpututil.IsKeyJustPressed(ebiten.KeyArrowRight) {
-        if g.inputElement != nil {
-            g.inputElement.ActionRight()
-        } else if !windowsOpen {
-            g.MoveAvatarInDirection(geometry.Point{X: 1, Y: 0})
-        }
+        return actionReceiver.OnCommand(ui.PlayerCommandRight)
     }
     if inpututil.IsKeyJustPressed(ebiten.KeyArrowLeft) {
-        if g.inputElement != nil {
-            g.inputElement.ActionLeft()
-        } else if !windowsOpen {
-            g.MoveAvatarInDirection(geometry.Point{X: -1, Y: 0})
-        }
+        return actionReceiver.OnCommand(ui.PlayerCommandLeft)
     }
     if inpututil.IsKeyJustPressed(ebiten.KeyArrowUp) {
-        if g.inputElement != nil {
-            g.inputElement.ActionUp()
-        } else if g.modalElement != nil {
-            g.modalElement.ActionUp()
-        } else {
-            g.MoveAvatarInDirection(geometry.Point{X: 0, Y: -1})
-        }
+        return actionReceiver.OnCommand(ui.PlayerCommandUp)
     }
     if inpututil.IsKeyJustPressed(ebiten.KeyArrowDown) {
-        if g.inputElement != nil {
-            g.inputElement.ActionDown()
-        } else if g.modalElement != nil {
-            g.modalElement.ActionDown()
-        } else {
-            g.MoveAvatarInDirection(geometry.Point{X: 0, Y: 1})
-        }
+        return actionReceiver.OnCommand(ui.PlayerCommandDown)
     }
 
     if inpututil.IsKeyJustPressed(ebiten.KeyEnter) {
-        if g.inputElement != nil {
-            g.inputElement.ActionConfirm()
-        } else if g.modalElement != nil {
-            g.modalElement.ActionConfirm()
-        } else if transition, ok := g.currentMap.GetTransitionAt(g.avatar.Pos()); ok {
-            g.transitionToNamedLocation(transition.TargetMap, transition.TargetLocation)
-        } else {
-            g.openContextMenu()
+        return actionReceiver.OnCommand(ui.PlayerCommandConfirm)
+    }
+
+    if inpututil.IsKeyJustPressed(ebiten.KeyEscape) || inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonRight) {
+        return actionReceiver.OnCommand(ui.PlayerCommandCancel)
+    }
+
+    /* TODO: implement mouse wheel
+       _, dy := ebiten.Wheel()
+          //g.wheel += dx
+          g.wheelYVelocity += dy
+          if math.Abs(dy) > 0.1 && g.inputElement != nil {
+              if dy > 0 {
+                  g.inputElement.ActionDown()
+              } else {
+                  g.inputElement.ActionUp()
+              }
+          }
+    */
+    return false
+}
+
+func (g *GridEngine) handleMouseInput(actionReceiver ui.InputReceiver, screenX int, screenY int) bool {
+    // mouse
+    cellX, cellY := g.gridRenderer.ScreenToSmallCell(screenX, screenY)
+
+    if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
+        g.lastInteractionWasMouse = true
+        mouseHandled := actionReceiver.OnMouseClicked(cellX, cellY)
+        return mouseHandled
+    } else {
+        g.lastInteractionWasMouse = false
+    }
+    _, dy := ebiten.Wheel()
+    if dy != 0 {
+        g.currentTooltip = nil
+        mouseHandled := actionReceiver.OnMouseWheel(cellX, cellY, dy)
+        if mouseHandled {
+            return true
         }
     }
+
+    if cellX != g.lastMousePosX || cellY != g.lastMousePosY {
+        mouseHandled, tooltip := actionReceiver.OnMouseMoved(cellX, cellY)
+        g.handleTooltip(tooltip)
+        g.lastMousePosX = cellX
+        g.lastMousePosY = cellY
+        return mouseHandled
+    }
+    return false
+}
+
+func (g *GridEngine) handleMapMouseInput(screenX int, screenY int) {
+    if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
+        if g.IsScreenPosInsideMap(screenX, screenY) {
+            mapPos := g.ScreenToMap(screenX, screenY)
+            g.onMapClicked(mapPos)
+        }
+    }
+}
+
+func (g *GridEngine) IsScreenPosInsideMap(x int, y int) bool {
+    smallX, smallY := g.gridRenderer.ScreenToSmallCell(x, y)
+    screenSize := g.gridRenderer.GetSmallGridScreenSize()
+    // 1 cell border at top, left, right and 2 cells at the bottom
+    return smallX >= 1 && smallX < screenSize.X-1 && smallY >= 1 && smallY < screenSize.Y-2
+}
+
+func (g *GridEngine) onMapClicked(pos geometry.Point) {
+    if g.GetAvatar().Pos() == pos {
+        g.openContextMenu(g.getContextActions())
+        return
+    }
+    dist := geometry.DistanceManhattan(g.GetAvatar().Pos(), pos)
+    if dist == 1 {
+        interactables := g.getInteractablesAt([]geometry.Point{pos})
+        if !interactables.IsEmpty() {
+            g.openContextMenu(g.contextActionsFromInteractables(interactables))
+            return
+        }
+    }
+
+    if g.currentMap.IsCurrentlyPassable(pos) {
+        g.TryMoveAvatarWithPathfinding(pos)
+    }
+}
+
+func (g *GridEngine) handleDebugKeys() {
+    if inpututil.IsKeyJustPressed(ebiten.KeyF9) {
+        ebiten.SetFullscreen(!ebiten.IsFullscreen())
+    } else if inpututil.IsKeyJustPressed(ebiten.KeyF10) {
+        g.openDebugMenu()
+    } else if inpututil.IsKeyJustPressed(ebiten.KeyF11) {
+        util.Persist("debug_map_pos", g.GetMapName()+g.avatar.Pos().Encode())
+        g.Print(fmt.Sprintf("Saved map position: %s", g.avatar.Pos().Encode()))
+    } else if inpututil.IsKeyJustPressed(ebiten.KeyF12) {
+        mapPosPred := recfile.StrPredicate(util.Get("debug_map_pos"))
+        mapName := mapPosPred.Name()
+        xPos := mapPosPred.GetInt(0)
+        yPos := mapPosPred.GetInt(1)
+        g.transitionToLocation(mapName, geometry.Point{X: xPos, Y: yPos})
+    }
+}
+
+func (g *GridEngine) handleShortcuts() {
     // SHORTCUTS
     // (P)ickup
     // (I)nventory
@@ -75,6 +173,8 @@ func (g *GridEngine) handleInput() {
     // (T)ry to join party
     // (L)og
     // (C)enter camera on avatar
+    // (K)eys
+    // cl(o)ck
     // Space - Party menu
     // Enter - Context menu
 
@@ -88,14 +188,13 @@ func (g *GridEngine) handleInput() {
     // O + 1-4     - Optimize equip for character (1-4)
     // U + 1-4     - Strip gear from character (1-4)
     // F9 - Toggle fullscreen
-
-    if inpututil.IsKeyJustPressed(ebiten.KeyP) && !windowsOpen {
+    if inpututil.IsKeyJustPressed(ebiten.KeyP) && !g.IsWindowOpen() {
         if g.currentMap.IsItemAt(g.avatar.Pos()) {
             item := g.currentMap.ItemAt(g.avatar.Pos())
             g.PickUpItem(item)
         }
     } else if inpututil.IsKeyJustPressed(ebiten.KeyI) {
-        //g.openSimpleInventory()
+        //g.openKeyInventory()
         g.openExtendedInventory()
     } else if inpututil.IsKeyJustPressed(ebiten.KeyJ) {
         g.openJournal()
@@ -123,23 +222,21 @@ func (g *GridEngine) handleInput() {
         } else {
             g.ShowText([]string{"You don't have any followers."})
         }
+    } else if inpututil.IsKeyJustPressed(ebiten.KeyK) {
+        g.openKeyInventory()
+    } else if inpututil.IsKeyJustPressed(ebiten.KeyO) {
+        g.Print(g.worldTime.GetTimeAndDate())
     }
     if inpututil.IsKeyJustPressed(ebiten.KeyC) {
         g.mapWindow.CenterOn(g.avatar.Pos())
     }
     if inpututil.IsKeyJustPressed(ebiten.KeyA) {
-        g.lastSelectedAction()
+        if g.lastSelectedAction != nil {
+            g.lastSelectedAction()
+        }
     }
     if inpututil.IsKeyJustPressed(ebiten.KeyQ) {
         g.ShowText(g.lastShownText)
-    }
-    if inpututil.IsKeyJustPressed(ebiten.KeyEscape) {
-        if g.inputElement != nil {
-            g.closeInputElement()
-        }
-        if g.modalElement != nil {
-            g.modalElement = nil
-        }
     }
     charIndex := -1
     if inpututil.IsKeyJustPressed(ebiten.Key1) {
@@ -187,43 +284,4 @@ func (g *GridEngine) handleInput() {
             g.OpenEquipmentDetails(member)
         }
     }
-
-    if inpututil.IsKeyJustPressed(ebiten.KeyF9) {
-        ebiten.SetFullscreen(!ebiten.IsFullscreen())
-    } else if inpututil.IsKeyJustPressed(ebiten.KeyF10) {
-        g.openDebugMenu()
-    } else if inpututil.IsKeyJustPressed(ebiten.KeyF11) {
-        util.Persist("debug_map_pos", g.GetMapName()+g.avatar.Pos().Encode())
-        g.Print(fmt.Sprintf("Saved map position: %s", g.avatar.Pos().Encode()))
-    } else if inpututil.IsKeyJustPressed(ebiten.KeyF12) {
-        mapPosPred := recfile.StrPredicate(util.Get("debug_map_pos"))
-        mapName := mapPosPred.Name()
-        xPos := mapPosPred.GetInt(0)
-        yPos := mapPosPred.GetInt(1)
-        g.transitionToLocation(mapName, geometry.Point{X: xPos, Y: yPos})
-    }
-
-    cellX, cellY := g.gridRenderer.ScreenToSmallCell(ebiten.CursorPosition())
-
-    if cellX != g.lastMousePosX || cellY != g.lastMousePosY {
-        g.onMouseMoved(cellX, cellY)
-        g.lastMousePosX = cellX
-        g.lastMousePosY = cellY
-    }
-    if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
-        g.onMouseClick(cellX, cellY)
-    }
-
-    /* TODO: implement mouse wheel
-       _, dy := ebiten.Wheel()
-          //g.wheel += dx
-          g.wheelYVelocity += dy
-          if math.Abs(dy) > 0.1 && g.inputElement != nil {
-              if dy > 0 {
-                  g.inputElement.ActionDown()
-              } else {
-                  g.inputElement.ActionUp()
-              }
-          }
-    */
 }

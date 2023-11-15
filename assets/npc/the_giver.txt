@@ -10,13 +10,19 @@ Item: armor(a cloak, torso, 1)
 
 %rec: Conversation
 
-Key: _first_time
+Key: _opening
+AddsKeyword: bye
 Text:
 + "You want to have some =nice= =food=, or =gold=?
 + I can also offer =XP=, or give you a =skill=. Maybe you need some =lockpicks=?
 +
 + Or how about some cool =items=? I can also provide =buffs=.
 + Or maybe you just want to set a =flag=, you =sneaky= person you.
+
+Key: bye
+Effect: quits
+Text: "Goodbye!"
+
 
 Key: food
 Effect: giveFood(10)
@@ -47,8 +53,8 @@ Effect: giveLockpicks(10)
 Text: "Here you go, enjoy!"
 
 Key: items
-GiveItem: weapon(a sword, 1)
-GiveItem: tool(pickaxe)
+NewItem: weapon(common, sword, iron)
+NewItem: tool(pickaxe)
 Text: "Here you go, enjoy!"
 
 Key: buffs

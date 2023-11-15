@@ -23,20 +23,28 @@ Item: noitem(food, 1)
 %rec: Conversation
 
 Key: _first_time
+AddsKeyword: bye
 Text: "Ah, the saviour of the \
 country! I am pleased to \
 make your acquaintance. \
-The chancellor is inside. \
-Please go ahead."
+Name's =Greg=."
 
-Key: name
-Text: "Gregor, loyal guard of \
+
+Key: _opening
+Text: "Pleased to see you."
+
+Key: bye
+Effect: quits
+Text: "Goodbye."
+
+Key: Greg
+Text: "Gregor, loyal =guard= of \
 the =chancellor=."
 + \
 He is obviously a very \
 enthusiastic guard.
 
-Key: job
+Key: guard
 Text: "I am a guard of the \
 =chancellor=. I am \
 responsible for the \
@@ -55,13 +63,18 @@ to have some =spare time=?"
 
 
 Key: spare time
-Option: _spare_time: yes
-Option: _no_spare_time: no
 Text: "I have some personal \
 matters to attend to. I \
 would be very grateful if \
 you could take over my \
 =shift= for a minute."
+#
+OnOptionSuccess: _spare_time
+Option: yes
+#
+OnOptionSuccess: _no_spare_time
+Option: no
+
 
 Key: _spare_time
 TriggerEvent: guard_duty

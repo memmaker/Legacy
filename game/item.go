@@ -3,14 +3,15 @@ package game
 import (
     "Legacy/geometry"
     "Legacy/recfile"
-    "Legacy/renderer"
+    "Legacy/util"
     "fmt"
     "image/color"
 )
 
 type ItemHolder interface {
     Pos() geometry.Point
-    RemoveItem(item Item)
+    RemoveItem(item Item) bool
+    Name() string
 }
 type ItemWearer interface {
     Pos() geometry.Point
@@ -24,7 +25,7 @@ type Item interface {
     TintColor() color.Color
     SetPos(geometry.Point)
     Name() string
-    GetContextActions(engine Engine) []renderer.MenuItem
+    GetContextActions(engine Engine) []util.MenuItem
     SetHolder(owner ItemHolder)
     GetHolder() ItemHolder
     IsHidden() bool
@@ -86,10 +87,10 @@ func (i *BaseItem) TintColor() color.Color {
 func (i *BaseItem) IsHeld() bool {
     return i.holder != nil
 }
-func inventoryItemActions(item Item, engine Engine) []renderer.MenuItem {
-    var actions []renderer.MenuItem
+func inventoryItemActions(item Item, engine Engine) []util.MenuItem {
+    var actions []util.MenuItem
     if item.GetHolder() == nil {
-        actions = append(actions, renderer.MenuItem{
+        actions = append(actions, util.MenuItem{
             Text: "Take",
             Action: func() {
                 if item.GetHolder() == nil {
@@ -98,7 +99,7 @@ func inventoryItemActions(item Item, engine Engine) []renderer.MenuItem {
             },
         })
     } else if engine.IsPlayerControlled(item.GetHolder()) {
-        actions = append(actions, renderer.MenuItem{
+        actions = append(actions, util.MenuItem{
             Text: "Drop",
             Action: func() {
                 if engine.IsPlayerControlled(item.GetHolder()) {
@@ -155,7 +156,7 @@ func NewItemFromString(encoded string) Item {
         return NewArmorFromPredicate(predicate)
     case "noitem":
         return NewPseudoItemFromPredicate(predicate)
-    case "flavor": // example flavor(a teddy|20)
+    case "flavor": // example flavor(a teddy, 20, a nice cozy teddy bear)
         return NewFlavorItemFromPredicate(predicate)
     case "weapon":
         return NewWeaponFromPredicate(predicate)

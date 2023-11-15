@@ -24,6 +24,7 @@ func (g *GridEngine) drawCombatActionBar(screen *ebiten.Image) {
 }
 func (g *GridEngine) drawUpperStatusBar(screen *ebiten.Image) {
     screenSize := g.gridRenderer.GetSmallGridScreenSize()
+
     foodCount := g.playerParty.GetFood()
     goldCount := g.playerParty.GetGold()
     lockpickCount := g.playerParty.GetLockpicks()
@@ -69,5 +70,15 @@ func (g *GridEngine) drawUpperStatusBar(screen *ebiten.Image) {
         swordIcon := int32(152)
         g.gridRenderer.DrawOnSmallGrid(screen, g.offenseBuffsButton.X, g.offenseBuffsButton.Y, swordIcon)
     }
+
+    // current location
+    mapName := g.currentMap.GetDisplayName()
+    width := len(mapName)
+    x := (screenSize.X - width) / 2
+    g.gridRenderer.DrawColoredString(screen, x, yPos, mapName, color.White)
+    xPosBefore := x - 1
+    xPosAfter := x + width
+    g.gridRenderer.DrawOnSmallGrid(screen, xPosBefore, yPos, 16)
+    g.gridRenderer.DrawOnSmallGrid(screen, xPosAfter, yPos, 17)
 
 }

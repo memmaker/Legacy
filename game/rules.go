@@ -75,7 +75,7 @@ func (r *Rules) GetXPTable(from, to int) []string {
     return util.TableLayout(rows)
 }
 
-func (r *Rules) GetTargetLocation(text string) (string, string) {
+func (r *Rules) GetTargetTravelLocation(text string) (string, string) {
     if text == "" {
         return "", ""
     }
@@ -119,4 +119,12 @@ func (r *Rules) GetMeleeDamage(attacker *Actor, victim *Actor) int {
 
 func (r *Rules) CalculateHit(attacker *Actor, npc *Actor) bool {
     return true
+}
+
+func (r *Rules) GetMinutesPerStepInLevels() int {
+    return 1
+}
+
+func (r *Rules) GetMinutesPerStepOnWorldmap() int {
+    return 20
 }

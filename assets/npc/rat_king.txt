@@ -1,0 +1,85 @@
+%rec: Details
+
+Name: a royal rodent
+Health: 10
+Description: This is a rat. It's a bit bigger than most rats, and it's wearing a crown.
+
+%rec: Inventory
+
+Item: flavor(royal cheese, 50, a bit of luxurious cheese)
+
+%rec: Conversation
+
+Key: _opening
+Effect: addKeyword(bye)
+Effect: addKeyword(chancellor's quest)
+Effect: addKeyword(extermination)
+Effect: addKeyword(rejected quest)
+Text:
++ "Ah, a =visitor=! Welcome to my kingdom."
+
+Key: visitor
+Text: "Yes, we don't get many visitors here. I'm the king of the rats, you see.
++ I guess you could say I'm the =ruler= of this place."
+
+Key: ruler
+Text: "Well, I'm the king, so I'm in charge of everything.
+You might have met that =chancellor= named Spid Tauci?"
+
+Key: chancellor
+AddsKeyword: your offer?
+Text: "He's the one who's been causing trouble around here.
+He thinks he's the king, but he's just a miserable human being.
+I'd like to make him disappear, if you know what I mean."
+
+Key: chancellor's quest
+Condition: isFlagSet('rat_quest_given') && !isFlagSet('rat_quest_accepted') && !isFlagSet('rat_quest_rejected')
+AddsKeyword: your offer?
+Text: "Yes, I've heard about the 'assignment' you've been offered.
++ I'm sure I can offer you a better deal."
+
+Key: extermination
+Condition: isFlagSet('rat_quest_accepted')
+AddsKeyword: your offer?
+Text: "You told the chancellor you'd do it?
++ Maybe you'll reconsider when you hear what I have to say."
+
+Key: rejected quest
+Condition: isFlagSet('rat_quest_rejected')
+AddsKeyword: your offer?
+Text: "I've heard about the 'assignment' you've been offered.
++ I'm glad you turned it down. Maybe I can make you a better offer."
+
+Key: your offer?
+Effect: setFlag(rat_king_quest_given)
+Condition: !isFlagSet('tauci_elimination_accepted')
+Text:
++ "I'll give you a =royal reward= if you can get rid of those pesky Taucis.
++ What do you say?"
+#
+Target: _tauci_elimination_accepted
+Option: I'll do it.
+#
+Target: _tauci_elimination_rejected
+Option: No thanks.
+#
+Target: royal reward
+Option: Royal reward?
+
+Key: royal reward
+Text:
++ "I'll give you a piece of royal cheese, straight from my own kitchen.
++ You can also get some of those old gold pieces we have lying around.
++ Must be a few hundred of them."
+
+Key: _tauci_elimination_accepted
+Effect: setFlag(tauci_elimination_accepted)
+Text: "Excellent! I'll be waiting for your return."
+
+Key: _tauci_elimination_rejected
+Effect: setFlag(tauci_elimination_rejected)
+Text: "Oh, well. I guess I'll have to find someone else."
+
+Key: bye
+Effect: quits
+Text: "We'll meet again."

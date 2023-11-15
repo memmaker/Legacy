@@ -2,7 +2,6 @@ package game
 
 import (
     "Legacy/recfile"
-    "Legacy/renderer"
     "Legacy/util"
     "fmt"
     "image/color"
@@ -16,11 +15,24 @@ const (
     WeaponTypeGreatSword WeaponType = "great sword"
     WeaponTypeSpear      WeaponType = "spear"
     WeaponTypeStaff      WeaponType = "staff"
+    WeaponTypeMace       WeaponType = "mace"
     WeaponTypeDagger     WeaponType = "dagger"
 
     WeaponTypeBow      WeaponType = "bow"
     WeaponTypeCrossbow WeaponType = "crossbow"
 )
+
+func GetAllWeaponTypes() []WeaponType {
+    return []WeaponType{
+        WeaponTypeSword,
+        WeaponTypeGreatSword,
+        WeaponTypeSpear,
+        WeaponTypeStaff,
+        WeaponTypeDagger,
+        WeaponTypeBow,
+        WeaponTypeCrossbow,
+    }
+}
 
 type Weapon struct {
     BaseItem
@@ -76,10 +88,10 @@ func (a *Weapon) GetValue() int {
     return damageValue * 10
 }
 func (a *Weapon) Icon(u uint64) int32 {
-    return int32(205)
+    return int32(220)
 }
-func (a *Weapon) GetContextActions(engine Engine) []renderer.MenuItem {
-    equipAction := renderer.MenuItem{
+func (a *Weapon) GetContextActions(engine Engine) []util.MenuItem {
+    equipAction := util.MenuItem{
         Text: "Equip",
         Action: func() {
             engine.ShowEquipMenu(a)
@@ -89,7 +101,7 @@ func (a *Weapon) GetContextActions(engine Engine) []renderer.MenuItem {
     if !a.IsHeldByPlayer(engine) {
         return baseActions
     }
-    equipActions := []renderer.MenuItem{equipAction}
+    equipActions := []util.MenuItem{equipAction}
     return append(equipActions, baseActions...)
 }
 
@@ -133,6 +145,16 @@ func (a *Weapon) IsTwoHanded() bool {
 func (a *Weapon) GetDamage(actorBaseDamage int) int {
     return a.GetBaseDamage() + actorBaseDamage
 }
+func GetAllWeaponMaterials() []WeaponMaterial {
+    return []WeaponMaterial{
+        WeaponMaterialIron,
+        WeaponMaterialBronze,
+        WeaponMaterialSteel,
+        WeaponMaterialGold,
+        WeaponMaterialDiamond,
+        WeaponMaterialObsidian,
+    }
+}
 
 type WeaponMaterial string
 
@@ -140,13 +162,14 @@ const (
     WeaponMaterialIron     WeaponMaterial = "iron"
     WeaponMaterialBronze   WeaponMaterial = "bronze"
     WeaponMaterialSteel    WeaponMaterial = "steel"
+    WeaponMaterialGold     WeaponMaterial = "gold"
     WeaponMaterialDiamond  WeaponMaterial = "diamond"
     WeaponMaterialObsidian WeaponMaterial = "obsidian"
 )
 
 func getRandomMaterial(lootLevel int) WeaponMaterial {
     mod := rand.Intn(4) - 2
-    weaponMaterial := min(5, max(1, lootLevel+mod))
+    weaponMaterial := min(6, max(1, lootLevel+mod))
 
     switch weaponMaterial {
     case 1:
@@ -156,13 +179,15 @@ func getRandomMaterial(lootLevel int) WeaponMaterial {
     case 3:
         return WeaponMaterialSteel
     case 4:
-        return WeaponMaterialDiamond
+        return WeaponMaterialGold
     case 5:
+        return WeaponMaterialDiamond
+    case 6:
         return WeaponMaterialObsidian
     }
     return WeaponMaterialIron
 }
-func getRandomWeaponType(lootLevel int) WeaponType {
+func getRandomWeaponType() WeaponType {
     weaponLevel := rand.Intn(7) + 1
 
     switch weaponLevel {
@@ -177,15 +202,17 @@ func getRandomWeaponType(lootLevel int) WeaponType {
     case 5:
         return WeaponTypeGreatSword
     case 6:
-        return WeaponTypeBow
+        return WeaponTypeMace
     case 7:
+        return WeaponTypeBow
+    case 8:
         return WeaponTypeCrossbow
     }
     return WeaponTypeDagger
 }
 
 func NewRandomWeapon(lootLevel int) *Weapon {
-    weaponType := getRandomWeaponType(lootLevel)
+    weaponType := getRandomWeaponType()
     material := getRandomMaterial(lootLevel)
     level := tierFromLootLevel(lootLevel)
     return NewWeapon(level, weaponType, material)
@@ -210,6 +237,8 @@ func (a *Weapon) damageByType(weaponType WeaponType, level ItemTier) int {
         return int(float64(15) * level.Multiplier())
     case WeaponTypeStaff:
         return int(float64(8) * level.Multiplier())
+    case WeaponTypeMace:
+        return int(float64(13) * level.Multiplier())
     case WeaponTypeSpear:
         return int(float64(18) * level.Multiplier())
     case WeaponTypeGreatSword:

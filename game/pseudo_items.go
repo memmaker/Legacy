@@ -2,7 +2,7 @@ package game
 
 import (
     "Legacy/recfile"
-    "Legacy/renderer"
+    "Legacy/util"
     "fmt"
     "strconv"
 )
@@ -33,10 +33,10 @@ func (p *PseudoItem) Icon(u uint64) int32 {
     return int32(205)
 }
 
-func (p *PseudoItem) GetContextActions(engine Engine) []renderer.MenuItem {
-    var actions []renderer.MenuItem
+func (p *PseudoItem) GetContextActions(engine Engine) []util.MenuItem {
+    var actions []util.MenuItem
     if p.GetHolder() == nil {
-        actions = append(actions, renderer.MenuItem{
+        actions = append(actions, util.MenuItem{
             Text: fmt.Sprintf("Take \"%s\"", p.Name()),
             Action: func() {
                 if p.GetHolder() == nil {

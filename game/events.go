@@ -23,8 +23,27 @@ func CreateGameEvent(engine Engine, name string) GameEvent {
         return NewEarlyExitEvent(engine)
     case "picked_up_nom_de_plume":
         return NewPickedUpNomDePlumeEvent(engine)
+    case "wood_orc_prisoner":
+        triggerRegion := name
+        neededNPCName := "orc_leader"
+        neededDialogueFile := "wood_orc_prisoner"
+        engine.GetParty().resetToPreviousPositions() // make the player bounce back from the trigger region
+        startDialogue(engine, neededNPCName, triggerRegion, neededDialogueFile)
     }
     return nil
+}
+
+func startDialogue(engine Engine, neededNPCName string, triggerRegion string, neededDialogueFile string) {
+    neededNPC := engine.GetActorByInternalName(neededNPCName)
+    triggerAtLoc, isInRegion := engine.GetGridMap().GetNamedTriggerAt(neededNPC.Pos())
+    isAtLocationOfTrigger := isInRegion && triggerAtLoc.Name == triggerRegion
+    if neededNPC.IsAlive() && isAtLocationOfTrigger {
+        dialogueFromFile := engine.GetDialogueFromFile(neededDialogueFile)
+        engine.StartConversation(
+            neededNPC,
+            dialogueFromFile,
+        )
+    }
 }
 
 type EncounterPickedUpNomDePlume struct {
@@ -88,7 +107,7 @@ func (e *EncounterEarlyExit) start() {
     avatar := e.engine.GetAvatar()
     doorPos := avatar.Pos()
     e.engine.RemoveDoorAt(doorPos)
-    e.engine.MoveAvatarInDirection(geometry.Point{X: -1, Y: 0})
+    e.engine.PlayerMovement(geometry.Point{X: -1, Y: 0})
     e.engine.SetWallAt(doorPos)
 }
 

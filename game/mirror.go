@@ -2,7 +2,7 @@ package game
 
 import (
     "Legacy/recfile"
-    "Legacy/renderer"
+    "Legacy/util"
     "github.com/hajimehoshi/ebiten/v2"
     "image/color"
 )
@@ -28,7 +28,7 @@ func (s *Mirror) Name() string {
 func (s *Mirror) ToRecordAndType() (recfile.Record, string) {
     return recfile.Record{
         {Name: "name", Value: s.name},
-        {Name: "unlitIcon", Value: recfile.Int32Str(s.icon)},
+        {Name: "icon", Value: recfile.Int32Str(s.icon)},
         {Name: "pos", Value: s.Pos().Encode()},
         {Name: "isHidden", Value: recfile.BoolStr(s.isHidden)},
     }, "mirror"
@@ -78,9 +78,9 @@ func (s *Mirror) IsTransparent() bool {
     return true
 }
 
-func (s *Mirror) GetContextActions(engine Engine) []renderer.MenuItem {
+func (s *Mirror) GetContextActions(engine Engine) []util.MenuItem {
     baseExamine := s.BaseObject.GetContextActions(engine, s)
-    travelAction := renderer.MenuItem{
+    travelAction := util.MenuItem{
         Text: "Touch the mirror",
         Action: func() {
             engine.AskUserForString("Where to? ", 14, func(text string) {
@@ -88,12 +88,12 @@ func (s *Mirror) GetContextActions(engine Engine) []renderer.MenuItem {
             })
         },
     }
-    changeAppearanceAction := renderer.MenuItem{
+    changeAppearanceAction := util.MenuItem{
         Text:   "Look into the mirror",
         Action: engine.ChangeAppearance,
     }
     if s.isMagical && !s.isBroken {
-        return []renderer.MenuItem{travelAction, changeAppearanceAction}
+        return []util.MenuItem{travelAction, changeAppearanceAction}
     }
     return append(baseExamine, changeAppearanceAction)
 }

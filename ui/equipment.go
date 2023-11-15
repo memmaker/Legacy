@@ -21,6 +21,32 @@ type EquipmentWindow struct {
     lastMouseLine  int
 }
 
+func (e *EquipmentWindow) OnMouseWheel(x int, y int, dy float64) bool {
+    return false
+}
+
+func (e *EquipmentWindow) OnCommand(command CommandType) bool {
+    switch command {
+    case PlayerCommandCancel:
+        e.ActionCancel()
+    case PlayerCommandConfirm:
+        e.ActionConfirm()
+    case PlayerCommandUp:
+        e.ActionUp()
+    case PlayerCommandDown:
+        e.ActionDown()
+    case PlayerCommandLeft:
+        e.ActionLeft()
+    case PlayerCommandRight:
+        e.ActionRight()
+    }
+    return true
+}
+
+func (e *EquipmentWindow) CanBeClosed() bool {
+    return true
+}
+
 func (e *EquipmentWindow) OnAvatarSwitched() {
     e.actor = e.engine.GetAvatar()
 }
@@ -67,7 +93,7 @@ func (e *EquipmentWindow) OnMouseClicked(x int, y int) bool {
     if armorSlot, clicked := e.armorSlotLines[y]; clicked {
         e.onArmorSlotClicked(armorSlot)
     }
-    return false
+    return true
 }
 
 func (e *EquipmentWindow) Draw(screen *ebiten.Image) {
@@ -273,9 +299,12 @@ func (e *EquipmentWindow) ActionConfirm() {
 
 }
 
-func (e *EquipmentWindow) OnMouseMoved(x int, y int) renderer.Tooltip {
+func (e *EquipmentWindow) OnMouseMoved(x int, y int) (bool, Tooltip) {
     e.lastMouseLine = y
-    return renderer.NoTooltip{}
+    if y < 7 || y > 19 {
+        return false, NoTooltip{}
+    }
+    return true, NoTooltip{}
 }
 
 func (e *EquipmentWindow) ShouldClose() bool {
@@ -330,7 +359,7 @@ func (e *EquipmentWindow) chooseEquipment(equipAction func(item game.Item), filt
         return
     }
 
-    menuItems := make([]renderer.MenuItem, 0)
+    menuItems := make([]util.MenuItem, 0)
 
     for _, item := range equippableItems {
         equippable := item.(game.Equippable)
@@ -339,7 +368,7 @@ func (e *EquipmentWindow) chooseEquipment(equipAction func(item game.Item), filt
             wearerIcon := string(party.GetMemberIcon(equippable.GetWearer()))
             armorLabel = fmt.Sprintf("%s (%s)", armorLabel, wearerIcon)
         }
-        menuItem := renderer.MenuItem{
+        menuItem := util.MenuItem{
             CharIcon:  equippable.InventoryIcon(),
             TextColor: equippable.TintColor(),
             Text:      armorLabel,
@@ -350,6 +379,9 @@ func (e *EquipmentWindow) chooseEquipment(equipAction func(item game.Item), filt
         }
         menuItems = append(menuItems, menuItem)
     }
-
     e.engine.OpenMenu(menuItems)
+}
+
+func (e *EquipmentWindow) ActionCancel() {
+    e.shouldClose = true
 }

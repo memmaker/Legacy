@@ -6,6 +6,7 @@ Description: This person is trying to blend in with the crowd.
 
 %rec: Inventory
 
+Item: scroll(a note,thieves_guild_trials,_no_spell_)
 Item: armor(a cloak, torso, 1)
 
 %rec: Conversation
@@ -49,3 +50,31 @@ on the east side of town."
 Key: _not_with_guild
 Effect: quits
 Text: "Yes, me neither." He quickly turns away.
+
+Key: _opening
+AddsKeyword: with the guild
+Text:
++ "Ah, it's you again."
++ It's hard to ignore his =hand gestures=.
+
+Key: hand gestures
+Text: "I am not sure what you are talking about."
+Effect: quits
+
+Key: with the guild
+Text: "Is that so? I am not sure, I can believe you. Are you sure you are with the guild? They don't usually send people like you."
+#
+OptionNeedsSkill: Lying(1)
+OnOptionSuccess: _with_guild
+OnOptionFail: _not_with_guild
+Option: yes (lie)
+#
+OptionNeedsFlag: _with_guild
+OnOptionSuccess: _with_guild
+Option: yes
+#
+OnOptionSuccess: _not_with_guild
+Option: no
+#
+OnOptionSuccess: _not_with_guild
+Option: no (lie)

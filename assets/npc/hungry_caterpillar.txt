@@ -15,18 +15,15 @@ Key: _first_time
 Text:
 + "I recognize you. You are the one who is coming from that strange place with human problems."
 +
-+ "And now you are here at our place of human problems."
++ "And now you are here at our place of human problems. We are always =hungry=, down here."
++ "Do you already want to =leave=?"
 
-Key: name
-Text: "I am just =hungry=."
-
-Key: job
-Text: "My job is eating."
+Key: _opening
+Text:
++ "Ah, you are back. I am still =hungry=, you know."
 
 Key: hungry
 Text: "I am always hungry. =Food= is good."
-ConditionForText: Flag(asked_about_food)
-ConditionalText: "I am not sure if I can eat your kind of food."
 
 Key: Food
 Text: "I cannot eat your kind of food. Actually, I follow a strict diet."
@@ -37,3 +34,7 @@ Key: Monday
 Text: "On Mondays I eat... I eat... I cannot remember. I am too hungry to think."
 + \
 "Oh, please, help me!"
+
+Key: leave
+Effect: quits
+Text: "Aw, you are leaving already? I am so hungry."

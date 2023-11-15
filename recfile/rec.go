@@ -106,7 +106,7 @@ func (r *RecReader) ReadLine(line string) {
     fieldNamePattern := regexp.MustCompile(`^([a-zA-Z%][a-zA-Z0-9_]*):[\t ]?`)
     plusPrefixPattern := regexp.MustCompile(`^\+\s?`)
     // eg. %rec: Article
-    recordTypeRegex := regexp.MustCompile(`^%rec: ([a-zA-Z][a-zA-Z0-9_]*)`)
+    recordTypeRegex := regexp.MustCompile(`^%rec:\s*([a-zA-Z][a-zA-Z0-9_]*)`)
     line = r.linePart + line
     r.linePart = ""
 

@@ -3,8 +3,10 @@ package game
 import (
     "Legacy/geometry"
     "Legacy/recfile"
-    "Legacy/renderer"
+    "Legacy/util"
+    "fmt"
     "image/color"
+    "math/rand"
 )
 
 type Loot string
@@ -28,6 +30,8 @@ type Chest struct {
     lootType       []Loot
     items          []Item
     hasCreatedLoot bool
+    emptyIcon      int32
+    isLocked       bool
 }
 
 func (s *Chest) GetItems() []Item {
@@ -51,12 +55,12 @@ func (s *Chest) TintColor() color.Color {
 }
 
 func (s *Chest) Name() string {
-    if s.needsKey != "" {
-        return "a locked chest"
+    if s.isLocked {
+        return fmt.Sprintf("%s (locked)", s.name)
     } else if s.IsEmpty() {
-        return "a chest (empty)"
+        return fmt.Sprintf("%s (empty)", s.name)
     } else {
-        return "a chest"
+        return s.name
     }
 }
 
@@ -64,7 +68,9 @@ func NewChest(lootLevel int, lootType []Loot) *Chest {
     return &Chest{
         BaseObject: BaseObject{
             icon: 25,
+            name: "a chest",
         },
+        emptyIcon: 204,
         lootLevel: lootLevel,
         lootType:  lootType,
     }
@@ -73,7 +79,32 @@ func NewFixedChest(contents []Item) *Chest {
     return &Chest{
         BaseObject: BaseObject{
             icon: 25,
+            name: "a chest",
         },
+        emptyIcon:      204,
+        items:          contents,
+        hasCreatedLoot: true,
+    }
+}
+
+func NewContainer(lootLevel int, lootType []Loot, name string, icon int32) *Chest {
+    return &Chest{
+        BaseObject: BaseObject{
+            icon: icon,
+            name: name,
+        },
+        emptyIcon: icon,
+        lootLevel: lootLevel,
+        lootType:  lootType,
+    }
+}
+func NewFixedContainer(contents []Item, name string, icon int32) *Chest {
+    return &Chest{
+        BaseObject: BaseObject{
+            icon: icon,
+            name: name,
+        },
+        emptyIcon:      icon,
         items:          contents,
         hasCreatedLoot: true,
     }
@@ -87,8 +118,10 @@ func NewChestFromRecord(record recfile.Record) *Chest {
             chest.name = field.Value
         case "isHidden":
             chest.isHidden = field.AsBool()
-        case "unlitIcon":
+        case "icon":
             chest.icon = field.AsInt32()
+        case "emptyIcon":
+            chest.emptyIcon = field.AsInt32()
         case "position":
             chest.SetPos(geometry.MustDecodePoint(field.Value))
         case "needsKey":
@@ -110,7 +143,8 @@ func (s *Chest) ToRecordAndType() (recfile.Record, string) {
     record = recfile.Record{
         {Name: "name", Value: s.name},
         {Name: "isHidden", Value: recfile.BoolStr(s.isHidden)},
-        {Name: "unlitIcon", Value: recfile.Int32Str(s.icon)},
+        {Name: "icon", Value: recfile.Int32Str(s.icon)},
+        {Name: "emptyIcon", Value: recfile.Int32Str(s.emptyIcon)},
         {Name: "position", Value: s.Pos().Encode()},
         {"needsKey", s.needsKey},
         {"lootLevel", recfile.IntStr(s.lootLevel)},
@@ -127,22 +161,17 @@ func (s *Chest) ToRecordAndType() (recfile.Record, string) {
 }
 
 func (s *Chest) Description() []string {
-    if s.needsKey != "" {
-        return []string{
-            "You see a chest.",
-            "It appears to be locked.",
-        }
-    } else {
-        return []string{
-            "You see a chest.",
-            "It is unlocked.",
-        }
+    var result []string
+    result = append(result, fmt.Sprintf("You see %s.", s.Name()))
+    if s.isLocked {
+        result = append(result, "It appears to be locked.")
     }
+    return result
 }
 
 func (s *Chest) Icon(uint64) int32 {
     if s.IsEmpty() {
-        return 204
+        return s.emptyIcon
     }
     return s.icon
 }
@@ -161,15 +190,43 @@ func (s *Chest) spawnLoot(engine Engine) {
     s.items = engine.CreateLootForContainer(s.lootLevel, s.lootType)
     s.hasCreatedLoot = true
 }
-func (s *Chest) GetContextActions(engine Engine) []renderer.MenuItem {
+func (s *Chest) GetContextActions(engine Engine) []util.MenuItem {
+    party := engine.GetParty()
     actions := s.BaseObject.GetContextActions(engine, s)
-    var additionalActions []renderer.MenuItem
-    if s.needsKey == "" || engine.PartyHasKey(s.needsKey) {
-        additionalActions = append(additionalActions, renderer.MenuItem{
+    var additionalActions []util.MenuItem
+    if s.needsKey == "" || !s.isLocked {
+        additionalActions = append(additionalActions, util.MenuItem{
             Text: "Open",
             Action: func() {
                 s.spawnLoot(engine)
                 engine.ShowContainer(s)
+            },
+        })
+    }
+    if s.isLocked && party.HasKey(s.needsKey) {
+        additionalActions = append(additionalActions, util.MenuItem{
+            Text: "Unlock",
+            Action: func() {
+                s.isLocked = false
+                party.UsedKey(s.needsKey)
+                s.spawnLoot(engine)
+                engine.ShowContainer(s)
+            },
+        })
+    }
+    if s.isLocked && party.GetLockpicks() > 0 {
+        additionalActions = append(additionalActions, util.MenuItem{
+            Text: "Pick lock",
+            Action: func() {
+                if rand.Float64() > (float64(s.lootLevel) / 10.0) {
+                    s.isLocked = false
+                    s.spawnLoot(engine)
+                    engine.ShowContainer(s)
+                } else {
+                    // broke
+                    engine.RemoveLockpick()
+                    engine.Print("Your lockpick broke.")
+                }
             },
         })
     }
@@ -178,6 +235,7 @@ func (s *Chest) GetContextActions(engine Engine) []renderer.MenuItem {
 
 func (s *Chest) SetLockedWithKey(key string) {
     s.needsKey = key
+    s.isLocked = true
 }
 
 func (s *Chest) SetFixedLoot(loot []Item) {

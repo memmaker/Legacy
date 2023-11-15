@@ -1,6 +1,9 @@
-package renderer
+package ui
 
-import "github.com/hajimehoshi/ebiten/v2"
+import (
+    "Legacy/renderer"
+    "github.com/hajimehoshi/ebiten/v2"
+)
 
 type MultiPageWindow struct {
     window         *IconWindow
@@ -10,8 +13,48 @@ type MultiPageWindow struct {
     currentPage    int
     closeOnConfirm bool
 
-    shouldClose  bool
-    gridRenderer *DualGridRenderer
+    shouldClose    bool
+    gridRenderer   *renderer.DualGridRenderer
+    onClose        func()
+    cannotBeClosed bool
+}
+
+func (m *MultiPageWindow) OnMouseWheel(x int, y int, dy float64) bool {
+    return false
+}
+
+func (m *MultiPageWindow) OnCommand(command CommandType) bool {
+    switch command {
+    case PlayerCommandCancel:
+        m.ActionCancel()
+    case PlayerCommandConfirm:
+        m.ActionConfirm()
+    case PlayerCommandUp:
+        m.ActionUp()
+    case PlayerCommandDown:
+        m.ActionDown()
+    case PlayerCommandLeft:
+        m.ActionLeft()
+    case PlayerCommandRight:
+        m.ActionRight()
+    }
+    return true
+}
+
+func (m *MultiPageWindow) ActionLeft() {
+
+}
+
+func (m *MultiPageWindow) ActionRight() {
+
+}
+
+func (m *MultiPageWindow) OnMouseMoved(x int, y int) (bool, Tooltip) {
+    return false, NoTooltip{}
+}
+
+func (m *MultiPageWindow) CanBeClosed() bool {
+    return !m.cannotBeClosed
 }
 
 func (m *MultiPageWindow) OnAvatarSwitched() {
@@ -50,10 +93,9 @@ func (m *MultiPageWindow) ActionDown() {
     m.ActionConfirm()
 }
 
-func NewMultiPageWindow(dualGrid *DualGridRenderer, onLastPageDisplayed func()) *MultiPageWindow {
+func NewMultiPageWindow(dualGrid *renderer.DualGridRenderer) *MultiPageWindow {
     return &MultiPageWindow{
         gridRenderer:   dualGrid,
-        onLastPage:     onLastPageDisplayed,
         lastPageCalled: false,
     }
 }
@@ -69,21 +111,36 @@ func (m *MultiPageWindow) InitWithFixedText(pages [][]string) {
     }
 }
 
+func (m *MultiPageWindow) InitWithoutText() {
+    m.currentPage = 0
+    m.window = NewIconWindow(m.gridRenderer)
+}
+
 func (m *MultiPageWindow) PositionAtY(offset int) {
     m.window.SetYOffset(offset)
 }
 func (m *MultiPageWindow) ActionConfirm() {
+    m.nextPage()
+}
+
+func (m *MultiPageWindow) ActionCancel() {
+    m.nextPage()
+}
+
+func (m *MultiPageWindow) nextPage() {
     m.currentPage++
     if m.currentPage >= len(m.pages)-1 {
         m.currentPage = len(m.pages) - 1
         if !m.lastPageCalled {
             m.lastPage()
-        } else if m.closeOnConfirm {
+        } else if m.closeOnConfirm && !m.cannotBeClosed {
             m.shouldClose = true
+            if m.onClose != nil {
+                m.onClose()
+            }
         }
     }
     m.window.SetFixedText(m.pages[m.currentPage])
-    m.window.RePosition()
 }
 
 func (m *MultiPageWindow) lastPage() {
@@ -107,4 +164,26 @@ func (m *MultiPageWindow) AddTextActionButton(icon int32, callback func(text []s
 
 func (m *MultiPageWindow) SetIcon(icon int32) {
     m.window.SetCurrentIcon(icon)
+}
+
+func (m *MultiPageWindow) SetOnClose(onCloseCallback func()) {
+    m.onClose = onCloseCallback
+}
+
+func (m *MultiPageWindow) SetCannotBeClosed() {
+    m.cannotBeClosed = true
+}
+
+func (m *MultiPageWindow) SetOnLastPage(onLastPageFunc func()) {
+    m.onLastPage = onLastPageFunc
+}
+
+func (m *MultiPageWindow) SetFixedText(text [][]string) {
+    m.pages = text
+    m.currentPage = 0
+    m.lastPageCalled = false
+    m.window.SetFixedText(m.pages[m.currentPage])
+    if len(text) == 1 {
+        m.lastPage()
+    }
 }

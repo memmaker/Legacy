@@ -5,6 +5,15 @@ import (
     "strings"
 )
 
+func MaxLen(text []string) int {
+    maxLength := 0
+    for _, line := range text {
+        if len(line) > maxLength {
+            maxLength = len(line)
+        }
+    }
+    return maxLength
+}
 func rightPad(s string, pLen int) string {
     return s + strings.Repeat(" ", pLen-len(s))
 }

@@ -3,23 +3,26 @@
 Name: Kanzler Tauci
 Health: 10
 Description: Der Kanzler von Prucol.
+Torso: armor(rare, breast plate, diamond, fancy purple robe)
+Head: armor(rare, helmet, diamond, a crown)
+RightHand: weapon(rare, mace, gold, a golden scepter)
 
 %rec: Inventory
 
-Item: armor(0): a fancy purple robe
-Item: weapon(1): a golden scepter
-Item: key(5, kingdom_01): a golden key
+Item: key(a golden key, kingdom_01, 5)
+Item: key(cellar key, tauci_cellar, 2)
 
 %rec: Conversation
 
 Key: _first_time
-Text: \
-"Aha, meine Spione haben
-+ mir von dir berichtet."
-+
-+ "Ich bin nicht sicher was du hier willst,
-+ aber lass dir eines gesagt sein:
-+ Wir brauchen dich nicht."
+AddsKeyword: name
+AddsKeyword: bye
+Text:
++ "We don't need any =help=
++ from =outsiders=."
+
+Key: _opening
+Text: "What do you want?"
 
 Key: name
 Text: My name and face should \
@@ -32,6 +35,45 @@ of the people.
 + \
 I am grand chancellor \
 =Tauci=.
+
+Key: bye
+Effect: quits
+Text: "Goodbye."
+
+Key: the rat king's offer
+Condition: isFlagSet('rat_king_quest_given')
+Text:
++ "You are saying that the king of those rats
++ lives in our cellar? And he wants us to
++ leave? That is preposterous! What did he offer your this deed?"
+#
+Target: low_offer
+Option: "He offered us 400 gold coins."
+#
+Target: high_offer
+Option: "He offered us 2000 gold coins."
+#
+Target: unknown_offer
+Option: "Actually, I am not sure."
+
+Key: low_offer
+Text:
++ "400 gold coins? That is an insult!
++ I will of course double that offer.
++ Now, go and make him regret his decisions."
+
+Key: high_offer
+Text:
++ "2000 gold coins? That's a lot of money.
++ I will pay you the same amount, plus
++ a nice piece of armor.
++ Now, go and make that rat suffer."
+
+Key: unknown_offer
+Text:
++ "You don't know how much he offered you?
++ Well, I will pay you 100 gold coins right to your face.
++ Now, go and make these rats go away."
 
 Key: Tauci
 Text: My full title is \
@@ -55,17 +97,7 @@ me and that other guy.
 + \
 I am sure I will win.
 
-Key: job
-Text: I am the elected \
-representative of the \
-people.
-+ \
-I am the grand chancellor \
-of =Prucol=.
-+ \
-What is your job, =outsider=?
-
-Key: outsider
+Key: outsiders
 Text: "My spies have told me \
 everything I need to know \
 about you."
@@ -85,19 +117,34 @@ you here. We have no need \
 for your services. \
 This country is doing just \
 fine without you."
-+ \
-"Well, there is =one thing= \
+
+Key: help
+Condition: !isFlagSet('rat_quest_accepted')
+Text: "Well, there is =one thing= \
 you could do for me."
 
 Key: one thing
-Text: "We have a bit of a problem \
-with rats in the castle."
-+ \
-"Could you please get rid \
-of them for me?"
-+ \
-"Just take the stairs down \
-to the cellar and you will \
-find them."
-+ \
-"Here, take this key."
+Condition: !isFlagSet('rat_quest_accepted')
+Effect: setFlag(rat_quest_given)
+Text:
++ "We have a bit of a problem
++ with rats in the castle.
++ You could get rid of them for me."
+#
+OnOptionSuccess: rat_quest_accepted
+Option: "I will do it."
+#
+OnOptionSuccess: rat_quest_rejected
+Option: "I will not do it."
+
+Key: rat_quest_rejected
+Effect: setFlag(rat_quest_rejected)
+Text: "Fine, then don't do it."
+
+Key: rat_quest_accepted
+Effect: setFlag(rat_quest_accepted)
+Effect: giveItem(cellar key)
+Text:
++ "Just take the stairs down
++ to the cellar, and you will
++ find them."

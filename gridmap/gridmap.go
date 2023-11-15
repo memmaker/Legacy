@@ -168,7 +168,9 @@ type GridMap[ActorType interface {
     transitionMap map[geometry.Point]Transition
     secretDoors   map[geometry.Point]bool
 
-    namedRects map[string]geometry.Rect
+    namedRects   map[string]geometry.Rect
+    namedTrigger map[string]Trigger
+    displayName  string
 }
 
 func (m *GridMap[ActorType, ItemType, ObjectType]) AddZone(zone *ZoneInfo) {
@@ -272,6 +274,7 @@ func (m *GridMap[ActorType, ItemType, ObjectType]) SetActorToDowned(a ActorType)
         m.displaceDownedActor(a)
         return
     }
+    m.AllDownedActors = append(m.AllDownedActors, a)
     m.Cells[a.Pos().Y*m.MapWidth+a.Pos().X] = m.Cells[a.Pos().Y*m.MapWidth+a.Pos().X].WithDownedActor(a)
 }
 func (m *GridMap[ActorType, ItemType, ObjectType]) SetActorToRemoved(person ActorType) {
@@ -325,7 +328,7 @@ func (m *GridMap[ActorType, ItemType, ObjectType]) GetFreeCellsForDistribution(p
     for _, neighbor := range m.GetFilteredNeighbors(currentPosition, m.IsTileWalkable) {
         openList[neighbor] = true
     }
-    for len(foundFreeCells) < neededCellCount {
+    for len(foundFreeCells) < neededCellCount && len(openList) > 0 {
         freeNeighbors := m.GetFilteredNeighbors(currentPosition, freePredicate)
         for _, neighbor := range freeNeighbors {
             foundFreeCells[neighbor] = true
@@ -447,6 +450,7 @@ func NewEmptyMap[ActorType interface {
         secretDoors:     make(map[geometry.Point]bool),
         transitionMap:   make(map[geometry.Point]Transition),
         namedRects:      make(map[string]geometry.Rect),
+        namedTrigger:    make(map[string]Trigger),
     }
     m.Fill(MapCell[ActorType, ItemType, ObjectType]{
         TileType: Tile{
@@ -804,6 +808,7 @@ func (m *GridMap[ActorType, ItemType, ObjectType]) MoveDownedActor(actor ActorTy
 }
 
 func (m *GridMap[ActorType, ItemType, ObjectType]) RemoveDownedActor(actor ActorType) bool {
+    m.Cells[actor.Pos().Y*m.MapWidth+actor.Pos().X] = m.Cells[actor.Pos().Y*m.MapWidth+actor.Pos().X].WithDownedActorHereRemoved(actor)
     for i := len(m.AllDownedActors) - 1; i >= 0; i-- {
         if m.AllDownedActors[i] == actor {
             m.AllDownedActors = append(m.AllDownedActors[:i], m.AllDownedActors[i+1:]...)
@@ -1135,15 +1140,6 @@ func (m *GridMap[ActorType, ItemType, ObjectType]) GetNamedLocation(name string)
     return m.NamedLocations[name]
 }
 
-func (m *GridMap[ActorType, ItemType, ObjectType]) IsNamedLocation(pos geometry.Point) bool {
-    for _, location := range m.NamedLocations {
-        if location == pos {
-            return true
-        }
-    }
-    return false
-}
-
 func (m *GridMap[ActorType, ItemType, ObjectType]) GetNamedLocationByPos(pos geometry.Point) string {
     for name, location := range m.NamedLocations {
         if location == pos {
@@ -1315,10 +1311,43 @@ func (m *GridMap[ActorType, ItemType, ObjectType]) GetNamedRegion(name string) g
     return m.namedRects[name]
 }
 
+type Trigger struct {
+    Name    string
+    Bounds  geometry.Rect
+    OneShot bool
+}
+
+func (m *GridMap[ActorType, ItemType, ObjectType]) GetNamedTriggerAt(pos geometry.Point) (Trigger, bool) {
+    for _, trigger := range m.namedTrigger {
+        if trigger.Bounds.Contains(pos) {
+            return trigger, true
+        }
+    }
+    return Trigger{}, false
+}
 func (m *GridMap[ActorType, ItemType, ObjectType]) SetTileIcon(pos geometry.Point, index int32) {
     m.Cells[pos.Y*m.MapWidth+pos.X].TileType.DefinedIcon = index
 }
 
 func (m *GridMap[ActorType, ItemType, ObjectType]) GetTileIconAt(pos geometry.Point) int32 {
     return m.Cells[pos.Y*m.MapWidth+pos.X].TileType.DefinedIcon
+}
+
+func (m *GridMap[ActorType, ItemType, ObjectType]) RemoveNamedRegion(regionName string) {
+    delete(m.namedRects, regionName)
+}
+func (m *GridMap[ActorType, ItemType, ObjectType]) RemoveNamedTrigger(triggerName string) {
+    delete(m.namedTrigger, triggerName)
+}
+
+func (m *GridMap[ActorType, ItemType, ObjectType]) AddNamedTrigger(name string, rect Trigger) {
+    m.namedTrigger[name] = rect
+}
+
+func (m *GridMap[ActorType, ItemType, ObjectType]) SetDisplayName(name string) {
+    m.displayName = name
+}
+
+func (m *GridMap[ActorType, ItemType, ObjectType]) GetDisplayName() string {
+    return m.displayName
 }

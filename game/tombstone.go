@@ -2,7 +2,7 @@ package game
 
 import (
     "Legacy/recfile"
-    "Legacy/renderer"
+    "Legacy/util"
     "image/color"
 )
 
@@ -25,7 +25,7 @@ func (s *Tombstone) Name() string {
 func (s *Tombstone) ToRecordAndType() (recfile.Record, string) {
     return recfile.Record{
         {Name: "name", Value: s.name},
-        {Name: "unlitIcon", Value: recfile.Int32Str(s.icon)},
+        {Name: "icon", Value: recfile.Int32Str(s.icon)},
         {Name: "pos", Value: s.Pos().Encode()},
         {Name: "isHidden", Value: recfile.BoolStr(s.isHidden)},
         {Name: "isHoly", Value: recfile.BoolStr(s.isHoly)},
@@ -66,8 +66,8 @@ func (s *Tombstone) IsTransparent() bool {
     return true
 }
 
-func (s *Tombstone) GetContextActions(engine Engine) []renderer.MenuItem {
-    return []renderer.MenuItem{
+func (s *Tombstone) GetContextActions(engine Engine) []util.MenuItem {
+    return []util.MenuItem{
         {
             Text: "Examine",
             Action: func() {

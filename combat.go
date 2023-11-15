@@ -5,8 +5,9 @@ import (
     "Legacy/geometry"
     "Legacy/gocoro"
     "Legacy/renderer"
+    "Legacy/ui"
+    "Legacy/util"
     "github.com/hajimehoshi/ebiten/v2"
-    "github.com/hajimehoshi/ebiten/v2/inpututil"
     "image/color"
     "time"
 )
@@ -31,6 +32,42 @@ type CombatState struct {
     iconGenericMissile   int32
     partyAutoAttacks     bool
 }
+
+func (c *CombatState) OnMouseWheel(x int, y int, dy float64) bool {
+    return false
+}
+
+func (c *CombatState) OnCommand(command ui.CommandType) bool {
+    if !c.isPlayerTurn {
+        return false
+    }
+    if !c.canAct(c.engine.GetAvatar()) {
+        return false
+    }
+    switch command {
+    case ui.PlayerCommandConfirm:
+        c.openCombatMenu(c.engine.GetAvatar())
+    case ui.PlayerCommandUp:
+        c.onDirectionalInput(geometry.Point{X: 0, Y: -1})
+    case ui.PlayerCommandDown:
+        c.onDirectionalInput(geometry.Point{X: 0, Y: 1})
+    case ui.PlayerCommandLeft:
+        c.onDirectionalInput(geometry.Point{X: -1, Y: 0})
+    case ui.PlayerCommandRight:
+        c.onDirectionalInput(geometry.Point{X: 1, Y: 0})
+    case ui.PlayerCommandCancel:
+        if c.waitForTarget != nil {
+            c.waitForTarget = nil
+            if len(c.opponents) == 0 && len(c.hitAnimations) == 0 && !c.animationRoutine.Running() {
+                c.isInCombat = false
+                //c.engine.ForceJoinParty()
+            }
+            return true
+        }
+    }
+    return true
+}
+
 type HitAnimation struct {
     Path          []geometry.Point
     CurrentIndex  int
@@ -112,9 +149,6 @@ func (c *CombatState) Update() {
             }
             if c.partyAutoAttacks {
                 c.automaticBattleActionFor(c.engine.GetAvatar(), c.listOfEnemies())
-            } else {
-                // wait for input
-                c.handleInput()
             }
         } else {
             c.endPlayerTurn()
@@ -229,86 +263,46 @@ func (c *CombatState) canPartyAct() bool {
     return false
 }
 
-func (c *CombatState) handleInput() {
-    if c.engine.inputElement != nil {
-        if inpututil.IsKeyJustPressed(ebiten.KeyArrowDown) {
-            c.engine.inputElement.ActionDown()
-        } else if inpututil.IsKeyJustPressed(ebiten.KeyArrowUp) {
-            c.engine.inputElement.ActionUp()
-        } else if inpututil.IsKeyJustPressed(ebiten.KeyEnter) {
-            c.engine.inputElement.ActionConfirm()
-        } else if inpututil.IsKeyJustPressed(ebiten.KeyEscape) {
-            c.engine.closeInputElement()
-        }
-        return
-    }
-    if c.engine.modalElement != nil {
-        if inpututil.IsKeyJustPressed(ebiten.KeyEnter) {
-            c.engine.modalElement.ActionConfirm()
-        } else if inpututil.IsKeyJustPressed(ebiten.KeyEscape) {
-            c.engine.modalElement = nil
-        }
-        return
-    }
+func (c *CombatState) OnMouseClicked(xGrid int, yGrid int) bool {
+    x, y := ebiten.CursorPosition()
+    return c.OnScreenMouseClicked(x, y)
+}
+
+func (c *CombatState) onDirectionalInput(direction geometry.Point) bool {
     avatar := c.engine.GetAvatar()
     curPos := avatar.Pos()
-    var direction, dest geometry.Point
-    if inpututil.IsKeyJustPressed(ebiten.KeyArrowRight) {
-        direction = geometry.Point{X: 1, Y: 0}
+    if c.waitForTarget != nil {
+        c.waitForTarget(curPos.Add(direction.Mul(10)))
+        return true
     }
 
-    if inpututil.IsKeyJustPressed(ebiten.KeyArrowLeft) {
-        direction = geometry.Point{X: -1, Y: 0}
-    }
-
-    if inpututil.IsKeyJustPressed(ebiten.KeyArrowUp) {
-        direction = geometry.Point{X: 0, Y: -1}
-    }
-
-    if inpututil.IsKeyJustPressed(ebiten.KeyArrowDown) {
-        direction = geometry.Point{X: 0, Y: 1}
-    }
-
-    if direction != (geometry.Point{}) {
-        if c.waitForTarget != nil {
-            c.waitForTarget(curPos.Add(direction.Mul(10)))
-            return
-        }
-
-        dest = curPos.Add(direction)
-        if isThere, enemy := c.isEnemyAt(dest); isThere {
-            c.animateMeleeHit(avatar, enemy)
-        } else {
-            c.engine.MoveAvatarInDirection(direction)
-            if curPos != avatar.Pos() {
-                c.movesTakenThisTurn[avatar]++
-            }
+    dest := curPos.Add(direction)
+    if isThere, enemy := c.isEnemyAt(dest); isThere {
+        c.animateMeleeHit(avatar, enemy)
+        return true
+    } else {
+        c.engine.PlayerMovement(direction)
+        if curPos != avatar.Pos() {
+            c.movesTakenThisTurn[avatar]++
+            return true
         }
     }
-
-    if inpututil.IsKeyJustPressed(ebiten.KeyEnter) {
-        c.openCombatMenu(avatar)
-    }
-
-    if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
-        x, y := ebiten.CursorPosition()
-        c.OnMouseClicked(x, y)
-    }
+    return false
 }
 
 func (c *CombatState) openCombatMenu(partyMember *game.Actor) {
-    combatOptions := []renderer.MenuItem{
+    combatOptions := []util.MenuItem{
         {
             Text: "Ranged",
             Action: func() {
                 c.selectRangedTarget(partyMember)
-                c.engine.closeInputElement()
+                c.engine.CloseAllModals()
             },
         },
         {
             Text: "Magic",
             Action: func() {
-                c.engine.closeInputElement()
+                c.engine.CloseAllModals()
                 c.engine.openCombatSpellMenu(partyMember)
             },
         },
@@ -316,14 +310,14 @@ func (c *CombatState) openCombatMenu(partyMember *game.Actor) {
             Text: "Auto-Attack",
             Action: func() {
                 c.partyAutoAttacks = true
-                c.engine.closeInputElement()
+                c.engine.CloseAllModals()
             },
         },
         {
             Text: "End turn",
             Action: func() {
                 c.hasUsedPrimaryAction[partyMember] = true
-                c.engine.closeInputElement()
+                c.engine.CloseAllModals()
             },
         },
     }
@@ -346,6 +340,9 @@ func (c *CombatState) endEnemyTurn() {
     }
 }
 func (c *CombatState) combatInitByPlayer() {
+    if c.isInCombat {
+        return
+    }
     clear(c.movesTakenThisTurn)
     clear(c.hasUsedPrimaryAction)
     clear(c.opponents)
@@ -354,7 +351,17 @@ func (c *CombatState) combatInitByPlayer() {
     c.isPlayerTurn = true
     c.didAlertNearbyActors = false
 }
-
+func (c *CombatState) combatInitByEnemy() {
+    if c.isInCombat {
+        return
+    }
+    clear(c.movesTakenThisTurn)
+    clear(c.hasUsedPrimaryAction)
+    clear(c.opponents)
+    c.isInCombat = true
+    c.isPlayerTurn = false
+    c.didAlertNearbyActors = false
+}
 func (c *CombatState) canEnemyAct() bool {
     for opponent, _ := range c.opponents {
         if c.canAct(opponent) {
@@ -487,10 +494,7 @@ func (c *CombatState) closeIntoMeleeRange(ourActor *game.Actor, listOfEnemies []
 func (c *CombatState) animateBattleAction(actor *game.Actor, move BattleAction) {
     _ = c.animationRoutine.Run(func(exe *gocoro.Execution) {
         for _, dest := range move.Movement {
-            c.engine.moveActor(actor, dest)
-            if c.engine.IsPlayerControlled(actor) {
-                c.engine.onViewedActorMoved(actor.Pos()) // UNCOMMENT FOR CAM FOLLOW BEHAVIOR
-            }
+            c.engine.moveActorInCombat(actor, dest)
             c.movesTakenThisTurn[actor]++
             _ = exe.YieldTime(200 * time.Millisecond)
         }
@@ -508,10 +512,15 @@ func (c *CombatState) findAlliesOfOpponent(attackedNPC *game.Actor) {
     if c.canAct(attackedNPC) {
         c.opponents[attackedNPC] = true
     }
+    combatFaction := attackedNPC.GetCombatFaction()
     radius := 25
     // TODO: better filter for guards, allies, etc.
     nearbyNPCs := c.engine.currentMap.FindAllNearbyActors(attackedNPC.Pos(), radius, func(actor *game.Actor) bool {
-        return !c.engine.IsPlayerControlled(actor) && actor.IsAlive() && !actor.IsHidden() && actor != attackedNPC
+        return !c.engine.IsPlayerControlled(actor) &&
+            actor.IsAlive() &&
+            !actor.IsHidden() &&
+            actor != attackedNPC &&
+            actor.GetCombatFaction() == combatFaction
     })
 
     for _, nearbyNPC := range nearbyNPCs {
@@ -536,35 +545,56 @@ func (c *CombatState) checkForEndOfCombat() {
     }
 }
 
-func (c *CombatState) OnMouseClicked(screenX, screenY int) {
+//
+func (c *CombatState) OnScreenMouseClicked(screenX, screenY int) bool {
     if c.waitForTarget != nil {
         mapPos := c.engine.ScreenToMap(screenX, screenY)
         c.waitForTarget(mapPos)
+        return true
     }
+    return false
     //c.engine.mapWindow.GetScreenGridPositionFromMapGridPosition()
 }
-
+func (c *CombatState) OnMouseMoved(screenX, screenY int) (bool, ui.Tooltip) {
+    return false, ui.NoTooltip{}
+}
 func (c *CombatState) PlayerStartsMeleeAttack(attacker *game.Actor, attackedNPC *game.Actor) {
     c.combatInitByPlayer()
     c.findAlliesOfOpponent(attackedNPC)
     c.animateMeleeHit(attacker, attackedNPC)
 }
 
+func (c *CombatState) EnemyStartsAttack(attacker *game.Actor, attackedNPC *game.Actor) {
+    c.combatInitByEnemy()
+    c.findAlliesOfOpponent(attacker)
+    //c.animateMeleeHit(attacker, attackedNPC)
+}
+
 func (c *CombatState) PlayerStartsRangedAttack() {
-    c.combatInitByPlayer()
-    c.selectRangedTarget(c.engine.GetAvatar())
+    avatar := c.engine.GetAvatar()
+    if avatar.HasRangedWeaponEquipped() {
+        c.combatInitByPlayer()
+        c.selectRangedTarget(avatar)
+    } else {
+        c.engine.Print("No ranged weapon equipped")
+    }
 }
 
 func (c *CombatState) OrchestratedRangedAttack() {
-    c.combatInitByPlayer()
-    c.selectOrchestratedRangedTarget()
+    if c.engine.GetParty().HasAnyRangedWeaponsEquipped() {
+        c.combatInitByPlayer()
+        c.selectOrchestratedRangedTarget()
+    } else {
+        c.engine.Print("No ranged weapons equipped")
+    }
 }
 
-func (c *CombatState) PlayerStartsOffensiveSpell(spellUsed *game.Spell) {
+func (c *CombatState) PlayerStartsOffensiveSpell(caster *game.Actor, spellUsed *game.Spell) {
     c.combatInitByPlayer()
-    c.SelectSpellTarget(c.engine.GetAvatar(), spellUsed)
+    c.SelectSpellTarget(caster, spellUsed)
 }
 func (c *CombatState) SelectSpellTarget(attacker *game.Actor, spell *game.Spell) {
+    c.engine.CloseAllModals()
     spellIcon := int32(28)
     spellColor := spell.Color()
     c.waitForTarget = func(targetPos geometry.Point) {
@@ -578,6 +608,7 @@ func (c *CombatState) SelectSpellTarget(attacker *game.Actor, spell *game.Spell)
     }
 }
 func (c *CombatState) selectRangedTarget(attacker *game.Actor) {
+    c.engine.CloseAllModals()
     c.waitForTarget = func(targetPos geometry.Point) {
         c.animateProjectile(attacker, targetPos, c.iconGenericMissile, color.White, func(pos geometry.Point, actorHit *game.Actor) func() {
             return func() {
@@ -590,6 +621,9 @@ func (c *CombatState) selectRangedTarget(attacker *game.Actor) {
 func (c *CombatState) selectOrchestratedRangedTarget() {
     c.waitForTarget = func(targetPos geometry.Point) {
         for _, partyMember := range c.engine.GetPartyMembers() {
+            if !partyMember.HasRangedWeaponEquipped() {
+                continue
+            }
             c.animateProjectile(partyMember, targetPos, c.iconGenericMissile, color.White, func(pos geometry.Point, actorHit *game.Actor) func() {
                 return func() {
                     c.onRangedHit(partyMember, actorHit)
