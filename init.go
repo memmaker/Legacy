@@ -6,7 +6,6 @@ import (
     "Legacy/geometry"
     "Legacy/gridmap"
     "Legacy/ldtk_go"
-    "Legacy/recfile"
     "Legacy/renderer"
     "Legacy/util"
     "fmt"
@@ -284,6 +283,8 @@ func (g *GridEngine) loadMap(mapName string) *gridmap.GridMap[*game.Actor, game.
             specialTile = gridmap.SpecialTileSwamp
         } else if enums.Contains("IsWater") {
             specialTile = gridmap.SpecialTileWater
+        } else if enums.Contains("IsVoid") {
+            specialTile = gridmap.SpecialTileVoid
         } else if enums.Contains("IsBed") {
             specialTile = gridmap.SpecialTileBed
         } else if enums.Contains("IsBreakable") {
@@ -382,8 +383,19 @@ func (g *GridEngine) loadMap(mapName string) *gridmap.GridMap[*game.Actor, game.
                 g.rules.LevelUp(npc)
             }
         }
-
-        loadedMap.AddActor(npc, pos)
+        if !entity.PropertyByIdentifier("IsAggressive").IsNull() {
+            npc.SetAggressive(entity.PropertyByIdentifier("IsAggressive").AsBool())
+        }
+        if !entity.PropertyByIdentifier("EngagementRange").IsNull() {
+            npc.SetNPCEngagementRange(entity.PropertyByIdentifier("EngagementRange").AsInt())
+        }
+        isAlive := entity.PropertyByIdentifier("IsAlive").AsBool()
+        if isAlive {
+            loadedMap.AddActor(npc, pos)
+        } else {
+            npc.SetHealth(0)
+            loadedMap.AddDownedActor(npc, pos)
+        }
     }
 
     return loadedMap
@@ -486,11 +498,9 @@ func (g *GridEngine) getItemFromEntity(entity *ldtk_go.Entity, mapDisplayName st
     case "Potion":
         returnedItem = game.NewPotion()
     case "Weapon":
-        weaponPredicate := entity.PropertyByIdentifier("WeaponDefinition").AsString()
-        returnedItem = game.NewWeaponFromPredicate(recfile.StrPredicate(weaponPredicate))
+        returnedItem = g.getWeaponFromEntity(entity)
     case "Armor":
-        armorPredicate := entity.PropertyByIdentifier("ArmorDefinition").AsString()
-        returnedItem = game.NewArmorFromPredicate(recfile.StrPredicate(armorPredicate))
+        returnedItem = g.getArmorFromEntity(entity)
     case "GroundItem":
         itemPredicate := entity.PropertyByIdentifier("ItemDefinition").AsString()
         returnedItem = game.NewItemFromString(itemPredicate)
@@ -525,6 +535,8 @@ func (g *GridEngine) getObjectFromEntity(entity *ldtk_go.Entity, mapDisplayName 
         return g.getTombstoneFromEntity(entity)
     case "Balloon":
         return game.NewBalloon()
+    case "Ship":
+        return game.NewShip()
     }
     return nil
 }

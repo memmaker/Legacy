@@ -235,7 +235,9 @@ func (s *Chest) GetContextActions(engine Engine) []util.MenuItem {
 
 func (s *Chest) SetLockedWithKey(key string) {
     s.needsKey = key
-    s.isLocked = true
+    if key != "" {
+        s.isLocked = true
+    }
 }
 
 func (s *Chest) SetFixedLoot(loot []Item) {

@@ -9,12 +9,16 @@ import (
 
 type Scroll struct {
     BaseItem
-    icon     int32
-    filename string
-    spell    *Spell
-    wearer   ItemWearer
+    icon           int32
+    filename       string
+    spell          *Spell
+    wearer         ItemWearer
+    autoLayoutText bool
 }
 
+func (b *Scroll) SetAutoLayoutText(value bool) {
+    b.autoLayoutText = value
+}
 func (b *Scroll) GetTooltipLines() []string {
     if b.spell != nil {
         return []string{fmt.Sprintf("Scroll of %s", b.spell.name)}
@@ -99,7 +103,7 @@ func (b *Scroll) GetContextActions(engine Engine) []util.MenuItem {
 
 func (b *Scroll) read(engine Engine) {
     text := engine.GetScrollFile(b.filename)
-    engine.ShowScrollableText(text, color.White, true)
+    engine.ShowScrollableText(text, color.White, b.autoLayoutText)
 }
 
 func (b *Scroll) SetSpell(spell *Spell) {
@@ -120,8 +124,9 @@ func NewScroll(title, filename string) *Scroll {
         BaseItem: BaseItem{
             name: title,
         },
-        icon:     181,
-        filename: filename,
+        icon:           181,
+        filename:       filename,
+        autoLayoutText: true,
     }
 }
 
@@ -130,9 +135,10 @@ func NewSpellScroll(title, filename string, spell *Spell) *Scroll {
         BaseItem: BaseItem{
             name: title,
         },
-        icon:     181,
-        filename: filename,
-        spell:    spell,
+        icon:           181,
+        filename:       filename,
+        spell:          spell,
+        autoLayoutText: true,
     }
 }
 

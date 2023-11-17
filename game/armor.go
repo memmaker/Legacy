@@ -39,6 +39,20 @@ func (t ItemTier) Color() color.Color {
     return color.White
 }
 
+func (t ItemTier) AsInt() int {
+    switch t {
+    case ItemTierCommon:
+        return 1
+    case ItemTierUncommon:
+        return 2
+    case ItemTierRare:
+        return 3
+    case ItemTierLegendary:
+        return 4
+    }
+    return 0
+}
+
 const (
     ItemTierCommon    ItemTier = "common"
     ItemTierUncommon  ItemTier = "uncommon"
@@ -56,6 +70,22 @@ func GetAllTiers() []ItemTier {
 }
 
 type ArmorModifier string
+
+func (m ArmorModifier) ValueMultiplier() float64 {
+    switch m {
+    case ArmorMaterialCloth:
+        return 0.7
+    case ArmorMaterialLeather:
+        return 1
+    case ArmorMaterialChain:
+        return 1.5
+    case ArmorMaterialPlate:
+        return 2
+    case ArmorMaterialMagical:
+        return 3
+    }
+    return 0
+}
 
 const (
     ArmorMaterialCloth   ArmorModifier = "cloth"
@@ -85,21 +115,11 @@ type Armor struct {
 
 func (a *Armor) GetTooltipLines() []string {
     rows := []util.TableRow{
-        util.TableRow{
-            Label:   "Level",
-            Columns: []string{string(a.level)},
-        },
-        util.TableRow{
-            Label: "Protection",
-            Columns: []string{
-                fmt.Sprintf("%d", a.GetProtection()),
-            },
-        },
-        util.TableRow{
-            Label: "Value",
-            Columns: []string{
-                fmt.Sprintf("%dg", a.GetValue()),
-            },
+        {Label: "Level", Columns: []string{string(a.level)}},
+        {Label: "Type", Columns: []string{string(a.slot)}},
+        {Label: "Material", Columns: []string{string(a.material)}},
+        {Label: "Protection", Columns: []string{fmt.Sprintf("%d", a.GetProtection())}},
+        {Label: "Value", Columns: []string{fmt.Sprintf("%dg", a.GetValue())},
         },
     }
     return util.TableLayout(rows)
@@ -141,9 +161,9 @@ func (a *Armor) GetWearer() ItemWearer {
     return a.wearer
 }
 func (a *Armor) GetValue() int {
-    protectionValue := max(a.GetProtection(), 10)
-    baseValue := a.slot.BaseValue() + int(float64(protectionValue)*a.level.Multiplier())
-    return baseValue
+    //protectionValue := max(a.GetProtection(), 10)
+    baseValue := float64(a.slot.BaseValue()) * a.level.Multiplier() * a.material.ValueMultiplier()
+    return int(baseValue)
 }
 func (a *Armor) Icon(u uint64) int32 {
     if a.slot == ArmorSlotHelmet {
@@ -218,6 +238,16 @@ func NewRandomArmor(lootLevel int) *Armor {
     material := materialFromLootLevel(lootLevel)
     randomTier := tierFromLootLevel(lootLevel)
     return NewArmor(randomTier, slot, material)
+}
+
+func NewRandomArmorForVendor(lootLevel int) *Armor {
+    slot := randomSlot()
+    material := materialFromLootLevel(lootLevel)
+    randomTier := "common"
+    if lootLevel > 1 {
+        randomTier = "uncommon"
+    }
+    return NewArmor(ItemTier(randomTier), slot, material)
 }
 
 func tierFromLootLevel(lootLevel int) ItemTier {
@@ -302,6 +332,9 @@ func randomSlot() ArmorSlot {
     return ArmorSlotBreastPlate
 }
 func (a *Armor) Name() string {
+    if a.name != "" {
+        return a.name
+    }
     return nameFromSlotAndMaterial(a.slot, a.material)
 }
 

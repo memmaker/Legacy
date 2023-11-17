@@ -117,7 +117,14 @@ func (r *Rules) GetMeleeDamage(attacker *Actor, victim *Actor) int {
     return meleeDamage
 }
 
-func (r *Rules) CalculateHit(attacker *Actor, npc *Actor) bool {
+func (r *Rules) GetRangedDamage(attacker *Actor, victim *Actor) int {
+    baseRangedDamage := attacker.GetRangedDamage()
+    victimArmor := victim.GetTotalArmor()
+    rangedDamage := baseRangedDamage - victimArmor
+    return rangedDamage
+}
+
+func (r *Rules) CalculateMeleeHit(attacker *Actor, npc *Actor) bool {
     return true
 }
 

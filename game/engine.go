@@ -26,6 +26,7 @@ type Engine interface {
     CreateLootForContainer(level int, lootType []Loot) []Item
     ShowContainer(container ItemContainer)
     OpenPickpocketMenu(victim *Actor)
+    OpenPlantMenu(victim *Actor)
     Print(text string)
     AddFood(amount int)
     AddGold(amount int)
@@ -43,8 +44,8 @@ type Engine interface {
     RemoveItem(item Item)
     GetPartyMembers() []*Actor
     ShowEquipMenu(a Equippable)
-    PlayerStartsCombat(opponents *Actor)
-
+    PlayerStartsCombat(opponent *Actor)
+    PlayerTriesBackstab(opponent *Actor)
     PlayerStartsOffensiveSpell(caster *Actor, spell *Spell)
     GetAoECircle(pos geometry.Point, radius int) []geometry.Point
     HitAnimation(pos geometry.Point, atlasName renderer.AtlasName, icon int32, tintColor color.Color, whenDone func())

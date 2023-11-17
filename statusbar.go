@@ -72,13 +72,17 @@ func (g *GridEngine) drawUpperStatusBar(screen *ebiten.Image) {
     }
 
     // current location
-    mapName := g.currentMap.GetDisplayName()
-    width := len(mapName)
+    g.drawTextOnUpperStatusbar(screen, g.currentMap.GetDisplayName())
+}
+
+func (g *GridEngine) drawTextOnUpperStatusbar(screen *ebiten.Image, text string) {
+    screenSize := g.gridRenderer.GetSmallGridScreenSize()
+    yPos := screenSize.Y - 2
+    width := len(text)
     x := (screenSize.X - width) / 2
-    g.gridRenderer.DrawColoredString(screen, x, yPos, mapName, color.White)
+    g.gridRenderer.DrawColoredString(screen, x, yPos, text, color.White)
     xPosBefore := x - 1
     xPosAfter := x + width
     g.gridRenderer.DrawOnSmallGrid(screen, xPosBefore, yPos, 16)
     g.gridRenderer.DrawOnSmallGrid(screen, xPosAfter, yPos, 17)
-
 }

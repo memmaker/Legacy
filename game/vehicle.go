@@ -2,6 +2,7 @@ package game
 
 import (
     "Legacy/geometry"
+    "Legacy/gridmap"
     "Legacy/recfile"
     "Legacy/util"
     "fmt"
@@ -62,6 +63,19 @@ func NewBalloon() *Vehicle {
     }
 }
 
+func NewShip() *Vehicle {
+    return &Vehicle{
+        BaseObject: BaseObject{
+            icon: 47,
+        },
+        name:                 "Ship",
+        canTraverseMountains: false,
+        canTraverseLand:      false,
+        canTraverseWater:     true,
+        minutesPerStep:       10,
+    }
+}
+
 func (v *Vehicle) Description() []string {
     return []string{
         "Somebody has built a Vehicle here.",
@@ -113,4 +127,23 @@ func (v *Vehicle) Exit(party *Party) {
 
 func (v *Vehicle) GetMinutesPerStep() int {
     return v.minutesPerStep
+}
+
+func (v *Vehicle) CanMoveTo(cell gridmap.MapCell[*Actor, Item, Object]) bool {
+    if cell.Object != nil {
+        return false
+    }
+
+    if cell.TileType.IsWater() {
+        return v.canTraverseWater
+    }
+
+    if cell.TileType.IsMountain() {
+        return v.canTraverseMountains
+    }
+
+    if cell.TileType.IsLand() {
+        return v.canTraverseLand
+    }
+    return cell.TileType.IsWalkable
 }

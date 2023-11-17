@@ -7,20 +7,27 @@ CannotBeClosed: true
 Text:
 + You see some orcs surrounding a bound
 + human. They are arguing about something.
-+ One of them notices you and shouts:
++ As they notice you, they stop talking
++ and stare at you. One of them,
++ a particularly large orc, steps
++ forward, grinding his teeth as
++ he speaks:
 + "Hey, you! What are you doing here?"
 #
-OnOptionSuccess: _ignore
+Target: _ignore
 Option: "Don't mind us, we're just passing through."
 #
-OnOptionSuccess: _asking
+Target: _asking
 Option: "Interesting, I was about to ask you the same thing."
 #
-OnOptionSuccess: _threaten
+Target: _threaten
 Option: "Let this man go, or you'll regret it!"
 #
-OnOptionSuccess: _participate
+Target: _participate
 Option: "We'd like to join you."
+#
+Target: _watch
+Option: "I am interested in your ritual. May I watch?"
 
 Key: _ignore
 Effect: quits
@@ -50,3 +57,9 @@ Text:
 + Together you prepare the human for
 + the sacrifice. The orcs are pleased
 + with your help and let you go.
+
+Key: _watch
+Effect: quits
+Effect: removeTrigger(wood_orc_prisoner)
+Text:
++ "Sure, why not. Just don't get in the way."

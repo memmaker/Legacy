@@ -1351,3 +1351,36 @@ func (m *GridMap[ActorType, ItemType, ObjectType]) SetDisplayName(name string) {
 func (m *GridMap[ActorType, ItemType, ObjectType]) GetDisplayName() string {
     return m.displayName
 }
+
+func (m *GridMap[ActorType, ItemType, ObjectType]) GetFilteredActorsInRadius(location geometry.Point, radius int, filter func(actor ActorType) bool) []ActorType {
+    if (radius * radius) < len(m.AllActors) {
+        return m.iterateMapForActors(location, radius, filter)
+    } else {
+        return m.iterateActors(location, radius, filter)
+    }
+}
+func (m *GridMap[ActorType, ItemType, ObjectType]) iterateActors(location geometry.Point, radius int, filter func(actor ActorType) bool) []ActorType {
+    result := make([]ActorType, 0)
+    for _, actor := range m.AllActors {
+        if geometry.DistanceManhattan(location, actor.Pos()) <= radius && filter(actor) {
+            result = append(result, actor)
+        }
+    }
+    return result
+}
+
+func (m *GridMap[ActorType, ItemType, ObjectType]) iterateMapForActors(location geometry.Point, radius int, filter func(actor ActorType) bool) []ActorType {
+    result := make([]ActorType, 0)
+    for y := location.Y - radius; y <= location.Y+radius; y++ {
+        for x := location.X - radius; x <= location.X+radius; x++ {
+            pos := geometry.Point{X: x, Y: y}
+            if m.IsActorAt(pos) {
+                actorAt := m.ActorAt(pos)
+                if filter(actorAt) {
+                    result = append(result, actorAt)
+                }
+            }
+        }
+    }
+    return result
+}

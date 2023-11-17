@@ -3,6 +3,7 @@ package ui
 import (
     "Legacy/geometry"
     "Legacy/renderer"
+    "Legacy/util"
     "github.com/hajimehoshi/ebiten/v2"
     "image/color"
     "slices"
@@ -121,7 +122,7 @@ func NewIconWindow(dualGrid *renderer.DualGridRenderer) *IconWindow {
 func (i *IconWindow) SetAutoLayoutText(inputText string) {
     screenSize := i.gridRenderer.GetSmallGridScreenSize()
     maxLineLength := screenSize.X - 11
-    text := renderer.AutoLayout(inputText, maxLineLength)
+    text := util.AutoLayout(inputText, maxLineLength)
     i.SetFixedText(text)
 }
 

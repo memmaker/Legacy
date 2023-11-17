@@ -39,18 +39,35 @@ func (g *GridEngine) PlayerMovement(direction geometry.Point) {
         object.OnActorWalkedOn(g.GetAvatar())
     }
     g.onAvatarMovedOrTeleported(g.GetAvatar().Pos())
+    g.movementRoutine.Stop()
 }
 
 func (g *GridEngine) onAvatarMovedOrTeleported(newLocation geometry.Point) {
+    g.onViewedActorMoved(newLocation)
+
     if trigger, isAtTrigger := g.currentMap.GetNamedTriggerAt(newLocation); isAtTrigger {
         g.TriggerEvent(trigger.Name)
         if trigger.OneShot {
             g.currentMap.RemoveNamedTrigger(trigger.Name)
         }
     }
-    g.onViewedActorMoved(newLocation)
+    if g.IsInCombat() {
+        return
+    }
+    // check if we are near any aggressive actors, that would want to start combat
+    for _, actor := range g.currentMap.GetFilteredActorsInRadius(newLocation, 11, g.aggressiveActorsFilter(newLocation)) {
+        g.EnemyStartsCombat(actor)
+        return
+    }
 }
-
+func (g *GridEngine) aggressiveActorsFilter(loc geometry.Point) func(actor *game.Actor) bool {
+    return func(actor *game.Actor) bool {
+        return actor.IsAggressive() &&
+            actor.IsAlive() &&
+            g.playerParty.CanSee(actor.Pos()) &&
+            geometry.DistanceManhattan(actor.Pos(), loc) <= actor.GetNPCEngagementRange()
+    }
+}
 func (g *GridEngine) moveActorInCombat(actor *game.Actor, dest geometry.Point) {
     g.currentMap.MoveActor(actor, dest)
     if g.IsPlayerControlled(actor) {
@@ -139,6 +156,10 @@ func (g *GridEngine) Update() error {
         g.animationRoutine.Update()
     }
 
+    if g.movementRoutine.Running() {
+        g.movementRoutine.Update()
+    }
+
     if g.combatManager.IsInCombat() {
         g.combatManager.Update()
     }
@@ -214,7 +235,11 @@ func (g *GridEngine) drawWarTimeStatusBar(screen *ebiten.Image) {
     if g.ticksForPrint > 0 {
         g.drawPrintMessage(screen, true)
     } else {
-        g.drawCombatActionBar(screen)
+        if g.combatManager.IsAITurn() {
+            g.drawTextOnUpperStatusbar(screen, "Wait for your turn...")
+        } else {
+            g.drawCombatActionBar(screen)
+        }
     }
     /*
        else {
@@ -289,6 +314,12 @@ func (g *GridEngine) getInteractablesAt(locations []geometry.Point) Interactable
         neighbor := n
         if g.currentMap.IsActorAt(neighbor) {
             actor := g.currentMap.GetActor(neighbor)
+            if !actor.IsHidden() && !g.IsPlayerControlled(actor) {
+                actorsNearby = append(actorsNearby, actor)
+            }
+        }
+        if g.currentMap.IsDownedActorAt(neighbor) {
+            actor := g.currentMap.DownedActorAt(neighbor)
             if !actor.IsHidden() && !g.IsPlayerControlled(actor) {
                 actorsNearby = append(actorsNearby, actor)
             }
@@ -444,18 +475,23 @@ func (g *GridEngine) contextActionsFromInteractables(interactables Interactables
                 })
             }
         } else if cell.TileType.IsForest() {
-            contextActions = append(contextActions, util.MenuItem{
-                Text: "Hunt game",
-                Action: func() {
-                    g.AddFood(1)
-                },
-            })
-            contextActions = append(contextActions, util.MenuItem{
-                Text: "Gather herbs",
-                Action: func() {
-                    g.AddFood(2)
-                },
-            })
+            /* TODO: add these back in
+               // removed because of "no clear concept"
+               // also: appears multiple times in the context menu
+               contextActions = append(contextActions, util.MenuItem{
+                   Text: "Hunt game",
+                   Action: func() {
+                       g.AddFood(1)
+                   },
+               })
+               contextActions = append(contextActions, util.MenuItem{
+                   Text: "Gather herbs",
+                   Action: func() {
+                       g.AddFood(2)
+                   },
+               })
+
+            */
         }
     }
 

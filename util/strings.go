@@ -1,6 +1,7 @@
 package util
 
 import (
+    "Legacy/geometry"
     "fmt"
     "strings"
 )
@@ -55,4 +56,130 @@ func TableLayout(tableData []TableRow) []string {
         result = append(result, fmt.Sprintf("%s%s", rightPad(row.Label, maxLabelLen+1), rightAlignColumns(row.Columns, maxColLen+1)))
     }
     return result
+}
+
+func AutoLayoutArray(inputText []string, width int) []string {
+    return AutoLayout(strings.Join(inputText, " "), width)
+}
+func splitIntoTokens(inputText []string) []string {
+    oneString := strings.Join(inputText, " ")
+    return strings.Split(oneString, " ")
+}
+
+// AutoLayout splits a string into lines of maximum width
+func AutoLayout(inputText string, width int) []string {
+    return AutoLayoutWithBreakingPrefix(inputText, width, "")
+}
+
+func AutoLayoutWithBreakingPrefix(inputText string, width int, prefix string) []string {
+    // split on spaces and newlines
+    inputText = strings.ReplaceAll(inputText, "\n", " ")
+    tokens := strings.Split(inputText, " ")
+
+    var lines []string
+    currentLine := ""
+    for i, token := range tokens {
+        if len(currentLine)+len(token)+1 > width {
+            lines = append(lines, currentLine)
+            currentLine = prefix + strings.TrimSpace(token)
+        } else if i == 0 {
+            currentLine = prefix + strings.TrimSpace(token)
+        } else {
+            currentLine += " " + strings.TrimSpace(token)
+        }
+    }
+    lines = append(lines, currentLine)
+    return lines
+}
+func AutoLayoutPages(inputText string, width int, height int) [][]string {
+    inputText = strings.ReplaceAll(inputText, "\n", " ")
+    tokens := strings.Split(inputText, " ")
+    var allPages [][]string
+    var currentPage []string
+    lastDelim := geometry.Point{X: -1, Y: -1}
+    currentLine := ""
+    firstTokenInPage := true
+    for len(tokens) > 0 {
+        // pop
+        token := tokens[0]
+        tokens = tokens[1:]
+
+        if strings.TrimSpace(token) == "" {
+            continue
+        }
+
+        indexOfDelimInToken := strings.IndexAny(token, ".!?")
+        indexOfDelimInLine := -1
+        if len(currentLine)+len(token)+1 > width {
+            currentPage = append(currentPage, currentLine)
+            if len(currentPage) == height {
+                if lastDelim.X > 0 {
+                    // we have a sensible split?
+                    lineToSplitOn := currentPage[lastDelim.Y]
+
+                    splitIndex := lastDelim.X + 1
+                    if len(lineToSplitOn) > splitIndex && lineToSplitOn[splitIndex] == '"' {
+                        splitIndex++
+                    }
+                    // split the lines
+                    partOfCurrPage := strings.TrimSpace(lineToSplitOn[:splitIndex])
+                    partOfNextPage := strings.TrimSpace(lineToSplitOn[splitIndex:])
+
+                    // get all the lines up to here
+                    currPageLines := currentPage[:lastDelim.Y]
+                    // append the split part
+                    currPageLines = append(currPageLines, partOfCurrPage)
+
+                    // get the rest of the lines
+                    nextPageLines := currentPage[lastDelim.Y+1:]
+
+                    // prepend the split part
+                    nextPageLines = append([]string{partOfNextPage}, nextPageLines...)
+                    restOfTheTokens := splitIntoTokens(nextPageLines)
+
+                    // re-add the token we popped
+                    restOfTheTokens = append(restOfTheTokens, token)
+
+                    // prepend to our token queue
+                    tokens = append(restOfTheTokens, tokens...)
+
+                    // append the current page
+                    allPages = append(allPages, currPageLines)
+
+                    // reset
+                    currentPage = []string{}
+                    lastDelim = geometry.Point{X: -1, Y: -1}
+                    currentLine = ""
+                    firstTokenInPage = true
+                    continue
+                } else {
+                    // just split
+                    allPages = append(allPages, currentPage)
+                    currentPage = []string{}
+                }
+            }
+            currentLine = token
+            if indexOfDelimInToken != -1 {
+                indexOfDelimInLine = indexOfDelimInToken
+            }
+        } else if firstTokenInPage {
+            firstTokenInPage = false
+            currentLine = token
+            if indexOfDelimInToken != -1 {
+                indexOfDelimInLine = indexOfDelimInToken
+            }
+        } else {
+            currentLine += " " + token
+            if indexOfDelimInToken != -1 {
+                indexOfDelimInLine = len(currentLine) - len(token) + indexOfDelimInToken
+            }
+        }
+        indexOfCurrentLine := len(currentPage)
+        if indexOfDelimInLine != -1 {
+            lastDelim = geometry.Point{X: indexOfDelimInLine, Y: indexOfCurrentLine}
+        }
+    }
+    currentPage = append(currentPage, currentLine)
+    allPages = append(allPages, currentPage)
+    return allPages
 }

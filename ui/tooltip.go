@@ -4,43 +4,62 @@ import (
     "Legacy/game"
     "Legacy/geometry"
     "Legacy/renderer"
+    "Legacy/util"
     "github.com/hajimehoshi/ebiten/v2"
     "image/color"
 )
 
-type ItemTooltip struct {
-    item         game.Item
+type BasicTooltip struct {
     gridRenderer *renderer.DualGridRenderer
-
-    topLeft     geometry.Point
-    bottomRight geometry.Point
-    nameLines   []string
-    infoLines   []string
+    topLeft      geometry.Point
+    bottomRight  geometry.Point
+    upperText    []string
+    lowerText    []string
 }
 
-func (i *ItemTooltip) Draw(screen *ebiten.Image) {
+func (i *BasicTooltip) Draw(screen *ebiten.Image) {
     i.gridRenderer.DrawFilledBorder(screen, i.topLeft, i.bottomRight, "")
-    i.drawStringArray(screen, i.nameLines, i.topLeft.Y+2)
+    i.drawStringArray(screen, i.upperText, i.topLeft.Y+2)
 
-    if len(i.infoLines) == 0 {
+    if len(i.lowerText) == 0 {
         return
     }
-    firstLineAfterName := i.topLeft.Y + 3 + len(i.nameLines)
-    i.drawStringArray(screen, i.infoLines, firstLineAfterName)
+    firstLineAfterName := i.topLeft.Y + 3 + len(i.upperText)
+    i.drawStringArray(screen, i.lowerText, firstLineAfterName)
 }
 
-func (i *ItemTooltip) IsNull() bool {
+func (i *BasicTooltip) IsNull() bool {
     return false
 }
 
-func (i *ItemTooltip) drawStringArray(screen *ebiten.Image, lines []string, startAtY int) {
+func (i *BasicTooltip) drawStringArray(screen *ebiten.Image, lines []string, startAtY int) {
     startPos := geometry.Point{X: i.topLeft.X + 2, Y: startAtY}
     for y, line := range lines {
         i.gridRenderer.DrawColoredString(screen, startPos.X, startPos.Y+y, line, color.White)
     }
 }
 
-func NewItemTooltip(gridRenderer *renderer.DualGridRenderer, item game.Item, mousePos geometry.Point) *ItemTooltip {
+func (i *BasicTooltip) SetUpperText(name []string) {
+    i.upperText = name
+}
+
+func (i *BasicTooltip) SetLowerText(infoLines []string) {
+    i.lowerText = infoLines
+}
+
+func NewTextTooltip(gridRenderer *renderer.DualGridRenderer, text []string, mousePos geometry.Point) *BasicTooltip {
+    widthNeeded := util.MaxLen(text)
+    heightNeeded := len(text)
+
+    width := widthNeeded + 4
+    height := heightNeeded + 4
+
+    tooltip := newTooltip(gridRenderer, mousePos, height, width)
+    tooltip.SetUpperText(text)
+    return tooltip
+}
+
+func NewItemTooltip(gridRenderer *renderer.DualGridRenderer, item game.Item, mousePos geometry.Point) *BasicTooltip {
     // let's start with a simple tooltip that just shows the item name
     // and some stats on the second line.
     // so height would be, 2x border, 2x spacing, 5x lines = 9
@@ -54,12 +73,20 @@ func NewItemTooltip(gridRenderer *renderer.DualGridRenderer, item game.Item, mou
         widthForContents = len(infoLines[0])
         otherStatsNeededLines = len(infoLines) + 1
     }
-    width := widthForContents + 4
-    wrappedName := renderer.AutoLayout(item.Name(), widthForContents)
 
+    wrappedName := util.AutoLayout(item.Name(), widthForContents)
+
+    width := widthForContents + 4
     height := 4 + len(wrappedName) + otherStatsNeededLines
 
     // can we position the tooltip to the top right of the mouse cursor?
+    tooltip := newTooltip(gridRenderer, mousePos, height, width)
+    tooltip.SetUpperText(wrappedName)
+    tooltip.SetLowerText(infoLines)
+    return tooltip
+}
+
+func newTooltip(gridRenderer *renderer.DualGridRenderer, mousePos geometry.Point, height int, width int) *BasicTooltip {
     var topLeftX, topLeftY int
     // decide if above or below the mouse cursor
     if mousePos.Y < height {
@@ -69,7 +96,7 @@ func NewItemTooltip(gridRenderer *renderer.DualGridRenderer, item game.Item, mou
         // below
         topLeftY = mousePos.Y - height
     }
-
+    screenSize := gridRenderer.GetSmallGridScreenSize()
     // decide if left or right of the mouse cursor
     if mousePos.X < width {
         // left
@@ -82,12 +109,9 @@ func NewItemTooltip(gridRenderer *renderer.DualGridRenderer, item game.Item, mou
     bottomRightX := topLeftX + width
     bottomRightY := topLeftY + height
 
-    return &ItemTooltip{
-        item:         item,
+    return &BasicTooltip{
         gridRenderer: gridRenderer,
         topLeft:      geometry.Point{X: topLeftX, Y: topLeftY},
         bottomRight:  geometry.Point{X: bottomRightX, Y: bottomRightY},
-        nameLines:    wrappedName,
-        infoLines:    infoLines,
     }
 }

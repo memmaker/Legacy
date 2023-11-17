@@ -1,7 +1,7 @@
 %rec: Details
 
-Name: Local Giver
-Health: 10
+Name: Mr. X
+Health: 999
 Description: He looks strong and mighty and magical.
 
 %rec: Inventory

@@ -10,6 +10,7 @@ import (
 
 type ScrollableTextWindow struct {
     ButtonHolder
+    ScrollingContent
     topLeft     geometry.Point
     bottomRight geometry.Point
 
@@ -17,21 +18,15 @@ type ScrollableTextWindow struct {
 
     textColor color.Color
 
-    scrollOffset int
     gridRenderer *renderer.DualGridRenderer
 
     shouldClose bool
     title       string
-
-    upIndicator, downIndicator int32
-    upDownIndicator            int32
 }
 
 func (r *ScrollableTextWindow) OnMouseWheel(x int, y int, dy float64) bool {
-    if dy < 0 {
-        r.ActionDown()
-    } else {
-        r.ActionUp()
+    if r.ScrollingContent.OnMouseWheel(x, y, dy) {
+        r.OnMouseMoved(x, y)
     }
     return true
 }
@@ -56,23 +51,17 @@ func (r *ScrollableTextWindow) OnCommand(command CommandType) bool {
 
 func (r *ScrollableTextWindow) ActionLeft() {
     // page up
-    if r.CanScroll() {
+    if r.needsScroll() {
         pageSize := r.bottomRight.Y - r.topLeft.Y - 4
-        r.scrollOffset -= pageSize
-        if r.scrollOffset < 0 {
-            r.scrollOffset = 0
-        }
+        r.ScrollUp(pageSize)
     }
 }
 
 func (r *ScrollableTextWindow) ActionRight() {
     // page down
-    if r.CanScroll() {
+    if r.needsScroll() {
         pageSize := r.bottomRight.Y - r.topLeft.Y - 4
-        r.scrollOffset += pageSize
-        if r.scrollOffset > len(r.text)-pageSize {
-            r.scrollOffset = len(r.text) - pageSize
-        }
+        r.ScrollDown(pageSize)
     }
 }
 
@@ -103,29 +92,33 @@ func NewAutoTextWindow(gridRenderer *renderer.DualGridRenderer, text []string) *
     screenSize := gridRenderer.GetSmallGridScreenSize()
     borderNeeded := 4 * 2
     widthAvailable := screenSize.X - borderNeeded
-    text = renderer.AutoLayoutArray(text, min(util.MaxLen(text), widthAvailable))
-    topLeft, bottomRight := gridRenderer.GetAutoFitRect(text)
+    widthWanted := widthAvailable
+    text = util.AutoLayoutArray(text, widthWanted)
+    addedSpace := geometry.Point{}
+    topLeft, bottomRight := gridRenderer.GetAutoFitRectWithExtraSpace(text, addedSpace)
     modal := NewScrollableTextWindow(gridRenderer, topLeft, bottomRight)
     modal.SetText(text)
     return modal
 }
 func NewFixedTextWindow(gridRenderer *renderer.DualGridRenderer, text []string) *ScrollableTextWindow {
-    topLeft, bottomRight := gridRenderer.GetAutoFitRect(text)
+    addedSpace := geometry.Point{}
+    topLeft, bottomRight := gridRenderer.GetAutoFitRectWithExtraSpace(text, addedSpace)
     modal := NewScrollableTextWindow(gridRenderer, topLeft, bottomRight)
     modal.SetText(text)
     return modal
 }
 func NewScrollableTextWindow(gridRenderer *renderer.DualGridRenderer, topLeft, bottomRight geometry.Point) *ScrollableTextWindow {
-    return &ScrollableTextWindow{
-        ButtonHolder:    NewButtonHolder(),
-        gridRenderer:    gridRenderer,
-        textColor:       color.White,
-        topLeft:         topLeft,
-        bottomRight:     bottomRight,
-        upDownIndicator: 4,
-        downIndicator:   5,
-        upIndicator:     6,
+    s := &ScrollableTextWindow{
+        ButtonHolder: NewButtonHolder(),
+        gridRenderer: gridRenderer,
+        textColor:    color.White,
+        topLeft:      topLeft,
+        bottomRight:  bottomRight,
     }
+    neededHeight := func() int { return len(s.text) }
+    availableSpace := func() geometry.Rect { return geometry.NewRect(s.topLeft.X+2, s.topLeft.Y+2, s.bottomRight.X-2, s.bottomRight.Y-2) }
+    s.ScrollingContent = NewScrollingContentWithFunctions(neededHeight, availableSpace)
+    return s
 }
 
 func (r *ScrollableTextWindow) SetText(text []string) {
@@ -137,31 +130,19 @@ func (r *ScrollableTextWindow) SetTextColor(color color.Color) {
 }
 
 func (r *ScrollableTextWindow) ActionUp() {
-    r.scrollOffset--
-    if r.scrollOffset < 0 {
-        r.scrollOffset = 0
-    }
+    r.ScrollUp(1)
 }
 
 func (r *ScrollableTextWindow) ActionDown() {
-    r.scrollOffset++
-    if r.scrollOffset > len(r.text)-(r.bottomRight.Y-r.topLeft.Y)+4 {
-        r.scrollOffset = len(r.text) - (r.bottomRight.Y - r.topLeft.Y) + 4
-    }
+    r.ScrollDown(1)
 }
 
-func (r *ScrollableTextWindow) CanScroll() bool {
-    return len(r.text) > (r.bottomRight.Y-r.topLeft.Y)-4
-}
 func (r *ScrollableTextWindow) Draw(screen *ebiten.Image) {
     brForBorder := r.bottomRight
-    if r.CanScroll() {
-        brForBorder.X += 1
-    }
     r.gridRenderer.DrawFilledBorder(screen, r.topLeft, brForBorder, r.title)
     for y := r.topLeft.Y + 2; y < r.bottomRight.Y-2; y++ {
-        for x := r.topLeft.X + 2; x < r.bottomRight.X-2; x++ {
-            currentLine := r.text[y-r.topLeft.Y-2+r.scrollOffset]
+        for x := r.topLeft.X + 2; x <= r.bottomRight.X-2; x++ {
+            currentLine := r.text[r.getLineFromScreenLine(y)]
             horizontalIndex := x - r.topLeft.X - 2
             asRunes := []rune(currentLine)
             if horizontalIndex >= len(asRunes) {
@@ -171,14 +152,7 @@ func (r *ScrollableTextWindow) Draw(screen *ebiten.Image) {
             r.gridRenderer.DrawColoredChar(screen, x, y, currentChar, r.textColor)
         }
     }
-    if r.CanScroll() {
-        if r.scrollOffset > 0 {
-            r.gridRenderer.DrawOnSmallGrid(screen, r.bottomRight.X-1, r.topLeft.Y+2, r.upIndicator)
-        }
-        if r.scrollOffset < len(r.text)-(r.bottomRight.Y-r.topLeft.Y)+4 {
-            r.gridRenderer.DrawOnSmallGrid(screen, r.bottomRight.X-1, r.bottomRight.Y-3, r.downIndicator)
-        }
-    }
+    r.drawScrollIndicators(r.gridRenderer, screen)
 }
 
 func (r *ScrollableTextWindow) SetTitle(name string) {

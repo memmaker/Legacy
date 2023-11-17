@@ -561,10 +561,15 @@ func (p *Party) vehicleMovement(movement geometry.Point) {
         return
     }
     destPosition := p.currentVehicle.Pos().Add(movement)
-    // TODO: check if allowed..
-    p.gridMap.MoveObject(p.currentVehicle, destPosition)
-    for _, member := range p.members {
-        member.SetPos(p.currentVehicle.Pos())
+    if !p.gridMap.Contains(destPosition) {
+        return
+    }
+    destCell := p.gridMap.GetCell(destPosition)
+    if p.currentVehicle.CanMoveTo(destCell) {
+        p.gridMap.MoveObject(p.currentVehicle, destPosition)
+        for _, member := range p.members {
+            member.SetPos(p.currentVehicle.Pos())
+        }
     }
 }
 
@@ -646,6 +651,10 @@ func (p *Party) UsedKey(key string) {
 func (p *Party) HasUsedKey(key string) bool {
     _, exists := p.usedKeys[key]
     return exists
+}
+
+func (p *Party) CanSee(pos geometry.Point) bool {
+    return p.fov.Visible(pos)
 }
 func moneyFormat(value int) string {
     return strconv.Itoa(value) + "g"

@@ -1,0 +1,26 @@
+%rec: Details
+
+Name: Slim Jake
+Health: 12
+Description: He is covered in green goo.
+
+%rec: Inventory
+
+Item: namedWeapon(slime whisperer)
+
+%rec: Conversation
+
+Key: _opening
+AddsKeyword: bye
+Text:
++ "You need a slime =tranquilizer=? I can sell you one for 10 gold."
+
+Key: bye
+Effect: quits
+Text: "Goodbye!"
+
+Key: tranquilizer
+Condition: !isFlagSet('slime_tranquilizer')
+Effect: giveItem(slime whisperer)
+Effect: setFlag(slime_tranquilizer)
+Text: "Here you go, enjoy!"

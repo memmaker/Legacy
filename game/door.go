@@ -167,6 +167,7 @@ func (d *Door) IsTransparent() bool {
 
 func (d *Door) GetContextActions(engine Engine) []util.MenuItem {
     actions := d.BaseObject.GetContextActions(engine, d)
+    party := engine.GetParty()
     if !d.isBroken {
         actions = append(actions, util.MenuItem{
             Text: "Listen",
@@ -192,7 +193,36 @@ func (d *Door) GetContextActions(engine Engine) []util.MenuItem {
                 }
             },
         })
+        if !d.isLocked && d.key != "" && party.HasKey(d.key) {
+            actions = append(actions, util.MenuItem{
+                Text: "Lock",
+                Action: func() {
+                    if !d.isLocked && d.key != "" && party.HasKey(d.key) {
+                        d.isLocked = true
+                        party.UsedKey(d.key)
+                        engine.Print("You locked the door.")
+                    }
+                },
+            })
+        }
+        if !d.isLocked && d.key != "" && party.GetLockpicks() > 0 {
+            actions = append(actions, util.MenuItem{
+                Text: "Lock (lockpick)",
+                Action: func() {
+                    if !d.isLocked && d.key != "" && party.GetLockpicks() > 0 {
+                        if rand.Float64() > d.lockStrength {
+                            d.isLocked = true
+                            engine.Print("You locked the door.")
+                        } else {
+                            engine.Print("Your lockpick broke.")
+                            engine.RemoveLockpick()
+                        }
+                    }
+                },
+            })
+        }
     }
+
     if d.isLocked && !d.isMagicallyLocked && !d.isBroken {
         actions = append(actions, util.MenuItem{
             Text: "Break",
@@ -232,7 +262,6 @@ func (d *Door) GetContextActions(engine Engine) []util.MenuItem {
                 },
             })
         }
-        party := engine.GetParty()
         if party.HasKey(d.key) {
             actions = append(actions, util.MenuItem{
                 Text: "Unlock",

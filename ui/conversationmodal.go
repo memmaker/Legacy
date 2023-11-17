@@ -13,6 +13,7 @@ type Menu interface {
     OnMouseMoved(x int, y int) (bool, Tooltip)
     OnMouseClicked(x int, y int) bool
     ShouldClose() bool
+    OnMouseWheel(x int, y int, dy float64) bool
 }
 
 type ConversationModal struct {
@@ -27,6 +28,9 @@ type ConversationModal struct {
 }
 
 func (c *ConversationModal) OnMouseWheel(x int, y int, dy float64) bool {
+    if c.responseInput != nil {
+        return c.responseInput.OnMouseWheel(x, y, dy)
+    }
     return false
 }
 
@@ -94,7 +98,7 @@ func (c *ConversationModal) SetText(text [][]string) {
     }
     c.reachedLastPage = false
     c.textWindow.SetFixedText(text)
-    c.textWindow.PositionAtY(3)
+    c.textWindow.PositionAtY(2)
 }
 
 func (c *ConversationModal) SetOptions(items []util.MenuItem) {
@@ -103,7 +107,7 @@ func (c *ConversationModal) SetOptions(items []util.MenuItem) {
         return
     }
     c.shouldClose = false
-    c.responseInput = NewGridDialogueMenu(c.gridRenderer, geometry.Point{X: 3, Y: 13}, items)
+    c.responseInput = NewGridDialogueMenu(c.gridRenderer, geometry.Point{X: 2, Y: 12}, items)
 }
 func (c *ConversationModal) SetVendorOptions(items []util.MenuItem) {
     c.closeOnCancel = true

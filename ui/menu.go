@@ -10,12 +10,12 @@ import (
 )
 
 type GridMenu struct {
+    ScrollingContent
     topLeft          geometry.Point
     menuItems        []util.MenuItem
     gridRenderer     *renderer.DualGridRenderer
     bottomRight      geometry.Point
     currentSelection int
-    scrollOffset     int
 
     shouldClose        bool
     autoCloseOnConfirm bool
@@ -23,16 +23,11 @@ type GridMenu struct {
     lastAction    func()
     title         string
     drawCharIcons bool
-
-    upIndicator   int32
-    downIndicator int32
 }
 
 func (g *GridMenu) OnMouseWheel(x int, y int, dy float64) bool {
-    if dy < 0 {
-        g.ActionUp()
-    } else {
-        g.ActionDown()
+    if g.ScrollingContent.OnMouseWheel(x, y, dy) {
+        g.OnMouseMoved(x, y)
     }
     return true
 }
@@ -84,7 +79,7 @@ func (g *GridMenu) GetLastAction() func() {
 }
 
 func (g *GridMenu) OnMouseMoved(x int, y int) (bool, Tooltip) {
-    relativeLine := y - g.topLeft.Y - 1
+    relativeLine := g.getLineFromScreenLine(y)
     if relativeLine < 0 || relativeLine >= len(g.menuItems) {
         return false, NoTooltip{}
     }
@@ -92,11 +87,14 @@ func (g *GridMenu) OnMouseMoved(x int, y int) (bool, Tooltip) {
         return false, NoTooltip{}
     }
     g.currentSelection = relativeLine
+    if len(g.menuItems[g.currentSelection].TooltipText) > 0 {
+        return true, NewTextTooltip(g.gridRenderer, g.menuItems[g.currentSelection].TooltipText, geometry.Point{X: x, Y: y})
+    }
     return true, NoTooltip{}
 }
 
 func (g *GridMenu) OnMouseClicked(x int, y int) bool {
-    relativeLine := y - g.topLeft.Y - 1
+    relativeLine := g.getLineFromScreenLine(y)
     if relativeLine < 0 || relativeLine >= len(g.menuItems) {
         return false
     }
@@ -124,50 +122,33 @@ func (g *GridMenu) ActionUp() {
     g.currentSelection--
     if g.currentSelection < 0 {
         g.currentSelection = len(g.menuItems) - 1
-        if g.NeedsScrolling() {
-            g.scrollOffset = len(g.menuItems) - 13
-        }
+        g.ScrollToBottom()
         return
-    } else if g.currentSelection < g.scrollOffset {
-        g.scrollOffset--
     }
+    g.MakeIndexVisible(g.currentSelection)
 }
 
 func (g *GridMenu) ActionDown() {
     g.currentSelection++
     if g.currentSelection >= len(g.menuItems) {
         g.currentSelection = 0
-        g.scrollOffset = 0
-    } else if g.currentSelection >= g.scrollOffset+13 {
-        g.scrollOffset++
+        g.ScrollToTop()
     }
+    g.MakeIndexVisible(g.currentSelection)
 }
 
-func (g *GridMenu) NeedsScrolling() bool {
-    return len(g.menuItems) > 13
-}
-func (g *GridMenu) CanScrollUp() bool {
-    if !g.NeedsScrolling() {
-        return false
-    }
-    return g.scrollOffset > 0
-}
-func (g *GridMenu) CanScrollDown() bool {
-    if !g.NeedsScrolling() {
-        return false
-    }
-    return g.scrollOffset < len(g.menuItems)-13
-}
 func NewGridMenu(gridRenderer *renderer.DualGridRenderer, menuItems []util.MenuItem) *GridMenu {
     topLeft, bottomRight := positionGridMenu(gridRenderer, menuItems, "")
-    return &GridMenu{
-        gridRenderer:  gridRenderer,
-        topLeft:       topLeft,
-        bottomRight:   bottomRight,
-        menuItems:     menuItems,
-        downIndicator: 5,
-        upIndicator:   6,
+    g := &GridMenu{
+        gridRenderer: gridRenderer,
+        topLeft:      topLeft,
+        bottomRight:  bottomRight,
+        menuItems:    menuItems,
     }
+    neededHeight := func() int { return len(menuItems) }
+    availableSpace := func() geometry.Rect { return geometry.NewRect(g.topLeft.X+1, g.topLeft.Y+1, g.bottomRight.X-1, g.bottomRight.Y-1) }
+    g.ScrollingContent = NewScrollingContentWithFunctions(neededHeight, availableSpace)
+    return g
 }
 
 func positionGridMenu(gridRenderer *renderer.DualGridRenderer, menuItems []util.MenuItem, title string) (geometry.Point, geometry.Point) {
@@ -192,14 +173,16 @@ func NewGridMenuAtY(gridRenderer *renderer.DualGridRenderer, menuItems []util.Me
         Y: yOffset,
     }
     bottomRight := geometry.Point{X: topLeft.X + width, Y: topLeft.Y + height}
-    return &GridMenu{
-        gridRenderer:  gridRenderer,
-        topLeft:       topLeft,
-        bottomRight:   bottomRight,
-        menuItems:     menuItems,
-        downIndicator: 5,
-        upIndicator:   6,
+    g := &GridMenu{
+        gridRenderer: gridRenderer,
+        topLeft:      topLeft,
+        bottomRight:  bottomRight,
+        menuItems:    menuItems,
     }
+    neededHeight := func() int { return len(menuItems) }
+    availableSpace := func() geometry.Rect { return geometry.NewRect(g.topLeft.X+1, g.topLeft.Y+1, g.bottomRight.X-1, g.bottomRight.Y-1) }
+    g.ScrollingContent = NewScrollingContentWithFunctions(neededHeight, availableSpace)
+    return g
 }
 func (g *GridMenu) SetAutoClose() {
     g.autoCloseOnConfirm = true
@@ -207,35 +190,27 @@ func (g *GridMenu) SetAutoClose() {
 func (g *GridMenu) Draw(screen *ebiten.Image) {
     var textColor color.Color
     g.gridRenderer.DrawFilledBorder(screen, g.topLeft, g.bottomRight, g.title)
-    itemCount := min(len(g.menuItems), 13)
-    for i := g.scrollOffset; i < g.scrollOffset+itemCount; i++ {
-        item := g.menuItems[i]
+    for y := g.topLeft.Y + 1; y < g.bottomRight.Y-1; y++ {
+        relativeItemOffset := g.getLineFromScreenLine(y)
+        if relativeItemOffset >= len(g.menuItems) {
+            break
+        }
+        item := g.menuItems[relativeItemOffset]
         textColor = color.White
-        if i == g.currentSelection {
+        if relativeItemOffset == g.currentSelection {
             textColor = ega.BrightGreen
         } else if item.TextColor != nil {
             textColor = item.TextColor
         }
-        drawOffset := i - g.scrollOffset
+        xPos := g.topLeft.X + 1
         if item.CharIcon > 0 {
-            g.gridRenderer.DrawOnSmallGrid(screen, g.topLeft.X+1, g.topLeft.Y+1+drawOffset, item.CharIcon)
-            g.gridRenderer.DrawColoredString(screen, g.topLeft.X+2, g.topLeft.Y+1+drawOffset, item.Text, textColor)
+            g.gridRenderer.DrawOnSmallGrid(screen, xPos, y, item.CharIcon)
+            g.gridRenderer.DrawColoredString(screen, xPos+1, y, item.Text, textColor)
         } else {
-            g.gridRenderer.DrawColoredString(screen, g.topLeft.X+1, g.topLeft.Y+1+drawOffset, item.Text, textColor)
+            g.gridRenderer.DrawColoredString(screen, xPos, y, item.Text, textColor)
         }
     }
-    g.drawScrollIndicators(screen)
-}
-
-func (g *GridMenu) drawScrollIndicators(screen *ebiten.Image) {
-    if g.NeedsScrolling() {
-        if g.CanScrollUp() {
-            g.gridRenderer.DrawOnSmallGrid(screen, g.bottomRight.X-2, g.topLeft.Y+2, g.upIndicator)
-        }
-        if g.CanScrollDown() {
-            g.gridRenderer.DrawOnSmallGrid(screen, g.bottomRight.X-2, g.bottomRight.Y-3, g.downIndicator)
-        }
-    }
+    g.drawScrollIndicators(g.gridRenderer, screen)
 }
 
 func (g *GridMenu) SetTitle(title string) {

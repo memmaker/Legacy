@@ -1,0 +1,23 @@
+%rec: Details
+
+Name: Banksy
+Health: 10
+Torso: armor(chainmail, torso, 4)
+Head: armor(mail coif, head, 2)
+Description: He clearly wants to sell you something..
+
+%rec: Inventory
+
+Item: key(bank key, tauci_bank, 4)
+
+%rec: Conversation
+
+Key: _opening
+Text: "Look at my fine =offers=! I have the best financial products in the whole country!"
+
+Key: offers
+Text: "I have the best financial products in the whole country!"
+
+Key: wares
+Effect: sells
+Text: "Would you like to buy some of my fine armors?"

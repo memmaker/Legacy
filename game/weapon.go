@@ -12,14 +12,15 @@ type WeaponType string
 
 const (
     WeaponTypeSword      WeaponType = "sword"
+    WeaponTypeShield     WeaponType = "shield"
     WeaponTypeGreatSword WeaponType = "great sword"
     WeaponTypeSpear      WeaponType = "spear"
     WeaponTypeStaff      WeaponType = "staff"
     WeaponTypeMace       WeaponType = "mace"
     WeaponTypeDagger     WeaponType = "dagger"
-
-    WeaponTypeBow      WeaponType = "bow"
-    WeaponTypeCrossbow WeaponType = "crossbow"
+    WeaponTypeAxe        WeaponType = "axe"
+    WeaponTypeBow        WeaponType = "bow"
+    WeaponTypeCrossbow   WeaponType = "crossbow"
 )
 
 func GetAllWeaponTypes() []WeaponType {
@@ -27,27 +28,76 @@ func GetAllWeaponTypes() []WeaponType {
         WeaponTypeSword,
         WeaponTypeGreatSword,
         WeaponTypeSpear,
+        WeaponTypeShield,
         WeaponTypeStaff,
+        WeaponTypeMace,
+        WeaponTypeAxe,
         WeaponTypeDagger,
         WeaponTypeBow,
         WeaponTypeCrossbow,
     }
 }
 
-type Weapon struct {
-    BaseItem
-    wearer      ItemWearer
-    isTwoHanded bool
-    weaponType  WeaponType
-    material    WeaponMaterial
-    level       ItemTier
+type OnHitEffect struct {
+    condition    func(engine Engine, weapon *Weapon, attacker, victim *Actor) bool
+    apply        func(engine Engine, weapon *Weapon, attacker, victim *Actor)
+    toolTipLeft  string
+    toolTipRight string
 }
 
+func (e OnHitEffect) toolTipDescription() util.TableRow {
+    return util.TableRow{Label: " " + e.toolTipLeft, Columns: []string{e.toolTipRight}}
+}
+
+func NewOnHitEffect(name string) OnHitEffect {
+    effect := OnHitEffect{}
+    switch name {
+    case "slime whisperer":
+        effect.condition = func(engine Engine, weapon *Weapon, attacker, victim *Actor) bool {
+            return victim.GetCombatFaction() == "slime"
+        }
+        effect.apply = func(engine Engine, weapon *Weapon, attacker, victim *Actor) {
+            victim.AddStatusEffect(StatusEffectSleeping, 5)
+        }
+        effect.toolTipLeft = "slime"
+        effect.toolTipRight = "sleeping (100%)"
+    }
+    return effect
+}
+
+type Weapon struct {
+    BaseItem
+    wearer         ItemWearer
+    isTwoHanded    bool
+    weaponType     WeaponType
+    material       WeaponMaterial
+    level          ItemTier
+    onHitEffects   []OnHitEffect
+    useFixedDamage bool
+    fixedDamage    int
+}
+
+func (a *Weapon) AddOnHitEffect(effect OnHitEffect) {
+    a.onHitEffects = append(a.onHitEffects, effect)
+}
+
+func (a *Weapon) AddOnHitEffectByName(effectName string) {
+    a.AddOnHitEffect(NewOnHitEffect(effectName))
+}
 func (a *Weapon) GetTooltipLines() []string {
     rows := []util.TableRow{
         {"Level", []string{string(a.level)}},
+        {"Type", []string{string(a.weaponType)}},
+        {"Material", []string{string(a.material)}},
         {"Damage", []string{fmt.Sprintf("%d", a.GetBaseDamage())}},
         {"Value", []string{fmt.Sprintf("%dg", a.GetValue())}},
+    }
+    if len(a.onHitEffects) > 0 {
+        rows = append(rows, util.TableRow{})
+        rows = append(rows, util.TableRow{Label: "On Hit", Columns: []string{}})
+        for _, effect := range a.onHitEffects {
+            rows = append(rows, effect.toolTipDescription())
+        }
     }
     return util.TableLayout(rows)
 }
@@ -84,10 +134,44 @@ func (a *Weapon) GetWearer() ItemWearer {
     return a.wearer
 }
 func (a *Weapon) GetValue() int {
-    damageValue := max(a.GetBaseDamage(), 10)
-    return damageValue * 10
+    levelMultiplier := a.level.Multiplier()
+    materialMultiplier := a.materialMultiplier(a.material)
+    var baseValue int
+    switch a.weaponType {
+    case WeaponTypeGreatSword:
+        baseValue = 10000
+    case WeaponTypeSword:
+        baseValue = 5000
+    case WeaponTypeShield:
+        baseValue = 2000
+    case WeaponTypeSpear:
+        baseValue = 900
+    case WeaponTypeStaff:
+        baseValue = 200
+    case WeaponTypeMace:
+        baseValue = 800
+    case WeaponTypeAxe:
+        baseValue = 500
+    case WeaponTypeDagger:
+        baseValue = 400
+    case WeaponTypeBow:
+        baseValue = 1000
+    case WeaponTypeCrossbow:
+        baseValue = 4000
+    }
+    return int(float64(baseValue) * (levelMultiplier * materialMultiplier))
+}
+
+func (a *Weapon) Name() string {
+    if a.name != "" {
+        return a.name
+    }
+    return fmt.Sprintf("%s %s", a.material, a.weaponType)
 }
 func (a *Weapon) Icon(u uint64) int32 {
+    if a.weaponType == WeaponTypeBow || a.weaponType == WeaponTypeCrossbow {
+        return int32(223)
+    }
     return int32(220)
 }
 func (a *Weapon) GetContextActions(engine Engine) []util.MenuItem {
@@ -188,27 +272,9 @@ func getRandomMaterial(lootLevel int) WeaponMaterial {
     return WeaponMaterialIron
 }
 func getRandomWeaponType() WeaponType {
-    weaponLevel := rand.Intn(7) + 1
-
-    switch weaponLevel {
-    case 1:
-        return WeaponTypeDagger
-    case 2:
-        return WeaponTypeSword
-    case 3:
-        return WeaponTypeStaff
-    case 4:
-        return WeaponTypeSpear
-    case 5:
-        return WeaponTypeGreatSword
-    case 6:
-        return WeaponTypeMace
-    case 7:
-        return WeaponTypeBow
-    case 8:
-        return WeaponTypeCrossbow
-    }
-    return WeaponTypeDagger
+    allWeaponTypes := GetAllWeaponTypes()
+    randomIndex := rand.Intn(len(allWeaponTypes))
+    return allWeaponTypes[randomIndex]
 }
 
 func NewRandomWeapon(lootLevel int) *Weapon {
@@ -216,6 +282,16 @@ func NewRandomWeapon(lootLevel int) *Weapon {
     material := getRandomMaterial(lootLevel)
     level := tierFromLootLevel(lootLevel)
     return NewWeapon(level, weaponType, material)
+}
+
+func NewRandomWeaponForVendor(lootLevel int) *Weapon {
+    weaponType := getRandomWeaponType()
+    material := getRandomMaterial(lootLevel)
+    level := "common"
+    if lootLevel > 1 {
+        level = "uncommon"
+    }
+    return NewWeapon(ItemTier(level), weaponType, material)
 }
 
 func (a *Weapon) IsRanged() bool {
@@ -226,43 +302,48 @@ func (a *Weapon) Encode() string {
 }
 
 func (a *Weapon) GetBaseDamage() int {
-    return int(float64(a.damageByType(a.weaponType, a.level)) * a.materialMultiplier(a.material, a.level))
+    if a.useFixedDamage {
+        return a.fixedDamage
+    }
+    return int(float64(a.damageByType(a.weaponType, a.level)) * a.materialMultiplier(a.material))
 }
 
 func (a *Weapon) damageByType(weaponType WeaponType, level ItemTier) int {
     switch weaponType {
     case WeaponTypeDagger:
-        return int(float64(12) * level.Multiplier())
+        return int(float64(17) * level.Multiplier())
     case WeaponTypeSword:
-        return int(float64(15) * level.Multiplier())
+        return int(float64(19) * level.Multiplier())
     case WeaponTypeStaff:
-        return int(float64(8) * level.Multiplier())
+        return int(float64(15) * level.Multiplier())
     case WeaponTypeMace:
-        return int(float64(13) * level.Multiplier())
+        return int(float64(17) * level.Multiplier())
     case WeaponTypeSpear:
         return int(float64(18) * level.Multiplier())
     case WeaponTypeGreatSword:
-        return int(float64(25) * level.Multiplier())
+        return int(float64(20) * level.Multiplier())
     case WeaponTypeBow:
-        return int(float64(12) * level.Multiplier())
+        return int(float64(15) * level.Multiplier())
     case WeaponTypeCrossbow:
         return int(float64(17) * level.Multiplier())
     }
     return 1
 }
 
-func (a *Weapon) materialMultiplier(material WeaponMaterial, level ItemTier) float64 {
+func (a *Weapon) materialMultiplier(material WeaponMaterial) float64 {
     switch material {
     case WeaponMaterialIron:
-        return 0.75 * level.Multiplier()
+        return 0.75
     case WeaponMaterialBronze:
-        return float64(1) * level.Multiplier()
+        return float64(1)
     case WeaponMaterialSteel:
-        return 1.1 * level.Multiplier()
+        return 1.1
+    case WeaponMaterialGold:
+        return 1.25
     case WeaponMaterialDiamond:
-        return 1.5 * level.Multiplier()
+        return 1.5
     case WeaponMaterialObsidian:
-        return float64(3) * level.Multiplier()
+        return float64(3)
     }
     return 1
 }
@@ -273,6 +354,28 @@ func (a *Weapon) IsHeldByPlayer(engine Engine) bool {
     }
     return engine.IsPlayerControlled(a.GetHolder())
 }
+
+// goal:
+// we want a weapon, that has a 100% chance to apply the sleeping status effect
+// to a creature, if the combat faction is set to "slime"
+// onHit:
+func (a *Weapon) OnHitProc(engine Engine, attacker, victim *Actor) {
+    for _, effect := range a.onHitEffects {
+        if effect.condition(engine, a, attacker, victim) {
+            effect.apply(engine, a, attacker, victim)
+        }
+    }
+}
+
+func (a *Weapon) SetFixedDamage(newValue int) {
+    a.useFixedDamage = true
+    a.fixedDamage = newValue
+}
+
+func (a *Weapon) IsDagger() bool {
+    return a.weaponType == WeaponTypeDagger
+}
+
 func NewWeaponFromPredicate(encoded recfile.StringPredicate) *Weapon {
     weapon := NewWeapon(
         ItemTier(encoded.GetString(0)),
@@ -285,13 +388,25 @@ func NewWeaponFromPredicate(encoded recfile.StringPredicate) *Weapon {
     return weapon
 }
 func NewWeapon(level ItemTier, weaponType WeaponType, material WeaponMaterial) *Weapon {
-    weaponName := fmt.Sprintf("%s %s", material, weaponType)
     return &Weapon{
         weaponType: weaponType,
         material:   material,
         BaseItem: BaseItem{
-            name: weaponName,
+            name: "",
         },
         level: level,
     }
+}
+
+func NewNamedWeapon(weaponName string) *Weapon {
+    switch weaponName {
+    case "slime whisperer":
+        weapon := NewWeapon(ItemTierCommon, WeaponTypeBow, WeaponMaterialIron)
+        weapon.SetFixedDamage(0)
+        weapon.SetName("slime whisperer")
+        weapon.AddOnHitEffectByName("slime whisperer")
+        return weapon
+    }
+    println("ERR: unknown weapon name:", weaponName)
+    return nil
 }

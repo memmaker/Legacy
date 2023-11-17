@@ -151,7 +151,13 @@ func NewItemFromString(encoded string) Item {
     case "candle":
         return NewCandle(false)
     case "scroll":
-        return NewScrollFromPredicate(predicate)
+        scroll := NewScrollFromPredicate(predicate)
+        scroll.SetAutoLayoutText(true)
+        return scroll
+    case "fixedScroll":
+        scroll := NewScrollFromPredicate(predicate)
+        scroll.SetAutoLayoutText(false)
+        return scroll
     case "armor":
         return NewArmorFromPredicate(predicate)
     case "noitem":
@@ -160,6 +166,8 @@ func NewItemFromString(encoded string) Item {
         return NewFlavorItemFromPredicate(predicate)
     case "weapon":
         return NewWeaponFromPredicate(predicate)
+    case "namedWeapon":
+        return NewNamedWeapon(predicate.GetString(0))
     case "tool":
         return NewToolFromPredicate(predicate)
     }

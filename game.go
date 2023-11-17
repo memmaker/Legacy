@@ -18,6 +18,15 @@ func (g *GridEngine) openPartyMenu() {
         {
             Text:   "Search",
             Action: g.searchForHiddenObjects,
+            TooltipText: []string{
+                "Search for hidden objects.",
+                "",
+                " This will reveal secret doors,",
+                " hidden items and hidden actors in",
+                " an area of 3x3 cells around you.",
+                "",
+                "Shortcut: [S]",
+            },
         },
         {
             Text:   "Inventory",
@@ -72,7 +81,7 @@ func (g *GridEngine) openPartyMenu() {
             Action: g.openDismissMenu,
         })
     }
-
+    g.CloseAllModals()
     g.OpenMenu(partyOptions)
 }
 
@@ -205,8 +214,15 @@ func (g *GridEngine) showScrollText(text []string, textcolor color.Color, autola
 }
 
 func (g *GridEngine) PickPocketItem(item game.Item, owner *game.Actor) {
-    owner.RemoveItem(item)
-    g.takeItem(item)
+    if owner.RemoveItem(item) {
+        g.takeItem(item)
+    }
+}
+
+func (g *GridEngine) PlantItem(item game.Item, newOwner *game.Actor) {
+    if g.playerParty.RemoveItem(item) {
+        newOwner.AddItem(item)
+    }
 }
 
 func (g *GridEngine) PickUpItem(item game.Item) {
@@ -348,7 +364,7 @@ func (g *GridEngine) openTrainerMenu(npc *game.Actor, maxLevel int) {
     }
 
     if len(eligibleMembers) == 0 {
-        g.conversationModal.SetText(oneLine("No member of your party can be trained here."))
+        g.conversationModal.SetText(oneLine("No one is eligible."))
         g.conversationModal.SetVendorOptions(nil)
         return
     }
@@ -431,15 +447,13 @@ func (g *GridEngine) TryRestParty() {
     if g.playerParty.TryRest() {
         g.AdvanceWorldTimeWithMessage(0, 8, 0)
         time := g.GetWorldTime()
-        pages := g.gridRenderer.AutolayoutArrayToIconPages(5, []string{
+        g.ShowFixedFormatText([]string{
             "You have eaten some food",
             "and rested the night.",
             "Your party has been healed.",
             "It is now:",
             time.GetTimeAndDate(),
         })
-        window := g.openIconWindow(g.GetAvatar().Icon(0), pages, func() {})
-        window.SetAutoCloseOnConfirm()
     } else {
         g.Print("Not enough food to rest.")
     }
@@ -558,11 +572,10 @@ func (g *GridEngine) CreateLootForContainer(level int, lootType []game.Loot) []g
             lootItems = g.createPotions(potionAmount)
         case game.LootArmor:
             armorAmount := max(1, int(float64(level)*randFloat))
-            lootItems = g.createArmor(level, armorAmount)
+            lootItems = g.createArmorForLoot(level, armorAmount)
         case game.LootWeapon:
             weaponAmount := max(1, int(float64(level)*randFloat))
-            lootItems = g.createWeapons(level, weaponAmount)
-
+            lootItems = g.createWeaponsForLoot(level, weaponAmount)
         }
         lootFound = append(lootFound, lootItems...)
     }

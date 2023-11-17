@@ -11,30 +11,21 @@ import (
 
 func (g *GridEngine) openSpeechWindow(npc *game.Actor) {
     toJournal := func(text []string) {
-        g.addToJournal(npc, text)
+        g.addToJournal(npc.Name(), text)
     }
     g.conversationModal = ui.NewConversationModal(g.gridRenderer, toJournal)
     g.conversationModal.SetIcon(npc.Icon(0))
     g.conversationModal.SetTitle(npc.Name())
 }
 
-func (g *GridEngine) openIconWindow(icon int32, textPages [][]string, onLastPage func()) *ui.MultiPageWindow {
-    if len(textPages) == 0 {
-        return nil
-    }
-    multipageWindow := ui.NewMultiPageWindow(g.gridRenderer)
-    multipageWindow.InitWithFixedText(textPages)
-    multipageWindow.SetOnLastPage(onLastPage)
-    multipageWindow.SetIcon(icon)
-    multipageWindow.PositionAtY(3)
-    g.PushModal(multipageWindow)
-    return multipageWindow
-}
-
 func (g *GridEngine) StartConversation(npc *game.Actor, loadedDialogue *game.Dialogue) {
     // NOTE: Conversations can have a line length of 27 chars
     if !npc.IsAlive() {
         g.Print(fmt.Sprintf("%s is dead.", npc.Name()))
+        return
+    }
+    if npc.IsSleeping() {
+        g.Print(fmt.Sprintf("%s is sleeping.", npc.Name()))
         return
     }
     if loadedDialogue == nil {
@@ -50,30 +41,19 @@ func (g *GridEngine) StartConversation(npc *game.Actor, loadedDialogue *game.Dia
     startedConversationFlag := fmt.Sprintf("talked_to_%s", npc.GetInternalName())
     g.flags.IncrementFlag(startedConversationFlag)
 
-    g.handleDialogueChoice(loadedDialogue, firstNode, npc)
+    response := loadedDialogue.GetResponseAndAddKnowledge(g.playerKnowledge, firstNode)
+    g.handleDialogueChoice(loadedDialogue, response, npc)
 }
 
 func (g *GridEngine) ShowMultipleChoiceDialogue(icon int32, text [][]string, choices []util.MenuItem) {
-    g.openIconWindow(icon, text, func() {
-        if len(choices) > 0 {
-            g.openMenuForDialogue(choices)
-        }
-    })
-}
-func (g *GridEngine) openMenuForDialogue(items []util.MenuItem) {
-    // geometry.Point{X: 3, Y: 13},
-    gridMenu := ui.NewGridMenuAtY(g.gridRenderer, items, 13)
-    gridMenu.OnMouseMoved(g.lastMousePosX, g.lastMousePosY)
-    //gridMenu.SetAutoClose()
-    g.PushModal(gridMenu)
-}
-func (g *GridEngine) openMenuForVendor(items []util.MenuItem) *ui.GridMenu {
-    // geometry.Point{X: 3, Y: 13},
-    gridMenu := ui.NewGridMenuAtY(g.gridRenderer, items, 10)
-    gridMenu.SetAutoClose()
-    gridMenu.OnMouseMoved(g.lastMousePosX, g.lastMousePosY)
-    g.PushModal(gridMenu)
-    return gridMenu
+    toJournal := func(page []string) {
+        g.addToJournal(g.currentMap.GetDisplayName(), page)
+    }
+    g.conversationModal = ui.NewConversationModal(g.gridRenderer, toJournal)
+    g.conversationModal.SetIcon(icon)
+    g.conversationModal.SetText(text)
+    g.conversationModal.SetOptions(choices)
+    g.conversationModal.OnMouseMoved(g.lastMousePosX, g.lastMousePosY)
 }
 
 func (g *GridEngine) toMenuItems(npc *game.Actor, dialogue *game.Dialogue, options []string) []util.MenuItem {
@@ -87,7 +67,8 @@ func (g *GridEngine) toMenuItems(npc *game.Actor, dialogue *game.Dialogue, optio
         items = append(items, util.MenuItem{
             Text: option,
             Action: func() {
-                g.handleDialogueChoice(dialogue, option, npc)
+                response := dialogue.GetResponseAndAddKnowledge(g.playerKnowledge, option)
+                g.handleDialogueChoice(dialogue, response, npc)
             },
             TextColor: textColor,
         })
@@ -111,18 +92,18 @@ func (g *GridEngine) toForcedMenuItems(npc *game.Actor, dialogue *game.Dialogue,
                 if transitionTarget == "" {
                     println("ERR: No transition target for choice", choice.Text)
                 }
-                g.handleDialogueChoice(dialogue, transitionTarget, npc)
+                response := dialogue.GetResponseAndAddKnowledge(g.playerKnowledge, transitionTarget)
+                g.handleDialogueChoice(dialogue, response, npc)
             },
         })
     }
     return items
 }
 
-func (g *GridEngine) handleDialogueChoice(dialogue *game.Dialogue, followUp string, npc *game.Actor) {
+func (g *GridEngine) handleDialogueChoice(dialogue *game.Dialogue, response game.ConversationNode, npc *game.Actor) {
     if g.conversationModal == nil {
         g.openSpeechWindow(npc)
     }
-    response := dialogue.GetResponseAndAddKnowledge(g.playerKnowledge, followUp)
 
     flow := ConversationFlowContinue
     var effectCalls []func()
@@ -138,7 +119,11 @@ func (g *GridEngine) handleDialogueChoice(dialogue *game.Dialogue, followUp stri
     if len(effectCalls) > 0 && flow != ConversationFlowEffectAfterLastPage {
         callAll(effectCalls)
     }
-    if flow == ConversationFlowQuit {
+    if flow == ConversationFlowJustQuit {
+        g.conversationModal.SetOnClose(func() {
+            g.closeConversation() // this MUST be the only way to close a conversation
+        })
+    } else if flow == ConversationFlowQuitAfterText {
         g.conversationModal.SetText(response.Text)
         g.conversationModal.SetOptions(nil)
         g.conversationModal.SetOnClose(func() {
@@ -177,14 +162,15 @@ type ConversationFlow int
 const (
     ConversationFlowContinue ConversationFlow = iota
     ConversationFlowVendor
-    ConversationFlowQuit
+    ConversationFlowQuitAfterText
+    ConversationFlowJustQuit
     ConversationFlowEffectAfterLastPage
 )
 
 func (g *GridEngine) handleDialogueEffect(npc *game.Actor, effect string) (func(), ConversationFlow) {
     switch effect {
     case "quits":
-        return nil, ConversationFlowQuit
+        return nil, ConversationFlowQuitAfterText
     case "joins":
         return func() { g.AddToParty(npc) }, ConversationFlowEffectAfterLastPage
     case "sells":
@@ -201,7 +187,7 @@ func (g *GridEngine) handleDialogueEffect(npc *game.Actor, effect string) (func(
         case "trainsToLevel":
             maxLevel := effectPredicate.GetInt(0)
             g.openTrainerMenu(npc, maxLevel)
-            return nil, ConversationFlowQuit
+            return nil, ConversationFlowJustQuit
         case "giveXP":
             amount := effectPredicate.GetInt(0)
             g.AddXP(amount)

@@ -32,27 +32,31 @@ func (g *GridEngine) ActionConfirm() {
 }
 
 func (g *GridEngine) ActionCancel() {
-    /* should each modal decide if it can be closed?
-       if g.IsModalOpen() {
 
-           //g.CloseAllModals()
-           g.PopModal()
-       }
-
-    */
+}
+func (g *GridEngine) isBeingPressedRepeatedly(key ebiten.Key) bool {
+    pressedForTicks := inpututil.KeyPressDuration(key)
+    ticksBetweenMovement := 30
+    if pressedForTicks > 180 {
+        ticksBetweenMovement = 10
+    } else if pressedForTicks > 60 {
+        ticksBetweenMovement = 20
+    }
+    isRepetitionTick := pressedForTicks > 0 && pressedForTicks%ticksBetweenMovement == 0
+    return inpututil.IsKeyJustPressed(key) || (ebiten.IsKeyPressed(key) && isRepetitionTick)
 }
 func (g *GridEngine) handleKeyboardInput(actionReceiver ui.InputReceiver) bool {
 
-    if inpututil.IsKeyJustPressed(ebiten.KeyArrowRight) {
+    if g.isBeingPressedRepeatedly(ebiten.KeyArrowRight) {
         return actionReceiver.OnCommand(ui.PlayerCommandRight)
     }
-    if inpututil.IsKeyJustPressed(ebiten.KeyArrowLeft) {
+    if g.isBeingPressedRepeatedly(ebiten.KeyArrowLeft) {
         return actionReceiver.OnCommand(ui.PlayerCommandLeft)
     }
-    if inpututil.IsKeyJustPressed(ebiten.KeyArrowUp) {
+    if g.isBeingPressedRepeatedly(ebiten.KeyArrowUp) {
         return actionReceiver.OnCommand(ui.PlayerCommandUp)
     }
-    if inpututil.IsKeyJustPressed(ebiten.KeyArrowDown) {
+    if g.isBeingPressedRepeatedly(ebiten.KeyArrowDown) {
         return actionReceiver.OnCommand(ui.PlayerCommandDown)
     }
 
@@ -64,18 +68,6 @@ func (g *GridEngine) handleKeyboardInput(actionReceiver ui.InputReceiver) bool {
         return actionReceiver.OnCommand(ui.PlayerCommandCancel)
     }
 
-    /* TODO: implement mouse wheel
-       _, dy := ebiten.Wheel()
-          //g.wheel += dx
-          g.wheelYVelocity += dy
-          if math.Abs(dy) > 0.1 && g.inputElement != nil {
-              if dy > 0 {
-                  g.inputElement.ActionDown()
-              } else {
-                  g.inputElement.ActionUp()
-              }
-          }
-    */
     return false
 }
 
@@ -110,10 +102,20 @@ func (g *GridEngine) handleMouseInput(actionReceiver ui.InputReceiver, screenX i
 }
 
 func (g *GridEngine) handleMapMouseInput(screenX int, screenY int) {
+    if !g.IsScreenPosInsideMap(screenX, screenY) {
+        return
+    }
     if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
-        if g.IsScreenPosInsideMap(screenX, screenY) {
-            mapPos := g.ScreenToMap(screenX, screenY)
-            g.onMapClicked(mapPos)
+        mapPos := g.ScreenToMap(screenX, screenY)
+        g.onMapClicked(mapPos)
+        return
+    }
+    if g.altIsPressed {
+        mapPos := g.ScreenToMap(screenX, screenY)
+        if g.currentMap.IsActorAt(mapPos) {
+            actor := g.currentMap.ActorAt(mapPos)
+            cellX, cellY := g.gridRenderer.ScreenToSmallCell(screenX, screenY)
+            g.handleTooltipWithDelay(ui.NewTextTooltip(g.gridRenderer, actor.LookDescription(), geometry.Point{X: cellX, Y: cellY}), 0)
         }
     }
 }
@@ -168,7 +170,7 @@ func (g *GridEngine) handleShortcuts() {
     // (J)ournal
     // (M)agic
     // (S)earch
-    // (B)ow
+    // (B)ows
     // (D)ivide party
     // (T)ry to join party
     // (L)og
@@ -188,6 +190,8 @@ func (g *GridEngine) handleShortcuts() {
     // O + 1-4     - Optimize equip for character (1-4)
     // U + 1-4     - Strip gear from character (1-4)
     // F9 - Toggle fullscreen
+    g.altIsPressed = ebiten.IsKeyPressed(ebiten.KeyAlt)
+
     if inpututil.IsKeyJustPressed(ebiten.KeyP) && !g.IsWindowOpen() {
         if g.currentMap.IsItemAt(g.avatar.Pos()) {
             item := g.currentMap.ItemAt(g.avatar.Pos())
@@ -273,7 +277,7 @@ func (g *GridEngine) handleShortcuts() {
                 g.SwitchAvatarTo(nextMember)
                 g.Print(fmt.Sprintf("Switched to %s", nextMember.Name()))
             }
-        } else if ebiten.IsKeyPressed(ebiten.KeyAlt) {
+        } else if g.altIsPressed {
             g.openCharSkills(charIndex)
         } else if ebiten.IsKeyPressed(ebiten.KeyF) {
             g.openCharBuffs(charIndex)

@@ -6,7 +6,7 @@ Description: This person is trying to blend in with the crowd.
 
 %rec: Inventory
 
-Item: scroll(a note,thieves_guild_trials,_no_spell_)
+Item: fixedScroll(a note,thieves_guild_trials,_no_spell_)
 Item: armor(a cloak, torso, 1)
 
 %rec: Conversation

@@ -186,11 +186,11 @@ func (c *CombatState) IsInCombat() bool {
 }
 
 func (c *CombatState) animateMeleeHit(attacker *game.Actor, npc *game.Actor) {
-    doesDamage := c.engine.rules.CalculateHit(attacker, npc)
+    doesHit := c.engine.rules.CalculateMeleeHit(attacker, npc)
     hitPos := npc.Pos()
     icon := int32(194)
     useAtlas := renderer.AtlasEntities
-    if doesDamage {
+    if doesHit {
         icon = int32(104)
         useAtlas = renderer.AtlasWorld
     }
@@ -202,8 +202,8 @@ func (c *CombatState) animateMeleeHit(attacker *game.Actor, npc *game.Actor) {
         TintColor: color.White,
         WhenDone: func() {
             c.hasUsedPrimaryAction[attacker] = true
-            if doesDamage {
-                c.deliverDamage(attacker, npc)
+            if doesHit {
+                c.deliverMeleeDamage(attacker, npc)
             }
         },
     })
@@ -245,7 +245,7 @@ func (c *CombatState) getMovesLeft(actor *game.Actor) int {
 }
 
 func (c *CombatState) canAct(actor *game.Actor) bool {
-    if !actor.IsAlive() {
+    if !actor.IsAlive() || actor.IsSleeping() {
         return false
     }
     actorMovementAllowance := actor.GetMovementAllowance()
@@ -378,8 +378,14 @@ func (c *CombatState) actorDied(actor *game.Actor) {
     c.engine.actorDied(actor)
 }
 
-func (c *CombatState) deliverDamage(attacker, victim *game.Actor) {
-    c.engine.DeliverCombatDamage(attacker, victim)
+func (c *CombatState) deliverMeleeDamage(attacker, victim *game.Actor) {
+    c.engine.DeliverMeleeDamage(attacker, victim)
+    if !victim.IsAlive() {
+        c.actorDied(victim)
+    }
+}
+func (c *CombatState) deliverRangedDamage(attacker, victim *game.Actor) {
+    c.engine.DeliverRangedDamage(attacker, victim)
     if !victim.IsAlive() {
         c.actorDied(victim)
     }
@@ -538,7 +544,7 @@ func (c *CombatState) removeOpponent(actor *game.Actor) {
 }
 
 func (c *CombatState) checkForEndOfCombat() {
-    c.removeDeadOpponents()
+    c.removeDeadAndSleepingOpponents()
     if len(c.opponents) == 0 && len(c.hitAnimations) == 0 && !c.animationRoutine.Running() {
         c.isInCombat = false
         c.engine.ForceJoinParty()
@@ -654,7 +660,7 @@ func (c *CombatState) onRangedHit(attacker, actorHit *game.Actor) {
         if actorHit.IsHidden() {
             actorHit.SetHidden(false)
         }
-        c.deliverDamage(attacker, actorHit)
+        c.deliverRangedDamage(attacker, actorHit)
         if !c.didAlertNearbyActors {
             c.findAlliesOfOpponent(actorHit)
         }
@@ -693,10 +699,14 @@ func (c *CombatState) listOfEnemies() []*game.Actor {
     return enemies
 }
 
-func (c *CombatState) removeDeadOpponents() {
+func (c *CombatState) removeDeadAndSleepingOpponents() {
     for opponent, _ := range c.opponents {
-        if !opponent.IsAlive() {
+        if !opponent.IsAlive() || opponent.IsSleeping() {
             delete(c.opponents, opponent)
         }
     }
+}
+
+func (c *CombatState) IsAITurn() bool {
+    return !c.isPlayerTurn
 }

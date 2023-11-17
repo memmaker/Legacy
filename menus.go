@@ -124,7 +124,6 @@ func (g *GridEngine) ShowDrinkPotionMenu(potion *game.Potion) {
                 if !potion.IsEmpty() {
                     g.DrinkPotion(potion, member)
                 }
-
             },
         })
     }
@@ -134,6 +133,10 @@ func (g *GridEngine) ShowDrinkPotionMenu(potion *game.Potion) {
 func (g *GridEngine) OpenPickpocketMenu(victim *game.Actor) {
     var itemList []util.MenuItem
     items := victim.GetItemsToSteal()
+    if len(items) == 0 {
+        g.ShowText([]string{"Nothing to steal."})
+        return
+    }
     for _, i := range items {
         item := i
         itemList = append(itemList, util.MenuItem{
@@ -144,6 +147,35 @@ func (g *GridEngine) OpenPickpocketMenu(victim *game.Actor) {
                 }
             },
         })
+    }
+    g.OpenMenu(itemList)
+}
+
+func (g *GridEngine) OpenPlantMenu(victim *game.Actor) {
+    var itemList []util.MenuItem
+    items := g.playerParty.GetFilteredStackedInventory(func(item game.Item) bool {
+        return true
+        // until we know better
+        /*
+           _, isArmor := item.(*game.Armor)
+           _, isWeapon := item.(*game.Weapon)
+           return !isArmor && !isWeapon
+        */
+    })
+    if len(items) == 0 {
+        g.ShowText([]string{"You don't have any items to plant."})
+        return
+    }
+    for _, i := range items {
+        itemStack := i
+        firstItem := itemStack[0]
+        itemList = append(itemList, util.MenuItem{
+            Text: firstItem.Name(),
+            Action: func() {
+                g.TryPlantItem(firstItem, victim)
+            },
+        })
+
     }
     g.OpenMenu(itemList)
 }
@@ -173,33 +205,8 @@ func (g *GridEngine) ShowEquipMenu(a game.Equippable) {
 func (g *GridEngine) openDebugMenu() {
     g.OpenMenu([]util.MenuItem{
         {
-            Text: "Toggle NoClip",
-            Action: func() {
-                noClipActive := g.currentMap.ToggleNoClip()
-                g.Print(fmt.Sprintf("DEBUG(No Clip): %t", noClipActive))
-            },
-        },
-        {
             Text:   "Teleport",
             Action: g.openTransportMenu,
-        },
-        {
-            Text: "Damage to Avatar",
-            Action: func() {
-                g.avatar.Damage(10)
-            },
-        },
-        {
-            Text: "Change Name",
-            Action: func() {
-                g.AskUserForString("Now known as: ", 8, func(text string) {
-                    g.GetAvatar().SetName(text)
-                })
-            },
-        },
-        {
-            Text:   "Change Icon",
-            Action: g.ChangeAppearance,
         },
         {
             Text: "impulse 9",
@@ -214,6 +221,20 @@ func (g *GridEngine) openDebugMenu() {
                 g.playerParty.AddItem(game.NewTool(game.ToolTypeShovel, "a shovel"))
                 g.giveAllArmorsAndWeapons()
                 g.Print("DEBUG(impulse 9)")
+            },
+        },
+        {
+            Text: "Toggle NoClip",
+            Action: func() {
+                noClipActive := g.currentMap.ToggleNoClip()
+                g.Print(fmt.Sprintf("DEBUG(No Clip): %t", noClipActive))
+            },
+        },
+
+        {
+            Text: "Damage to Avatar",
+            Action: func() {
+                g.avatar.Damage(10)
             },
         },
         {
@@ -235,14 +256,6 @@ func (g *GridEngine) openDebugMenu() {
             },
         },
         {
-            Text: "Set some flags",
-            Action: func() {
-                g.flags.SetFlag("can_talk_to_ghosts", 1)
-                g.Print("DEBUG(Flags): Set flag \"can_talk_to_ghosts\"")
-            },
-        },
-
-        {
             Text: "Show all Flags",
             Action: func() {
                 g.ShowScrollableText(g.flags.GetDebugInfo(), color.White, false)
@@ -252,19 +265,6 @@ func (g *GridEngine) openDebugMenu() {
             Text: "Show XP Table",
             Action: func() {
                 g.ShowScrollableText(g.rules.GetXPTable(2, 30), color.White, false)
-            },
-        },
-        {
-            Text: "Testing paging",
-            Action: func() {
-                g.openIconWindow(g.GetAvatar().Icon(0), g.gridRenderer.AutolayoutArrayToIconPages(5, []string{
-                    "This is a test for some paging stuff.",
-                    "Thus we're going to write some more text.",
-                    "And even more text. It has to be long enough to fill 3 pages.",
-                    "This is the last page.",
-                    "No, it's not. Please wait for the next page.",
-                    "Damn, this is a lot of text, but we're almost there.",
-                }), func() {})
             },
         },
     })

@@ -21,6 +21,7 @@ const (
     SpecialTileMountain
     SpecialTileWater
     SpecialTileSwamp
+    SpecialTileVoid
     SpecialTileBed
 )
 
@@ -117,6 +118,22 @@ func (t Tile) GetDebrisTile() int32 {
 
 func (t Tile) IsForest() bool {
     return t.Special == SpecialTileForest
+}
+
+func (t Tile) IsWater() bool {
+    return t.Special == SpecialTileWater
+}
+
+func (t Tile) IsLand() bool {
+    return !t.IsWater() && !t.IsVoid()
+}
+
+func (t Tile) IsMountain() bool {
+    return t.Special == SpecialTileMountain
+}
+
+func (t Tile) IsVoid() bool {
+    return t.Special == SpecialTileVoid
 }
 
 type MapCell[ActorType interface {

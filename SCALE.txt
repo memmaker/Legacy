@@ -3,3 +3,22 @@ What is the maximum HP, Mana, Armor and Damage, that is achievable?
 
 What are prices of items and how much money can be acquired?
 Basically, what is the progression curve like?
+
+A normal person would be considered level 1 on the Hero-Scale.
+A normal person would have 10 HP, 2 Armor and 5 Damage.
+A normal person could KO someone with a lucky hit.
+A normal person could probably beat someone down with 4-5 hits.
+
+Starter Weapons would be about 3-8 Damage.
+End-Game Weapons would be about 100-150 Damage.
+Legendary Weapons would be about 150-200 Damage.
+
+Starter Armor would be about 1-3 Armor.
+End-Game Armor would be about 80-100 Armor.
+Legendary Armor would be about 100-120 Armor.
+
+We want the player to have a maximum level of about 20.
+We want the player to need about 500k XP to reach that.
+The HP Should be about 100 at level 20.
+The max armor in the end-game should be about 100.
+The max damage should be about 200.

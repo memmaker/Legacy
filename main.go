@@ -61,6 +61,7 @@ type GridEngine struct {
 
     // Animation
     animationRoutine gocoro.Coroutine
+    movementRoutine  gocoro.Coroutine
 
     // UI
     deviceDPIScale float64
@@ -108,6 +109,7 @@ type GridEngine struct {
     allTransitions          map[string][]NamedLocation
     worldTime               game.WorldTime
     lastInteractionWasMouse bool
+    altIsPressed            bool
 }
 
 func (g *GridEngine) OnMouseWheel(x int, y int, dy float64) bool {
@@ -273,8 +275,11 @@ func (g *GridEngine) ProdActor(prodder *game.Actor, victim *game.Actor) {
     if !g.currentMap.IsCurrentlyPassable(dest) {
         return
     }
-
-    g.currentMap.MoveActor(victim, dest)
+    if victim.IsAlive() {
+        g.currentMap.MoveActor(victim, dest)
+    } else {
+        g.currentMap.MoveDownedActor(victim, dest)
+    }
 }
 
 func (g *GridEngine) FreezeActorAt(pos geometry.Point, turns int) {
@@ -330,12 +335,31 @@ func (g *GridEngine) SpellDamageAt(caster *game.Actor, pos geometry.Point, amoun
         }
     }
 }
-
+func (g *GridEngine) PlayerTriesBackstab(opponent *game.Actor) {
+    if !opponent.IsAlive() {
+        g.Print(fmt.Sprintf("'%s' is already dead.", opponent.Name()))
+        return
+    }
+    chanceToBackstab := 0.5
+    if rand.Float64() < chanceToBackstab {
+        g.kill(opponent)
+    } else {
+        g.Print("Your attack was noticed!")
+        g.PlayerStartsCombat(opponent)
+    }
+}
 func (g *GridEngine) PlayerStartsCombat(opponent *game.Actor) {
+    if !opponent.IsAlive() {
+        g.Print(fmt.Sprintf("'%s' is already dead.", opponent.Name()))
+        return
+    }
     g.combatManager.PlayerStartsMeleeAttack(g.GetAvatar(), opponent)
 }
 
 func (g *GridEngine) EnemyStartsCombat(opponent *game.Actor) {
+    if opponent.IsSleeping() || !opponent.IsAlive() {
+        return
+    }
     g.combatManager.EnemyStartsAttack(opponent, g.GetAvatar())
 }
 
@@ -374,6 +398,7 @@ func main() {
         uiOverlay:            make(map[int]int32),
         mapsInMemory:         make(map[string]*gridmap.GridMap[*game.Actor, game.Item, game.Object]),
         animationRoutine:     gocoro.NewCoroutine(),
+        movementRoutine:      gocoro.NewCoroutine(),
     }
     ebiten.SetWindowTitle(gameTitle)
     ebiten.SetWindowSize(scaledScreenWidth, scaledScreenHeight)
@@ -401,11 +426,15 @@ func (g *GridEngine) OnMouseMoved(x int, y int) (bool, ui.Tooltip) {
 }
 
 func (g *GridEngine) handleTooltip(tooltip ui.Tooltip) {
+    g.handleTooltipWithDelay(tooltip, 0.5)
+}
+
+func (g *GridEngine) handleTooltipWithDelay(tooltip ui.Tooltip, delay float64) {
     if tooltip.IsNull() {
         g.currentTooltip = nil
     } else {
         g.currentTooltip = tooltip
-        g.ticksUntilTooltipAppears = int(ebiten.ActualTPS() * 0.5)
+        g.ticksUntilTooltipAppears = int(ebiten.ActualTPS() * delay)
     }
 }
 
@@ -590,6 +619,21 @@ func (g *GridEngine) TryPickpocketItem(item game.Item, victim *game.Actor) {
     }
 }
 
+func (g *GridEngine) TryPlantItem(item game.Item, victim *game.Actor) {
+    g.flags.IncrementFlag("plant_attempts")
+    chanceOfSuccess := 1.0
+    if rand.Float64() < chanceOfSuccess {
+        g.PlantItem(item, victim)
+
+        g.Print(fmt.Sprintf("You planted \"%s\"", item.Name()))
+        g.flags.IncrementFlag("plant_successes")
+    } else {
+        g.Print(fmt.Sprintf("You were caught planting \"%s\"", item.Name()))
+        // TODO: consequences, encounter depending on the attitude of the victim
+        // and the reputation of the party
+    }
+}
+
 func (g *GridEngine) createPotions(level int) []game.Item {
     var potions []game.Item
     for i := 0; i < level; i++ {
@@ -598,7 +642,14 @@ func (g *GridEngine) createPotions(level int) []game.Item {
     return potions
 }
 
-func (g *GridEngine) createArmor(level, amount int) []game.Item {
+func (g *GridEngine) createArmorForVendor(level, amount int) []game.Item {
+    var armor []game.Item
+    for i := 0; i < amount; i++ {
+        armor = append(armor, game.NewRandomArmorForVendor(level))
+    }
+    return armor
+}
+func (g *GridEngine) createArmorForLoot(level, amount int) []game.Item {
     var armor []game.Item
     for i := 0; i < amount; i++ {
         armor = append(armor, game.NewRandomArmor(level))
@@ -606,7 +657,15 @@ func (g *GridEngine) createArmor(level, amount int) []game.Item {
     return armor
 }
 
-func (g *GridEngine) createWeapons(level int, amount int) []game.Item {
+func (g *GridEngine) createWeaponsForVendor(level int, amount int) []game.Item {
+    var weapons []game.Item
+    for i := 0; i < amount; i++ {
+        weapons = append(weapons, game.NewRandomWeaponForVendor(level))
+    }
+    return weapons
+}
+
+func (g *GridEngine) createWeaponsForLoot(level int, amount int) []game.Item {
     var weapons []game.Item
     for i := 0; i < amount; i++ {
         weapons = append(weapons, game.NewRandomWeapon(level))
@@ -671,9 +730,9 @@ func (g *GridEngine) IsModalOpen() bool {
     return g.modalStack != nil && len(g.modalStack) > 0
 }
 
-func (g *GridEngine) addToJournal(npc *game.Actor, text []string) {
+func (g *GridEngine) addToJournal(source string, text []string) {
     g.Print("Added to journal.")
-    g.playerKnowledge.AddJournalEntry(npc.Name(), text, g.CurrentTick())
+    g.playerKnowledge.AddJournalEntry(source, text, g.CurrentTick())
 }
 
 func (g *GridEngine) openJournal() {
@@ -724,7 +783,7 @@ func (g *GridEngine) openPartyOverView() {
     g.ShowFixedFormatText(g.playerParty.GetPartyOverview())
 }
 
-func (g *GridEngine) DeliverCombatDamage(attacker *game.Actor, victim *game.Actor) {
+func (g *GridEngine) DeliverMeleeDamage(attacker *game.Actor, victim *game.Actor) {
     damage := g.rules.GetMeleeDamage(attacker, victim)
 
     if damage > 0 {
@@ -734,6 +793,21 @@ func (g *GridEngine) DeliverCombatDamage(attacker *game.Actor, victim *game.Acto
         g.Print(fmt.Sprintf("No dmg. to '%s'", victim.Name()))
     }
 
+    // hit procs
+    attacker.OnMeleeHit(g, victim)
+}
+
+func (g *GridEngine) DeliverRangedDamage(attacker *game.Actor, victim *game.Actor) {
+    damage := g.rules.GetRangedDamage(attacker, victim)
+
+    if damage > 0 {
+        victim.Damage(damage)
+        g.Print(fmt.Sprintf("%d dmg. to '%s'", damage, victim.Name()))
+    } else {
+        g.Print(fmt.Sprintf("No dmg. to '%s'", victim.Name()))
+    }
+    // hit procs
+    attacker.OnRangedHit(g, victim)
 }
 
 func (g *GridEngine) DeliverSpellDamage(attacker *game.Actor, victim *game.Actor, amount int) {
@@ -821,9 +895,9 @@ func (g *GridEngine) loadPartyIcons() {
 func (g *GridEngine) CreateItemsForVendor(lootType game.Loot, level int) []game.Item {
     switch lootType {
     case game.LootArmor:
-        return g.createArmor(level, 10)
+        return g.createArmorForVendor(level, 10)
     case game.LootWeapon:
-        return g.createWeapons(level, 10)
+        return g.createWeaponsForVendor(level, 10)
     case game.LootHealer:
         return g.createPotions(10)
     case game.LootPotions:
@@ -837,13 +911,13 @@ func (g *GridEngine) goBackToBed() {
         {
             Text: "Stay awake",
             Action: func() {
-                g.CloseAllModals()
+                g.closeConversation()
             },
         },
         {
             Text: "Go back to bed",
             Action: func() {
-                g.CloseAllModals()
+                g.closeConversation()
                 g.setGameOver()
             },
         },
@@ -928,18 +1002,33 @@ func (g *GridEngine) TryMoveAvatarWithPathfinding(pos geometry.Point) {
     if len(currentPath) == 0 {
         return
     }
-    g.animationRoutine.Run(func(exe *gocoro.Execution) {
-        for _, dest := range currentPath {
-            direction := dest.Sub(g.playerParty.Pos())
+    runMoveScript := func() {
+        g.movementRoutine.OnFinish = nil
+        g.movementRoutine.Run(func(exe *gocoro.Execution) {
+            for _, dest := range currentPath {
+                if exe.Stopped() {
+                    return
+                }
+                direction := dest.Sub(g.playerParty.Pos())
 
-            g.playerParty.Move(direction)
-            if g.playerParty.Pos() == dest {
-                g.onAvatarMovedOrTeleported(dest)
+                g.playerParty.Move(direction)
+                if g.playerParty.Pos() == dest {
+                    g.onAvatarMovedOrTeleported(dest)
+                }
+
+                _ = exe.YieldTime(200 * time.Millisecond)
             }
+        })
+    }
 
-            _ = exe.YieldTime(200 * time.Millisecond)
-        }
-    })
+    if g.movementRoutine.Running() {
+        //g.movementRoutine.Stop()
+        //g.movementRoutine.OnFinish = runMoveScript
+        g.movementRoutine = gocoro.NewCoroutine()
+        runMoveScript()
+    } else {
+        runMoveScript()
+    }
 }
 
 func (g *GridEngine) advanceTimeFromMovement() {
@@ -959,6 +1048,38 @@ func (g *GridEngine) advanceTimeFromTicks(ticks uint64) {
     if ticks%uint64(actualTPS*delayInSeconds) == 0 {
         g.AdvanceWorldTime(0, 0, 1)
     }
+}
+
+func (g *GridEngine) getWeaponFromEntity(entity *ldtk_go.Entity) game.Item {
+    itemTier := game.ItemTier(fromEnum(entity.PropertyByIdentifier("ItemTier").AsString()))
+    weaponType := game.WeaponType(fromEnum(entity.PropertyByIdentifier("WeaponType").AsString()))
+    weaponMaterial := game.WeaponMaterial(fromEnum(entity.PropertyByIdentifier("WeaponMaterial").AsString()))
+    returnedItem := game.NewWeapon(itemTier, weaponType, weaponMaterial)
+    if !entity.PropertyByIdentifier("CustomName").IsNull() {
+        returnedItem.SetName(entity.PropertyByIdentifier("CustomName").AsString())
+    }
+    return returnedItem
+}
+
+func (g *GridEngine) getArmorFromEntity(entity *ldtk_go.Entity) game.Item {
+    itemTier := game.ItemTier(fromEnum(entity.PropertyByIdentifier("ItemTier").AsString()))
+    armorType := game.ArmorSlot(fromEnum(entity.PropertyByIdentifier("ArmorType").AsString()))
+    armorModifier := game.ArmorModifier(fromEnum(entity.PropertyByIdentifier("ArmorMaterial").AsString()))
+    returnedItem := game.NewArmor(itemTier, armorType, armorModifier)
+    if !entity.PropertyByIdentifier("CustomName").IsNull() {
+        returnedItem.SetName(entity.PropertyByIdentifier("CustomName").AsString())
+    }
+    return returnedItem
+}
+
+func (g *GridEngine) kill(opponent *game.Actor) {
+    opponent.Damage(opponent.GetHealth())
+    g.actorDied(opponent)
+}
+
+func fromEnum(asString string) string {
+    asString = strings.ToLower(asString)
+    return strings.ReplaceAll(asString, "_", " ")
 }
 
 func secondsToTicks(seconds float64) int {

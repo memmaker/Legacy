@@ -8,6 +8,8 @@ Description: He clearly wants to sell weaponry.
 
 %rec: Inventory
 
+Item: key(arms store key, tauci_arms, 1)
+
 %rec: Conversation
 
 Key: _opening

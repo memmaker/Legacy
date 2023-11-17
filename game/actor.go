@@ -3,7 +3,6 @@ package game
 import (
     "Legacy/geometry"
     "Legacy/recfile"
-    "Legacy/renderer"
     "Legacy/util"
     "fmt"
     "image/color"
@@ -52,21 +51,21 @@ func (s ArmorSlot) IsAmulet() bool {
 func (s ArmorSlot) BaseValue() int {
     switch s {
     case ArmorSlotHelmet:
-        return 700
+        return 2000
     case ArmorSlotBreastPlate:
-        return 800
+        return 12000
     case ArmorSlotShoes:
-        return 500
+        return 1500
     case AccessorySlotRobe:
-        return 400
+        return 900
     case AccessorySlotRingLeft:
         fallthrough
     case AccessorySlotRingRight:
-        return 300
+        return 900
     case AccessorySlotAmuletOne:
         fallthrough
     case AccessorySlotAmuletTwo:
-        return 300
+        return 700
     }
     return 200
 }
@@ -151,11 +150,14 @@ type Actor struct {
     experiencePoints int
     level            int
 
-    skillset      SkillSet
-    buffs         map[BuffType][]Buff
-    color         color.Color
-    isTinted      bool
-    combatFaction string
+    skillset        SkillSet
+    buffs           map[BuffType][]Buff
+    color           color.Color
+    isTinted        bool
+    combatFaction   string
+    isAggressive    bool
+    engagementRange int
+    statusEffects   map[StatusEffect]int
 }
 
 func NewActor(name string, icon int32) *Actor {
@@ -174,6 +176,7 @@ func NewActor(name string, icon int32) *Actor {
         color:               color.White,
         equippedArmor:       make(map[ArmorSlot]*Armor),
         equippedAccessories: make(map[ArmorSlot]*Armor),
+        statusEffects:       make(map[StatusEffect]int),
     }
 }
 
@@ -201,6 +204,7 @@ func NewActorFromFile(file io.ReadCloser, icon int32, toPages func(height int, i
         buffs:               make(map[BuffType][]Buff),
         equippedArmor:       make(map[ArmorSlot]*Armor),
         equippedAccessories: make(map[ArmorSlot]*Armor),
+        statusEffects:       make(map[StatusEffect]int),
     }
 
     if armorString, hasArmor := coreRecord["Torso"]; hasArmor {
@@ -228,6 +232,7 @@ func NewActorFromRecord(record recfile.Record) *Actor {
         skillset:            NewSkillSet(), // TODO
         equippedArmor:       make(map[ArmorSlot]*Armor),
         equippedAccessories: make(map[ArmorSlot]*Armor),
+        statusEffects:       make(map[StatusEffect]int),
         //dialogue:        NewDialogueFromRecords(actorData["Conversation"]),
     }
     for _, field := range record {
@@ -414,7 +419,10 @@ func (a *Actor) GetDetails(engine Engine) []string {
 
 func (a *Actor) LookDescription() []string {
     healthString := "healthy"
-    description := renderer.AutoLayout(a.description, 32)
+    var description []string
+    if a.description != "" {
+        description = append(description, util.AutoLayout(a.description, 32)...)
+    }
     // wearables
     if len(a.equippedArmor) > 0 {
         description = append(description, "", "The person is wearing:")
@@ -448,9 +456,17 @@ func (a *Actor) LookDescription() []string {
         healthString = "near death"
     }
 
-    description = append(description, "")
+    if len(description) > 0 {
+        description = append(description, "")
+    }
     description = append(description, fmt.Sprintf("The person looks %s.", healthString))
-
+    if len(a.statusEffects) > 0 {
+        description = append(description, "")
+        description = append(description, "The person is affected by:")
+        for effect, _ := range a.statusEffects {
+            description = append(description, fmt.Sprintf("  %s", effect))
+        }
+    }
     return description
 }
 
@@ -473,10 +489,20 @@ func (a *Actor) GetContextActions(engine Engine) []util.MenuItem {
             Text:   "Steal",
             Action: func() { engine.OpenPickpocketMenu(a) },
         }
+        plant := util.MenuItem{
+            Text:   "Plant",
+            Action: func() { engine.OpenPlantMenu(a) },
+        }
         attack := util.MenuItem{
             Text: "Attack",
             Action: func() {
                 engine.PlayerStartsCombat(a)
+            },
+        }
+        backstab := util.MenuItem{
+            Text: "Backstab",
+            Action: func() {
+                engine.PlayerTriesBackstab(a)
             },
         }
         push := util.MenuItem{
@@ -487,9 +513,13 @@ func (a *Actor) GetContextActions(engine Engine) []util.MenuItem {
                 }
             },
         }
-        items = append(items, talkTo, lookAt, attack)
+        items = append(items, talkTo, lookAt)
         if engine.GetAvatar().IsRightNextTo(a) {
-            items = append(items, steal, push)
+            items = append(items, attack)
+            if engine.GetAvatar().CanBackstab(a) {
+                items = append(items, backstab)
+            }
+            items = append(items, steal, plant, push)
         }
     }
     return items
@@ -771,6 +801,15 @@ func (a *Actor) GetMeleeDamage() int {
         if weapon, ok := a.equippedLeftHand.(*Weapon); ok {
             return weapon.GetDamage(baseDamage)
         }
+    }
+    return baseDamage
+}
+
+func (a *Actor) GetRangedDamage() int {
+    buffs := a.GetOffenseBuffBonus()
+    baseDamage := a.baseRangedDamage + buffs
+    if a.equippedRanged != nil {
+        return a.equippedRanged.GetDamage(baseDamage)
     }
     return baseDamage
 }
@@ -1172,4 +1211,84 @@ func (a *Actor) UsedKey(key string) {
     if a.party != nil {
         a.party.UsedKey(key)
     }
+}
+
+func (a *Actor) AddItem(item Item) {
+    a.inventory = append(a.inventory, item)
+    item.SetHolder(a)
+}
+
+func (a *Actor) SetAggressive(isAggressive bool) {
+    a.isAggressive = isAggressive
+}
+
+func (a *Actor) IsAggressive() bool {
+    return a.isAggressive
+}
+
+func (a *Actor) GetNPCEngagementRange() int {
+    return a.engagementRange
+}
+
+func (a *Actor) SetNPCEngagementRange(rangeInTiles int) {
+    a.engagementRange = rangeInTiles
+}
+
+func (a *Actor) OnMeleeHit(engine Engine, victim *Actor) {
+    if a.HasMeleeWeaponEquipped() {
+        weaponUsed := a.GetMeleeWeapon()
+        weaponUsed.OnHitProc(engine, a, victim)
+    }
+}
+
+func (a *Actor) OnRangedHit(engine Engine, victim *Actor) {
+    if a.HasRangedWeaponEquipped() {
+        weaponUsed := a.GetRangedWeapon()
+        weaponUsed.OnHitProc(engine, a, victim)
+    }
+}
+func (a *Actor) HasMeleeWeaponEquipped() bool {
+    return a.equippedRightHand != nil || a.equippedLeftHand != nil
+}
+
+func (a *Actor) GetMeleeWeapon() *Weapon {
+    if a.equippedRightHand != nil {
+        if weapon, ok := a.equippedRightHand.(*Weapon); ok {
+            return weapon
+        }
+    }
+    if a.equippedLeftHand != nil {
+        if weapon, ok := a.equippedLeftHand.(*Weapon); ok {
+            return weapon
+        }
+    }
+    return nil
+}
+
+func (a *Actor) GetRangedWeapon() *Weapon {
+    if a.equippedRanged != nil {
+        return a.equippedRanged
+    }
+    return nil
+}
+
+func (a *Actor) AddStatusEffect(statusEffect StatusEffect, turns int) {
+    a.statusEffects[statusEffect] = turns
+}
+
+func (a *Actor) IsSleeping() bool {
+    return a.HasStatusEffect(StatusEffectSleeping)
+}
+
+func (a *Actor) HasStatusEffect(sleeping StatusEffect) bool {
+    _, hasEffect := a.statusEffects[sleeping]
+    return hasEffect
+}
+
+func (a *Actor) CanBackstab(victim *Actor) bool {
+    if !a.HasMeleeWeaponEquipped() {
+        return false
+    }
+    weapon := a.GetMeleeWeapon()
+    return weapon.IsDagger()
 }
