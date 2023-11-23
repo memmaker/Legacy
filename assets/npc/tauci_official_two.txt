@@ -1,0 +1,92 @@
+%rec: Details
+
+Name: Jim Banks
+Health: 10
+Torso: armor(chainmail, torso, 4)
+Head: armor(mail coif, head, 2)
+Description: He is constantly humming to himself. A rather simple tune.
+
+%rec: Inventory
+
+Item: key(bank key, tauci_bank, 4)
+Item: flavor(signed form 32, 10, a signed form 32.)
+
+%rec: Conversation
+
+Key: _opening
+AddsKeyword: bye
+Condition: !hasFlag('talked_to_tauci_official_one')
+Effect: setFlagTo(jim_stage, 1)
+Text:
++ "I am very busy, please go over to the other window.
++ My colleague, Josie, will be happy to help you."
+
+
+Key: _opening
+AddsKeyword: bye
+Condition: getFlag('josie_stage') == 1 || getFlag('josie_stage') == 2
+Effect: setFlagTo(josie_stage, 2)
+Text:
++ "Look, I am just helping out Josie here.
+It's actually her job to deal with formalities.
+Please go back over to the other window and talk to her
+about your regulatory needs."
+
+Key: _opening
+AddsKeyword: bank account
+AddsKeyword: form 32
+Condition: getFlag('jim_stage') == 2
+Text:
++ "Ok, I'm ready to help you now.
++ What do you need?"
+
+Key: _opening
+AddsKeyword: form 32
+AddsKeyword: bank account
+Condition: getFlag('josie_stage') == 3
+Text:
++ "Let me guess, you need a form 32?
++ Did Josie send you over here?
++ Fine, I'll help you."
+
+
+Key: bank account
+Text:
++ "Right, that's what I thought. Well, I cannot help you with that.
++ You'll need to go to over to the other window and talk to Josie."
+
+Key: form 32
+Condition: hasFlag('needs_form_32')
+AddsKeyword: obtain form 32
+AddsKeyword: signed form 32
+Text:
++ "You are lucky, I can help you with that.
++ Truth be told, I am the local expert on form 32s.
++ What do you need to know?"
+
+
+Key: obtain form 32
+Effect: setFlag(banks_needs_form_32)
+Text:
++ "Oh, you need to obtain a form 32?
++ That's the easy part, regulations require
++ that every financial business has a form 32 on hand.
++ You can get one from any bank in town."
+
+
+Key: signed form 32
+Condition: !hasItem('blank form 32')
+Text:
++ "Oh, you need a signed form 32? Do you have the blank form with you?
++ No, that's not going to work. You need to get a blank form 32 first."
+
+Key: signed form 32
+Condition: hasItem('blank form 32')
+Text:
++ "Perfect, you have a blank form 32.
++ Let me just sign it for you."
+
+
+Key: bye
+Effect: quits
+Text: "See you later!"

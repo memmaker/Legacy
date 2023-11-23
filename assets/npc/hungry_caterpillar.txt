@@ -33,7 +33,23 @@ Text: "I cannot eat your kind of food. Actually, I follow a strict diet."
 Key: Monday
 Text: "On Mondays I eat... I eat... I cannot remember. I am too hungry to think."
 + \
-"Oh, please, help me!"
+"Oh, please, help me! Will you?"
+#
+Target: _yes_help
+Option: yes
+# -> Problem, hardcoded difficulty does not adjust to skill level
+OptionSkillCheckVersus: Bluff, Perception
+OnOptionSuccess: _bluff_success
+OnOptionFailure: _bluff_failure
+Option: yes
+
+Key: _bluff_success
+Text: You tell the creature that you will help it. It seems to believe you.
++ "Oh, thank you! I am so happy. I will tell you what I need."
+
+Key: _bluff_failure
+Text: Your bluff fails. The creature does not believe you.
++ "You are lying! I can see it in your eyes. You are not going to help me."
 
 Key: leave
 Effect: quits

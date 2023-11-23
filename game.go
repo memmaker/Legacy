@@ -215,26 +215,28 @@ func (g *GridEngine) showScrollText(text []string, textcolor color.Color, autola
 
 func (g *GridEngine) PickPocketItem(item game.Item, owner *game.Actor) {
     if owner.RemoveItem(item) {
-        g.takeItem(item)
+        g.TakeItem(item)
     }
 }
 
 func (g *GridEngine) PlantItem(item game.Item, newOwner *game.Actor) {
     if g.playerParty.RemoveItem(item) {
         newOwner.AddItem(item)
+        // publish an event that the item has been planted
+        g.checkPlantHooks(item, newOwner)
     }
 }
 
 func (g *GridEngine) PickUpItem(item game.Item) {
     g.currentMap.RemoveItem(item)
-    g.takeItem(item)
+    g.TakeItem(item)
 }
 func (g *GridEngine) moveItemToParty(item game.Item, container game.ItemContainer) {
     container.RemoveItem(item)
-    g.takeItem(item)
+    g.TakeItem(item)
 }
 
-func (g *GridEngine) takeItem(item game.Item) {
+func (g *GridEngine) TakeItem(item game.Item) {
     if pseudoItem, ok := item.(*game.PseudoItem); ok {
         pseudoItem.Take(g)
     } else {
@@ -440,6 +442,10 @@ func (g *GridEngine) TryBuyItem(npc *game.Actor, offer game.SalesOffer) {
 }
 
 func (g *GridEngine) TryRestParty() {
+    if g.IsInCombat() {
+        g.Print("You can't rest while in combat.")
+        return
+    }
     if !g.playerParty.NeedsRest() {
         g.Print("Your party is not tired.")
         return

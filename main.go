@@ -110,6 +110,35 @@ type GridEngine struct {
     worldTime               game.WorldTime
     lastInteractionWasMouse bool
     altIsPressed            bool
+    levelHooks              game.LevelHooks
+}
+
+func (g *GridEngine) HasSkill(skill game.SkillName) bool {
+    return g.avatar.GetSkills().HasSkill(skill)
+}
+
+func (g *GridEngine) GetRelativeDifficulty(skill game.SkillName, difficulty game.DifficultyLevel) game.DifficultyLevel {
+    avatar := g.GetAvatar()
+    skills := avatar.GetSkills()
+    if !skills.HasSkill(skill) {
+        return game.DifficultyLevelImpossible
+    }
+    skillLevel := skills.GetLevel(skill)
+    return g.rules.GetRelativeDifficulty(skillLevel, difficulty)
+}
+func (g *GridEngine) SkillCheckAvatar(skill game.SkillName, difficulty game.DifficultyLevel) bool {
+    return g.SkillCheck(g.GetAvatar(), skill, difficulty)
+}
+func (g *GridEngine) SkillCheckAvatarVs(skill game.SkillName, antagonist *game.Actor, attribute game.AttributeName) bool {
+    return g.SkillCheck(g.GetAvatar(), skill, antagonist.GetAntagonistDifficultyByAttribute(attribute))
+}
+func (g *GridEngine) SkillCheck(actor *game.Actor, skill game.SkillName, difficulty game.DifficultyLevel) bool {
+    skills := actor.GetSkills()
+    if !skills.HasSkill(skill) {
+        return game.RollChance(0.01)
+    }
+    skillLevel := skills.GetLevel(skill)
+    return g.rules.RollSkillCheck(skillLevel, difficulty)
 }
 
 func (g *GridEngine) OnMouseWheel(x int, y int, dy float64) bool {
@@ -342,7 +371,7 @@ func (g *GridEngine) PlayerTriesBackstab(opponent *game.Actor) {
     }
     chanceToBackstab := 0.5
     if rand.Float64() < chanceToBackstab {
-        g.kill(opponent)
+        g.Kill(opponent)
     } else {
         g.Print("Your attack was noticed!")
         g.PlayerStartsCombat(opponent)
@@ -420,11 +449,6 @@ func (g *GridEngine) QuitGame() {
     g.wantsToQuit = true
 }
 
-// OnMouseMoved receives the coordinates as character cells
-func (g *GridEngine) OnMouseMoved(x int, y int) (bool, ui.Tooltip) {
-    return false, ui.NoTooltip{}
-}
-
 func (g *GridEngine) handleTooltip(tooltip ui.Tooltip) {
     g.handleTooltipWithDelay(tooltip, 0.5)
 }
@@ -440,6 +464,45 @@ func (g *GridEngine) handleTooltipWithDelay(tooltip ui.Tooltip, delay float64) {
 
 func (g *GridEngine) MapToScreenCoordinates(pos geometry.Point) geometry.Point {
     return g.mapWindow.GetScreenGridPositionFromMapGridPosition(pos)
+}
+
+// OnMouseMoved receives the coordinates as character cells
+func (g *GridEngine) OnMouseMoved(x int, y int) (bool, ui.Tooltip) {
+    screenSize := g.gridRenderer.GetSmallGridScreenSize()
+    oneFourth := screenSize.X / 4
+    if y == screenSize.Y-1 {
+        // each 1/4 of the screen is a different UI
+        if x < oneFourth {
+            if x == 0 {
+                member := g.playerParty.GetMember(0)
+                return true, ui.NewTextTooltip(g.gridRenderer, []string{fmt.Sprintf("HP: %d/%d", member.GetHealth(), member.GetMaxHealth())}, geometry.Point{X: x, Y: y})
+            } else {
+                return false, ui.NoTooltip{}
+            }
+        } else if x < oneFourth*2 {
+            if x == oneFourth && len(g.playerParty.GetMembers()) > 1 {
+                member := g.playerParty.GetMember(1)
+                return true, ui.NewTextTooltip(g.gridRenderer, []string{fmt.Sprintf("HP: %d/%d", member.GetHealth(), member.GetMaxHealth())}, geometry.Point{X: x, Y: y})
+            } else {
+                return false, ui.NoTooltip{}
+            }
+        } else if x < oneFourth*3 && len(g.playerParty.GetMembers()) > 2 {
+            if x == oneFourth*2 {
+                member := g.playerParty.GetMember(2)
+                return true, ui.NewTextTooltip(g.gridRenderer, []string{fmt.Sprintf("HP: %d/%d", member.GetHealth(), member.GetMaxHealth())}, geometry.Point{X: x, Y: y})
+            } else {
+                return false, ui.NoTooltip{}
+            }
+        } else {
+            if x == oneFourth*3 && len(g.playerParty.GetMembers()) > 3 {
+                member := g.playerParty.GetMember(3)
+                return true, ui.NewTextTooltip(g.gridRenderer, []string{fmt.Sprintf("HP: %d/%d", member.GetHealth(), member.GetMaxHealth())}, geometry.Point{X: x, Y: y})
+            } else {
+                return false, ui.NoTooltip{}
+            }
+        }
+    }
+    return false, ui.NoTooltip{}
 }
 
 // OnMouseClicked receives the coordinates as character cells
@@ -607,8 +670,8 @@ func (g *GridEngine) breakTileAt(loc geometry.Point) {
 
 func (g *GridEngine) TryPickpocketItem(item game.Item, victim *game.Actor) {
     g.flags.IncrementFlag("pickpocket_attempts")
-    chanceOfSuccess := 1.0
-    if rand.Float64() < chanceOfSuccess {
+
+    if g.SkillCheckAvatarVs(game.ThievingSkillPickpocket, victim, game.Perception) {
         g.PickPocketItem(item, victim)
         g.Print(fmt.Sprintf("You stole \"%s\"", item.Name()))
         g.flags.IncrementFlag("pickpocket_successes")
@@ -621,8 +684,7 @@ func (g *GridEngine) TryPickpocketItem(item game.Item, victim *game.Actor) {
 
 func (g *GridEngine) TryPlantItem(item game.Item, victim *game.Actor) {
     g.flags.IncrementFlag("plant_attempts")
-    chanceOfSuccess := 1.0
-    if rand.Float64() < chanceOfSuccess {
+    if g.SkillCheckAvatarVs(game.ThievingSkillPickpocket, victim, game.Perception) {
         g.PlantItem(item, victim)
 
         g.Print(fmt.Sprintf("You planted \"%s\"", item.Name()))
@@ -687,8 +749,9 @@ func (g *GridEngine) actorDied(actor *game.Actor) {
     if !g.IsPlayerControlled(actor) {
         g.currentMap.SetActorToDowned(actor) // IS THIS A GOOD IDEA?
         g.Print(fmt.Sprintf("'%s' died", actor.Name()))
-        // award xp for the kill
+        // award xp for the Kill
         g.AddXP(actor.GetXPForKilling())
+        println(fmt.Sprintf("'%s' died at %s", actor.Name(), actor.Pos().String()))
     }
 }
 
@@ -779,6 +842,10 @@ func (g *GridEngine) ScreenToMap(screenX int, screenY int) geometry.Point {
     return g.mapWindow.GetMapGridPositionFromScreenGridPosition(screenGridPos)
 }
 
+func (g *GridEngine) IsMapPosOnScreen(pos geometry.Point) bool {
+    return g.mapWindow.GetVisibleMap().Contains(pos)
+}
+
 func (g *GridEngine) openPartyOverView() {
     g.ShowFixedFormatText(g.playerParty.GetPartyOverview())
 }
@@ -794,7 +861,7 @@ func (g *GridEngine) DeliverMeleeDamage(attacker *game.Actor, victim *game.Actor
     }
 
     // hit procs
-    attacker.OnMeleeHit(g, victim)
+    attacker.OnMeleeHitPerformed(g, victim)
 }
 
 func (g *GridEngine) DeliverRangedDamage(attacker *game.Actor, victim *game.Actor) {
@@ -807,7 +874,7 @@ func (g *GridEngine) DeliverRangedDamage(attacker *game.Actor, victim *game.Acto
         g.Print(fmt.Sprintf("No dmg. to '%s'", victim.Name()))
     }
     // hit procs
-    attacker.OnRangedHit(g, victim)
+    attacker.OnRangedHitPerformed(g, victim)
 }
 
 func (g *GridEngine) DeliverSpellDamage(attacker *game.Actor, victim *game.Actor, amount int) {
@@ -955,7 +1022,12 @@ func (g *GridEngine) OpenEquipmentDetails(actor *game.Actor) {
     g.CloseAllModals()
     g.PushModal(ui.NewEquipmentWindow(g, actor, g.gridRenderer))
 }
-
+func (g *GridEngine) giveAllSpells() {
+    allSpellScrolls := game.GetAllSpellScrolls()
+    for _, spellScroll := range allSpellScrolls {
+        g.playerParty.AddItem(spellScroll)
+    }
+}
 func (g *GridEngine) giveAllArmorsAndWeapons() {
     allTiers := game.GetAllTiers()
     allWeaponTypes := game.GetAllWeaponTypes()
@@ -1003,18 +1075,13 @@ func (g *GridEngine) TryMoveAvatarWithPathfinding(pos geometry.Point) {
         return
     }
     runMoveScript := func() {
-        g.movementRoutine.OnFinish = nil
         g.movementRoutine.Run(func(exe *gocoro.Execution) {
             for _, dest := range currentPath {
                 if exe.Stopped() {
                     return
                 }
                 direction := dest.Sub(g.playerParty.Pos())
-
-                g.playerParty.Move(direction)
-                if g.playerParty.Pos() == dest {
-                    g.onAvatarMovedOrTeleported(dest)
-                }
+                g.PlayerMovement(direction)
 
                 _ = exe.YieldTime(200 * time.Millisecond)
             }
@@ -1042,10 +1109,11 @@ func (g *GridEngine) advanceTimeFromMovement() {
 func (g *GridEngine) advanceTimeFromTicks(ticks uint64) {
     delayInSeconds := 60.0
     actualTPS := ebiten.ActualTPS()
-    if actualTPS == 0 {
+    divider := uint64(actualTPS * delayInSeconds)
+    if divider == 0 {
         return
     }
-    if ticks%uint64(actualTPS*delayInSeconds) == 0 {
+    if ticks%divider == 0 {
         g.AdvanceWorldTime(0, 0, 1)
     }
 }
@@ -1072,9 +1140,38 @@ func (g *GridEngine) getArmorFromEntity(entity *ldtk_go.Entity) game.Item {
     return returnedItem
 }
 
-func (g *GridEngine) kill(opponent *game.Actor) {
+func (g *GridEngine) Kill(opponent *game.Actor) {
+    if !opponent.IsAlive() {
+        return
+    }
     opponent.Damage(opponent.GetHealth())
     g.actorDied(opponent)
+}
+
+func (g *GridEngine) checkPlantHooks(item game.Item, owner *game.Actor) {
+    plantHooks := g.levelHooks.PlantHooks
+    for i := len(plantHooks) - 1; i >= 0; i-- {
+        hook := plantHooks[i]
+        if hook.Applies(item, owner) {
+            hook.Action(item, owner)
+            if hook.Consume {
+                g.levelHooks.PlantHooks = append(g.levelHooks.PlantHooks[:i], g.levelHooks.PlantHooks[i+1:]...)
+            }
+        }
+    }
+}
+
+func (g *GridEngine) checkMoveHooks(actor *game.Actor, newPos geometry.Point) {
+    moveHooks := g.levelHooks.MovementHooks
+    for i := len(moveHooks) - 1; i >= 0; i-- {
+        hook := moveHooks[i]
+        if hook.Applies(actor, newPos) {
+            hook.Action(actor, newPos)
+            if hook.Consume {
+                g.levelHooks.MovementHooks = append(g.levelHooks.MovementHooks[:i], g.levelHooks.MovementHooks[i+1:]...)
+            }
+        }
+    }
 }
 
 func fromEnum(asString string) string {

@@ -7,6 +7,30 @@ import (
     "image/color"
 )
 
+type OngoingSpellEffect string
+
+const (
+    OngoingSpellEffectBirdsEye OngoingSpellEffect = "birds_eye"
+)
+
+func GetAllSpellScrolls() []*Scroll {
+    names := []string{
+        "Nom De Plume",
+        "Create Food",
+        "Bird's Eye",
+        "Raise as Undead",
+        "Fireball",
+        "Icebolt",
+        "Healing word of Tauci",
+    }
+    var scrolls []*Scroll
+    for _, name := range names {
+        scrolls = append(scrolls, NewSpellScroll(name, "dummy", NewSpellFromName(name)))
+    }
+
+    return scrolls
+}
+
 func NewSpellFromName(name string) *Spell {
     switch name {
     case "Nom De Plume":
@@ -18,6 +42,17 @@ func NewSpellFromName(name string) *Spell {
     case "Create Food":
         return NewSpell(name, 10, func(engine Engine, caster *Actor) {
             engine.AddFood(10)
+        })
+    case "Healing word of Tauci":
+        return NewSpell(name, 10, func(engine Engine, caster *Actor) {
+            healthIncrease := 10 * caster.GetLevel()
+            newHealth := min(caster.GetHealth()+healthIncrease, caster.GetMaxHealth())
+            caster.SetHealth(newHealth)
+            engine.Print("You feel better!")
+        })
+    case "Bird's Eye":
+        return NewSpell(name, 10, func(engine Engine, caster *Actor) {
+            engine.GetParty().AddSpellEffect(OngoingSpellEffectBirdsEye, 5)
         })
     case "Raise as Undead":
         targetedSpell := NewTargetedSpell(name, 10, func(engine Engine, caster *Actor, pos geometry.Point) {

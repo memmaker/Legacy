@@ -6,7 +6,6 @@ import (
     "Legacy/util"
     "fmt"
     "image/color"
-    "math/rand"
 )
 
 type Loot string
@@ -32,6 +31,8 @@ type Chest struct {
     hasCreatedLoot bool
     emptyIcon      int32
     isLocked       bool
+    walkable       bool
+    lockStrength   DifficultyLevel
 }
 
 func (s *Chest) GetItems() []Item {
@@ -176,7 +177,7 @@ func (s *Chest) Icon(uint64) int32 {
     return s.icon
 }
 func (s *Chest) IsWalkable(person *Actor) bool {
-    return true
+    return s.walkable
 }
 
 func (s *Chest) IsTransparent() bool {
@@ -215,10 +216,12 @@ func (s *Chest) GetContextActions(engine Engine) []util.MenuItem {
         })
     }
     if s.isLocked && party.GetLockpicks() > 0 {
+        skill := ThievingSkillLockpicking
+        difficulty := s.lockStrength
         additionalActions = append(additionalActions, util.MenuItem{
-            Text: "Pick lock",
+            Text: fmt.Sprintf("Pick lock - %s", engine.GetRelativeDifficulty(skill, difficulty).ToString()),
             Action: func() {
-                if rand.Float64() > (float64(s.lootLevel) / 10.0) {
+                if engine.SkillCheckAvatar(skill, difficulty) {
                     s.isLocked = false
                     s.spawnLoot(engine)
                     engine.ShowContainer(s)
@@ -250,4 +253,12 @@ func (s *Chest) IsEmpty() bool {
         return len(s.items) == 0
     }
     return false
+}
+
+func (s *Chest) SetWalkable(isWalkable bool) {
+    s.walkable = isWalkable
+}
+
+func (s *Chest) SetLockStrength(difficultyLevel DifficultyLevel) {
+    s.lockStrength = difficultyLevel
 }

@@ -79,4 +79,10 @@ type Engine interface {
 
     GetWorldTime() WorldTime
     AdvanceWorldTime(days, hours, minutes int)
+    Kill(actor *Actor)
+    TakeItem(item Item)
+    SkillCheck(actor *Actor, skill SkillName, difficulty DifficultyLevel) bool
+    SkillCheckAvatar(skill SkillName, difficulty DifficultyLevel) bool
+    HasSkill(skill SkillName) bool
+    GetRelativeDifficulty(skill SkillName, difficulty DifficultyLevel) DifficultyLevel
 }

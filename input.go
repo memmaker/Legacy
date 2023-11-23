@@ -11,19 +11,22 @@ import (
 )
 
 func (g *GridEngine) ActionUp() {
-
+    g.movementRoutine.Stop()
     g.PlayerMovement(geometry.Point{X: 0, Y: -1})
 }
 
 func (g *GridEngine) ActionDown() {
+    g.movementRoutine.Stop()
     g.PlayerMovement(geometry.Point{X: 0, Y: 1})
 }
 
 func (g *GridEngine) ActionRight() {
+    g.movementRoutine.Stop()
     g.PlayerMovement(geometry.Point{X: 1, Y: 0})
 }
 
 func (g *GridEngine) ActionLeft() {
+    g.movementRoutine.Stop()
     g.PlayerMovement(geometry.Point{X: -1, Y: 0})
 }
 
@@ -147,19 +150,45 @@ func (g *GridEngine) onMapClicked(pos geometry.Point) {
 }
 
 func (g *GridEngine) handleDebugKeys() {
-    if inpututil.IsKeyJustPressed(ebiten.KeyF9) {
+    mapPosSlot := -1
+
+    if inpututil.IsKeyJustPressed(ebiten.KeyF1) {
+        mapPosSlot = 0
+    } else if inpututil.IsKeyJustPressed(ebiten.KeyF2) {
+        mapPosSlot = 1
+    } else if inpututil.IsKeyJustPressed(ebiten.KeyF3) {
+        mapPosSlot = 2
+    } else if inpututil.IsKeyJustPressed(ebiten.KeyF4) {
+        mapPosSlot = 3
+    } else if inpututil.IsKeyJustPressed(ebiten.KeyF5) {
+        mapPosSlot = 4
+    } else if inpututil.IsKeyJustPressed(ebiten.KeyF6) {
+        mapPosSlot = 5
+    } else if inpututil.IsKeyJustPressed(ebiten.KeyF7) {
+        mapPosSlot = 6
+    } else if inpututil.IsKeyJustPressed(ebiten.KeyF8) {
+        mapPosSlot = 7
+    } else if inpututil.IsKeyJustPressed(ebiten.KeyF9) {
+        mapPosSlot = 8
+    }
+    if mapPosSlot >= 0 {
+        posKey := fmt.Sprintf("debug_map_pos_%d", mapPosSlot)
+        if g.altIsPressed { // save
+            util.Persist(posKey, g.GetMapName()+g.avatar.Pos().Encode())
+            g.Print(fmt.Sprintf("Saved map position: %s", g.avatar.Pos().Encode()))
+        } else { // recall
+            mapPosPred := recfile.StrPredicate(util.Get(posKey))
+            mapName := mapPosPred.Name()
+            xPos := mapPosPred.GetInt(0)
+            yPos := mapPosPred.GetInt(1)
+            g.transitionToLocation(mapName, geometry.Point{X: xPos, Y: yPos})
+        }
+    }
+
+    if inpututil.IsKeyJustPressed(ebiten.KeyF11) {
         ebiten.SetFullscreen(!ebiten.IsFullscreen())
     } else if inpututil.IsKeyJustPressed(ebiten.KeyF10) {
         g.openDebugMenu()
-    } else if inpututil.IsKeyJustPressed(ebiten.KeyF11) {
-        util.Persist("debug_map_pos", g.GetMapName()+g.avatar.Pos().Encode())
-        g.Print(fmt.Sprintf("Saved map position: %s", g.avatar.Pos().Encode()))
-    } else if inpututil.IsKeyJustPressed(ebiten.KeyF12) {
-        mapPosPred := recfile.StrPredicate(util.Get("debug_map_pos"))
-        mapName := mapPosPred.Name()
-        xPos := mapPosPred.GetInt(0)
-        yPos := mapPosPred.GetInt(1)
-        g.transitionToLocation(mapName, geometry.Point{X: xPos, Y: yPos})
     }
 }
 

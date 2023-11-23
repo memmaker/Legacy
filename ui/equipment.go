@@ -95,7 +95,24 @@ func (e *EquipmentWindow) OnMouseClicked(x int, y int) bool {
     }
     return true
 }
+func (e *EquipmentWindow) OnMouseMoved(x int, y int) (bool, Tooltip) {
+    e.lastMouseLine = y
+    if y < 7 || y > 19 {
+        return false, NoTooltip{}
+    }
+    if y == 7 {
+        return e.onRightHandHovered(geometry.Point{X: x, Y: y})
+    } else if y == 8 {
+        return e.onLeftHandHovered(geometry.Point{X: x, Y: y})
+    } else if y == 9 {
+        return e.onRangedHovered(geometry.Point{X: x, Y: y})
+    }
 
+    if armorSlot, clicked := e.armorSlotLines[y]; clicked {
+        return e.onArmorSlotHovered(armorSlot, geometry.Point{X: x, Y: y})
+    }
+    return false, NoTooltip{}
+}
 func (e *EquipmentWindow) Draw(screen *ebiten.Image) {
     smallScreen := e.gridRenderer.GetSmallGridScreenSize()
 
@@ -110,12 +127,12 @@ func (e *EquipmentWindow) Draw(screen *ebiten.Image) {
     e.gridRenderer.DrawBigOnScreenWithAtlasNameAndTint(screen, iconScreenPosX, iconScreenPosY, renderer.AtlasEntities, icon, color.White)
 
     mainStatsLeft := []util.TableRow{
-        {Label: "Health", Columns: []string{strconv.Itoa(e.actor.GetHealth())}},
         {Label: "Level", Columns: []string{strconv.Itoa(e.actor.GetLevel())}},
+        {Label: "Armor", Columns: []string{strconv.Itoa(e.actor.GetTotalArmor())}},
     }
     mainStatsRight := []util.TableRow{
-        {Label: "Damage", Columns: []string{strconv.Itoa(e.actor.GetMeleeDamage())}},
-        {Label: "Armor", Columns: []string{strconv.Itoa(e.actor.GetTotalArmor())}},
+        {Label: "Melee", Columns: []string{strconv.Itoa(e.actor.GetMeleeDamage())}},
+        {Label: "Ranged", Columns: []string{strconv.Itoa(e.actor.GetRangedDamage())}},
     }
     leftStats := util.TableLayout(mainStatsLeft)
     rightStats := util.TableLayout(mainStatsRight)
@@ -299,18 +316,31 @@ func (e *EquipmentWindow) ActionConfirm() {
 
 }
 
-func (e *EquipmentWindow) OnMouseMoved(x int, y int) (bool, Tooltip) {
-    e.lastMouseLine = y
-    if y < 7 || y > 19 {
-        return false, NoTooltip{}
-    }
-    return true, NoTooltip{}
-}
-
 func (e *EquipmentWindow) ShouldClose() bool {
     return e.shouldClose
 }
+func (e *EquipmentWindow) onRightHandHovered(mousePos geometry.Point) (bool, Tooltip) {
+    item, exists := e.actor.GetRightHandItem()
+    if !exists {
+        return false, NoTooltip{}
+    }
+    return true, NewItemTooltip(e.gridRenderer, item, mousePos)
+}
+func (e *EquipmentWindow) onLeftHandHovered(mousePos geometry.Point) (bool, Tooltip) {
+    item, exists := e.actor.GetLeftHandItem()
+    if !exists {
+        return false, NoTooltip{}
+    }
+    return true, NewItemTooltip(e.gridRenderer, item, mousePos)
+}
 
+func (e *EquipmentWindow) onRangedHovered(mousePos geometry.Point) (bool, Tooltip) {
+    item, exists := e.actor.GetRangedItem()
+    if !exists {
+        return false, NoTooltip{}
+    }
+    return true, NewItemTooltip(e.gridRenderer, item, mousePos)
+}
 func (e *EquipmentWindow) onRightHandClicked() {
     equipAction := func(item game.Item) {
         e.actor.EquipWeapon(item.(*game.Weapon))
@@ -341,6 +371,13 @@ func (e *EquipmentWindow) onRangedClicked() {
     })
 }
 
+func (e *EquipmentWindow) onArmorSlotHovered(slot game.ArmorSlot, mousePos geometry.Point) (bool, Tooltip) {
+    item, exists := e.actor.GetArmor(slot)
+    if !exists {
+        return false, NoTooltip{}
+    }
+    return true, NewItemTooltip(e.gridRenderer, item, mousePos)
+}
 func (e *EquipmentWindow) onArmorSlotClicked(slot game.ArmorSlot) {
     equipAction := func(item game.Item) {
         e.actor.EquipArmor(item.(*game.Armor), slot)

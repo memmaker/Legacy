@@ -150,6 +150,8 @@ type Actor struct {
     experiencePoints int
     level            int
 
+    attributes AttributeHolder
+
     skillset        SkillSet
     buffs           map[BuffType][]Buff
     color           color.Color
@@ -158,15 +160,17 @@ type Actor struct {
     isAggressive    bool
     engagementRange int
     statusEffects   map[StatusEffect]int
+    deathIcon       int32
 }
 
 func NewActor(name string, icon int32) *Actor {
     return &Actor{
-        name:                name,
-        icon:                icon,
-        iconFrameCount:      1,
-        health:              23,
-        maxHealth:           23,
+        name:           name,
+        icon:           icon,
+        iconFrameCount: 1,
+        health:         23,
+        maxHealth:      23,
+
         isHuman:             true,
         inventory:           []Item{},
         skillset:            NewSkillSet(),
@@ -177,6 +181,9 @@ func NewActor(name string, icon int32) *Actor {
         equippedArmor:       make(map[ArmorSlot]*Armor),
         equippedAccessories: make(map[ArmorSlot]*Armor),
         statusEffects:       make(map[StatusEffect]int),
+        deathIcon:           24,
+
+        attributes: NewAttributeHolder(),
     }
 }
 
@@ -201,10 +208,12 @@ func NewActorFromFile(file io.ReadCloser, icon int32, toPages func(height int, i
         skillset:            NewSkillSet(),
         level:               1,
         baseMeleeDamage:     5,
+        attributes:          NewAttributeHolder(),
         buffs:               make(map[BuffType][]Buff),
         equippedArmor:       make(map[ArmorSlot]*Armor),
         equippedAccessories: make(map[ArmorSlot]*Armor),
         statusEffects:       make(map[StatusEffect]int),
+        deathIcon:           24,
     }
 
     if armorString, hasArmor := coreRecord["Torso"]; hasArmor {
@@ -233,6 +242,8 @@ func NewActorFromRecord(record recfile.Record) *Actor {
         equippedArmor:       make(map[ArmorSlot]*Armor),
         equippedAccessories: make(map[ArmorSlot]*Armor),
         statusEffects:       make(map[StatusEffect]int),
+        attributes:          NewAttributeHolder(),
+        deathIcon:           24,
         //dialogue:        NewDialogueFromRecords(actorData["Conversation"]),
     }
     for _, field := range record {
@@ -390,7 +401,7 @@ func (a *Actor) SetHuman(isHuman bool) {
 }
 func (a *Actor) Icon(tick uint64) int32 {
     if !a.IsAlive() && a.isHuman {
-        return 24
+        return a.deathIcon
     }
     if a.iconFrameCount == 1 {
         return a.icon
@@ -541,7 +552,7 @@ func (a *Actor) IsNearTo(other *Actor) bool {
 func (a *Actor) IsRightNextTo(other *Actor) bool {
     ownPos := a.Pos()
     otherPos := other.Pos()
-    return geometry.DistanceManhattan(ownPos, otherPos) == 1
+    return geometry.DistanceManhattan(ownPos, otherPos) <= 1
 }
 
 type SalesOffer struct {
@@ -758,6 +769,7 @@ func (a *Actor) FullRest() {
 
 func (a *Actor) Damage(amount int) {
     a.health -= amount
+    a.OnDamageReceived(amount)
 }
 
 func (a *Actor) GetItemsToSteal() []Item {
@@ -828,7 +840,8 @@ func (a *Actor) DropInventory() []Item {
 }
 
 func (a *Actor) GetMovementAllowance() int {
-    return 5 // TODO
+    encumberance := a.GetTotalEncumberance()
+    return a.attributes.GetMovementAllowance(encumberance)
 }
 
 func (a *Actor) SetHealth(health int) {
@@ -956,11 +969,11 @@ func (a *Actor) GetBaseRanged() int {
 }
 
 func (a *Actor) GetXPForKilling() int {
-    return a.level * 10
+    return a.level * 25
 }
 
 func (a *Actor) AddAllSkills() {
-    a.skillset.AddAll()
+    a.skillset.AddMasteryInAllSkills()
 }
 
 func (a *Actor) AddBuff(name string, buffType BuffType, strength int) {
@@ -1234,19 +1247,31 @@ func (a *Actor) SetNPCEngagementRange(rangeInTiles int) {
     a.engagementRange = rangeInTiles
 }
 
-func (a *Actor) OnMeleeHit(engine Engine, victim *Actor) {
+func (a *Actor) OnMeleeHitPerformed(engine Engine, victim *Actor) {
     if a.HasMeleeWeaponEquipped() {
         weaponUsed := a.GetMeleeWeapon()
         weaponUsed.OnHitProc(engine, a, victim)
     }
 }
 
-func (a *Actor) OnRangedHit(engine Engine, victim *Actor) {
+func (a *Actor) OnRangedHitPerformed(engine Engine, victim *Actor) {
     if a.HasRangedWeaponEquipped() {
         weaponUsed := a.GetRangedWeapon()
         weaponUsed.OnHitProc(engine, a, victim)
     }
 }
+
+func (a *Actor) OnDamageReceived(amount int) {
+    if amount <= 0 {
+        return
+    }
+    for effect, _ := range a.statusEffects {
+        if effect.IsRemovedOnDamage() {
+            a.RemoveStatusEffect(effect)
+        }
+    }
+}
+
 func (a *Actor) HasMeleeWeaponEquipped() bool {
     return a.equippedRightHand != nil || a.equippedLeftHand != nil
 }
@@ -1291,4 +1316,40 @@ func (a *Actor) CanBackstab(victim *Actor) bool {
     }
     weapon := a.GetMeleeWeapon()
     return weapon.IsDagger()
+}
+
+func (a *Actor) GetArmor(slot ArmorSlot) (*Armor, bool) {
+    armor, ok := a.equippedArmor[slot]
+    return armor, ok
+}
+
+func (a *Actor) SetDeathIcon(icon int32) {
+    a.deathIcon = icon
+}
+
+func (a *Actor) RemoveStatusEffect(effect StatusEffect) {
+    delete(a.statusEffects, effect)
+}
+
+func (a *Actor) HasNamedItemsWithCount(name string, count int) bool {
+    itemCount := 0
+    for _, item := range a.inventory {
+        if item.Name() == name {
+            itemCount++
+        }
+    }
+    return itemCount >= count
+}
+
+func (a *Actor) GetTotalEncumberance() int {
+    total := 0
+    for _, item := range a.equippedArmor {
+        total += item.GetEncumbrance()
+    }
+    return total
+}
+
+func (a *Actor) GetAntagonistDifficultyByAttribute(attribute AttributeName) DifficultyLevel {
+    attributeValue := a.attributes.GetAttribute(attribute)
+    return DifficultyLevelFromInt(attributeValue - 5)
 }

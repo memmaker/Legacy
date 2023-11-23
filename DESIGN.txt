@@ -3,11 +3,8 @@
  - It's not possible to have a conversation with your followers
  - Dialogue options will only depend on the skills of the Avatar, not the whole party
  - Dialogue missing from NPCs after loading
- - Combat will magically end, when block a doorway with a party member
  - Skill checks in dialogues are a bit rough, only works for the first option, if at all
  - Someone will definitely try to type "Your Bedroom" into a mirror to get home. We should react to that.
- - Allow scrolling with the mouse
- - Multiple Choice dialogue is broken
 
 
 # Next Steps
@@ -133,7 +130,7 @@ Foreign Language Skill
  - Animals, Monsters, etc.
 
 -> Flags + Counter
-Perception Skill (Spot Hidden, Danger Sense, Listen, Search)
+Perception Skill (Spot Hidden Secrets, Danger Sense, Listen, Search Range)
  - More options per level
  - (Spot Hidden, Danger Sense)
  - Further levels increase range

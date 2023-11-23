@@ -87,6 +87,22 @@ func (m ArmorModifier) ValueMultiplier() float64 {
     return 0
 }
 
+func (m ArmorModifier) GetEncumbrance() int {
+    switch m {
+    case ArmorMaterialCloth:
+        return 0
+    case ArmorMaterialLeather:
+        return 1
+    case ArmorMaterialChain:
+        return 2
+    case ArmorMaterialPlate:
+        return 3
+    case ArmorMaterialMagical:
+        return 1
+    }
+    return 0
+}
+
 const (
     ArmorMaterialCloth   ArmorModifier = "cloth"
     ArmorMaterialLeather ArmorModifier = "leather"
@@ -119,6 +135,7 @@ func (a *Armor) GetTooltipLines() []string {
         {Label: "Type", Columns: []string{string(a.slot)}},
         {Label: "Material", Columns: []string{string(a.material)}},
         {Label: "Protection", Columns: []string{fmt.Sprintf("%d", a.GetProtection())}},
+        {Label: "Encumbrance", Columns: []string{fmt.Sprintf("%d", a.GetEncumbrance())}},
         {Label: "Value", Columns: []string{fmt.Sprintf("%dg", a.GetValue())},
         },
     }
@@ -176,14 +193,20 @@ func (a *Armor) GetContextActions(engine Engine) []util.MenuItem {
     if !engine.IsPlayerControlled(a.GetHolder()) {
         return baseActions
     }
-    equipAction := util.MenuItem{
-        Text: "Equip",
-        Action: func() {
-            engine.ShowEquipMenu(a)
-        },
+
+    if a.IsEquipped() {
+        return append([]util.MenuItem{{
+            Text: "Unequip",
+            Action: func() {
+                a.Unequip()
+            }}}, baseActions...)
+    } else {
+        return append([]util.MenuItem{{
+            Text: "Equip",
+            Action: func() {
+                engine.ShowEquipMenu(a)
+            }}}, baseActions...)
     }
-    equipActions := []util.MenuItem{equipAction}
-    return append(equipActions, baseActions...)
 }
 
 func (a *Armor) CanStackWith(other Item) bool {
@@ -503,4 +526,18 @@ func (a *Armor) GetLevel() ItemTier {
 
 func (a *Armor) GetProtection() int {
     return protectionForArmor(a.slot, a.material, a.level)
+}
+
+func (a *Armor) GetEncumbrance() int {
+    materialEncumbrance := a.material.GetEncumbrance()
+    switch a.slot {
+    case ArmorSlotHelmet:
+        return 1 + materialEncumbrance
+    case ArmorSlotBreastPlate:
+        return 3 + materialEncumbrance
+    case ArmorSlotShoes:
+        return 1 + materialEncumbrance
+    default:
+        return 0
+    }
 }

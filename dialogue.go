@@ -36,12 +36,14 @@ func (g *GridEngine) StartConversation(npc *game.Actor, loadedDialogue *game.Dia
     firstNode := "_opening"
     if !g.playerKnowledge.HasTalkedTo(npc.GetInternalName()) && loadedDialogue.HasFirstTimeText() {
         g.playerKnowledge.AddTalkedTo(npc.GetInternalName())
-        firstNode = "_first_time"
+        if loadedDialogue.HasFirstTimeText() {
+            firstNode = "_first_time"
+        }
     }
     startedConversationFlag := fmt.Sprintf("talked_to_%s", npc.GetInternalName())
     g.flags.IncrementFlag(startedConversationFlag)
 
-    response := loadedDialogue.GetResponseAndAddKnowledge(g.playerKnowledge, firstNode)
+    response := loadedDialogue.GetResponseAndAddKnowledge(g.GetAvatar(), g.playerKnowledge, g, firstNode)
     g.handleDialogueChoice(loadedDialogue, response, npc)
 }
 
@@ -67,7 +69,7 @@ func (g *GridEngine) toMenuItems(npc *game.Actor, dialogue *game.Dialogue, optio
         items = append(items, util.MenuItem{
             Text: option,
             Action: func() {
-                response := dialogue.GetResponseAndAddKnowledge(g.playerKnowledge, option)
+                response := dialogue.GetResponseAndAddKnowledge(g.GetAvatar(), g.playerKnowledge, g, option)
                 g.handleDialogueChoice(dialogue, response, npc)
             },
             TextColor: textColor,
@@ -79,20 +81,47 @@ func (g *GridEngine) toMenuItems(npc *game.Actor, dialogue *game.Dialogue, optio
 func (g *GridEngine) toForcedMenuItems(npc *game.Actor, dialogue *game.Dialogue, choices []game.DialogueChoice) []util.MenuItem {
     var items []util.MenuItem
     for _, c := range choices {
-        if !game.EvalConditionals(g.GetAvatar(), g.flags, c.Conditionals) {
+        if !game.EvalConditionals(g.GetAvatar(), g, c.Conditionals) {
             continue
         }
 
         choice := c
+
+        label := choice.Text
+        if choice.SkillCheck != nil {
+            baseDifficulty := choice.SkillCheck.Difficulty
+            if choice.SkillCheck.IsVersusAntagonist {
+                baseDifficulty = npc.GetAntagonistDifficultyByAttribute(choice.SkillCheck.VersusAttribute)
+            }
+            label = fmt.Sprintf("%s (%s - %s)", label, choice.SkillCheck.SkillName, g.GetRelativeDifficulty(choice.SkillCheck.SkillName, baseDifficulty).ToString())
+        }
         items = append(items, util.MenuItem{
-            Text: choice.Text,
+            Text: label,
             Action: func() {
                 transitionTarget := choice.TransitionOnSuccess
-                // TODO? no transition on fail..
+                // do the checks..
+                checksFailed := false
+                if len(choice.Checks) > 0 {
+                    checksFailed = !game.EvalConditionals(g.GetAvatar(), g, choice.Checks)
+                }
+                if choice.SkillCheck != nil {
+                    if choice.SkillCheck.IsVersusAntagonist {
+                        if !g.SkillCheckAvatarVs(choice.SkillCheck.SkillName, npc, choice.SkillCheck.VersusAttribute) {
+                            checksFailed = true
+                        }
+                    } else {
+                        if !g.SkillCheckAvatar(choice.SkillCheck.SkillName, choice.SkillCheck.Difficulty) {
+                            checksFailed = true
+                        }
+                    }
+                }
+                if checksFailed {
+                    transitionTarget = choice.TransitionOnFail
+                }
                 if transitionTarget == "" {
                     println("ERR: No transition target for choice", choice.Text)
                 }
-                response := dialogue.GetResponseAndAddKnowledge(g.playerKnowledge, transitionTarget)
+                response := dialogue.GetResponseAndAddKnowledge(g.GetAvatar(), g.playerKnowledge, g, transitionTarget)
                 g.handleDialogueChoice(dialogue, response, npc)
             },
         })
@@ -101,6 +130,11 @@ func (g *GridEngine) toForcedMenuItems(npc *game.Actor, dialogue *game.Dialogue,
 }
 
 func (g *GridEngine) handleDialogueChoice(dialogue *game.Dialogue, response game.ConversationNode, npc *game.Actor) {
+    if response.IsEmpty() {
+        g.closeConversation()
+        println("ERR: Empty response")
+        return
+    }
     if g.conversationModal == nil {
         g.openSpeechWindow(npc)
     }
@@ -142,7 +176,7 @@ func (g *GridEngine) handleDialogueChoice(dialogue *game.Dialogue, response game
         if len(response.ForcedChoice) > 0 {
             optionsMenuItems = g.toForcedMenuItems(npc, dialogue, response.ForcedChoice)
         } else {
-            newOptions := dialogue.GetOptions(g.GetAvatar(), g.playerKnowledge, g.flags)
+            newOptions := dialogue.GetOptions(g.GetAvatar(), g.playerKnowledge, g)
             optionsMenuItems = g.toMenuItems(npc, dialogue, newOptions)
         }
         g.conversationModal.SetText(response.Text)
@@ -200,6 +234,9 @@ func (g *GridEngine) handleDialogueEffect(npc *game.Actor, effect string) (func(
         case "setFlag":
             flagName := effectPredicate.GetString(0)
             g.flags.IncrementFlag(flagName)
+        case "setFlagTo":
+            flagName := effectPredicate.GetString(0)
+            g.flags.SetFlag(flagName, effectPredicate.GetInt(1))
         case "triggerEvent":
             eventName := effectPredicate.GetString(0)
             g.TriggerEvent(eventName)
@@ -214,8 +251,10 @@ func (g *GridEngine) handleDialogueEffect(npc *game.Actor, effect string) (func(
             name := effectPredicate.GetString(1)
             strength := effectPredicate.GetInt(2)
             g.AddBuff(g.GetAvatar(), name, buffType, strength)
+        default:
+            println("Unknown effect:", effect)
         }
     }
-    println("Unknown effect:", effect)
+
     return nil, ConversationFlowContinue
 }

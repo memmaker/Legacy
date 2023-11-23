@@ -269,12 +269,15 @@ func (m *GridMap[ActorType, ItemType, ObjectType]) IsItemAt(location geometry.Po
     return m.Cells[m.MapWidth*location.Y+location.X].Item != nil
 }
 func (m *GridMap[ActorType, ItemType, ObjectType]) SetActorToDowned(a ActorType) {
-    m.RemoveActor(a)
+    if !m.RemoveActor(a) {
+        println("Could not remove actor from map")
+        return
+    }
+    m.AllDownedActors = append(m.AllDownedActors, a)
     if m.IsDownedActorAt(a.Pos()) && m.DownedActorAt(a.Pos()) != a {
         m.displaceDownedActor(a)
         return
     }
-    m.AllDownedActors = append(m.AllDownedActors, a)
     m.Cells[a.Pos().Y*m.MapWidth+a.Pos().X] = m.Cells[a.Pos().Y*m.MapWidth+a.Pos().X].WithDownedActor(a)
 }
 func (m *GridMap[ActorType, ItemType, ObjectType]) SetActorToRemoved(person ActorType) {
@@ -477,14 +480,15 @@ func (m *GridMap[ActorType, ItemType, ObjectType]) GetActor(p geometry.Point) Ac
     return *m.Cells[p.X+p.Y*m.MapWidth].Actor
 }
 
-func (m *GridMap[ActorType, ItemType, ObjectType]) RemoveActor(actor ActorType) {
+func (m *GridMap[ActorType, ItemType, ObjectType]) RemoveActor(actor ActorType) bool {
     m.Cells[actor.Pos().X+actor.Pos().Y*m.MapWidth] = m.Cells[actor.Pos().X+actor.Pos().Y*m.MapWidth].WithActorHereRemoved(actor)
     for i := len(m.AllActors) - 1; i >= 0; i-- {
         if m.AllActors[i] == actor {
             m.AllActors = append(m.AllActors[:i], m.AllActors[i+1:]...)
-            break
+            return true
         }
     }
+    return false
 }
 
 // MoveActor Should only be called my the model, so we can ensure that a HUD IsFinished will follow
@@ -802,7 +806,10 @@ func (m *GridMap[ActorType, ItemType, ObjectType]) IsTileWithSpecialAt(pos geome
 }
 
 func (m *GridMap[ActorType, ItemType, ObjectType]) MoveDownedActor(actor ActorType, newPos geometry.Point) {
-    m.Cells[actor.Pos().Y*m.MapWidth+actor.Pos().X].DownedActor = nil
+    if m.Cells[newPos.Y*m.MapWidth+newPos.X].DownedActor != nil {
+        return
+    }
+    m.Cells[actor.Pos().Y*m.MapWidth+actor.Pos().X] = m.Cells[actor.Pos().Y*m.MapWidth+actor.Pos().X].WithDownedActorHereRemoved(actor)
     actor.SetPos(newPos)
     m.Cells[newPos.Y*m.MapWidth+newPos.X] = m.Cells[newPos.Y*m.MapWidth+newPos.X].WithDownedActor(actor)
 }

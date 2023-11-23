@@ -169,8 +169,11 @@ func (c *CombatState) Draw(screen *ebiten.Image) {
     offset := c.engine.gridRenderer.GetScaledSmallGridSize()
     offsetPoint := geometry.Point{X: offset, Y: offset}
     for _, hitAnim := range c.hitAnimations {
-        screenPos := c.engine.MapToScreenCoordinates(hitAnim.Position())
-        c.engine.gridRenderer.DrawOnBigGridWithColor(screen, screenPos, offsetPoint, hitAnim.UseTiles, hitAnim.Icon, hitAnim.TintColor)
+        mapPosition := hitAnim.Position()
+        if c.engine.IsMapPosOnScreen(mapPosition) {
+            screenPos := c.engine.MapToScreenCoordinates(mapPosition)
+            c.engine.gridRenderer.DrawOnBigGridWithColor(screen, screenPos, offsetPoint, hitAnim.UseTiles, hitAnim.Icon, hitAnim.TintColor)
+        }
     }
 
     if c.isPlayerTurn && !c.engine.IsWindowOpen() {
@@ -474,7 +477,7 @@ func (c *CombatState) closeIntoMeleeRange(ourActor *game.Actor, listOfEnemies []
                 currentPath := currentMap.GetJPSPath(ourActor.Pos(), freeNeighbor, func(point geometry.Point) bool {
                     return currentMap.Contains(point) && currentMap.IsWalkableFor(point, ourActor)
                 })
-                if nearestEnemy == nil || (len(currentPath) > 0 && len(currentPath) < len(nearestPath)) {
+                if nearestEnemy == nil || (len(currentPath) > 0 && ((len(currentPath) < len(nearestPath)) || len(nearestPath) == 0)) {
                     nearestEnemy = enemy
                     nearestPath = currentPath
                 }
@@ -502,10 +505,20 @@ func (c *CombatState) animateBattleAction(actor *game.Actor, move BattleAction) 
         for _, dest := range move.Movement {
             c.engine.moveActorInCombat(actor, dest)
             c.movesTakenThisTurn[actor]++
+            if !actor.IsAlive() {
+                c.actorDied(actor)
+                return
+            }
+            if actor.IsSleeping() {
+                if !c.engine.IsPlayerControlled(actor) {
+                    c.removeOpponent(actor)
+                }
+                return
+            }
             _ = exe.YieldTime(200 * time.Millisecond)
         }
 
-        if move.ActionType == AttackActionTypeMelee && move.Target != nil {
+        if move.ActionType == AttackActionTypeMelee && move.Target != nil && actor.IsAlive() && !actor.IsSleeping() && move.Target.IsAlive() {
             c.animateMeleeHit(actor, move.Target)
         }
     })
@@ -521,15 +534,21 @@ func (c *CombatState) findAlliesOfOpponent(attackedNPC *game.Actor) {
     combatFaction := attackedNPC.GetCombatFaction()
     radius := 25
     // TODO: better filter for guards, allies, etc.
-    nearbyNPCs := c.engine.currentMap.FindAllNearbyActors(attackedNPC.Pos(), radius, func(actor *game.Actor) bool {
+    currentMap := c.engine.currentMap
+    nearbyNPCs := currentMap.FindAllNearbyActors(attackedNPC.Pos(), radius, func(actor *game.Actor) bool {
         return !c.engine.IsPlayerControlled(actor) &&
             actor.IsAlive() &&
             !actor.IsHidden() &&
             actor != attackedNPC &&
             actor.GetCombatFaction() == combatFaction
     })
-
+    avatar := c.engine.GetAvatar()
     for _, nearbyNPC := range nearbyNPCs {
+        randomPosNearby := currentMap.GetRandomFreeNeighbor(avatar.Pos())
+        path := currentMap.GetJPSPath(nearbyNPC.Pos(), randomPosNearby, currentMap.IsCurrentlyPassable)
+        if len(path) > (nearbyNPC.GetMovementAllowance() * 4) {
+            continue
+        }
         c.opponents[nearbyNPC] = true
     }
     c.didAlertNearbyActors = true
@@ -546,12 +565,17 @@ func (c *CombatState) removeOpponent(actor *game.Actor) {
 func (c *CombatState) checkForEndOfCombat() {
     c.removeDeadAndSleepingOpponents()
     if len(c.opponents) == 0 && len(c.hitAnimations) == 0 && !c.animationRoutine.Running() {
-        c.isInCombat = false
-        c.engine.ForceJoinParty()
+        c.endCombat()
     }
 }
 
-//
+func (c *CombatState) endCombat() {
+    c.isInCombat = false
+    c.engine.ForceJoinParty()
+    clear(c.movesTakenThisTurn)
+    clear(c.hasUsedPrimaryAction)
+}
+
 func (c *CombatState) OnScreenMouseClicked(screenX, screenY int) bool {
     if c.waitForTarget != nil {
         mapPos := c.engine.ScreenToMap(screenX, screenY)
@@ -559,7 +583,6 @@ func (c *CombatState) OnScreenMouseClicked(screenX, screenY int) bool {
         return true
     }
     return false
-    //c.engine.mapWindow.GetScreenGridPositionFromMapGridPosition()
 }
 func (c *CombatState) OnMouseMoved(screenX, screenY int) (bool, ui.Tooltip) {
     return false, ui.NoTooltip{}
@@ -578,12 +601,19 @@ func (c *CombatState) EnemyStartsAttack(attacker *game.Actor, attackedNPC *game.
 
 func (c *CombatState) PlayerStartsRangedAttack() {
     avatar := c.engine.GetAvatar()
-    if avatar.HasRangedWeaponEquipped() {
-        c.combatInitByPlayer()
-        c.selectRangedTarget(avatar)
-    } else {
-        c.engine.Print("No ranged weapon equipped")
+
+    if !c.canAct(avatar) {
+        c.engine.Print("You cannot act anymore this turn")
+        return
     }
+
+    if !avatar.HasRangedWeaponEquipped() {
+        c.engine.Print("No ranged weapon equipped")
+        return
+    }
+
+    c.combatInitByPlayer()
+    c.selectRangedTarget(avatar)
 }
 
 func (c *CombatState) OrchestratedRangedAttack() {
@@ -616,6 +646,7 @@ func (c *CombatState) SelectSpellTarget(attacker *game.Actor, spell *game.Spell)
 func (c *CombatState) selectRangedTarget(attacker *game.Actor) {
     c.engine.CloseAllModals()
     c.waitForTarget = func(targetPos geometry.Point) {
+        c.hasUsedPrimaryAction[attacker] = true
         c.animateProjectile(attacker, targetPos, c.iconGenericMissile, color.White, func(pos geometry.Point, actorHit *game.Actor) func() {
             return func() {
                 c.onRangedHit(attacker, actorHit)

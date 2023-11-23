@@ -7,6 +7,8 @@ import (
     "Legacy/renderer"
     "fmt"
     "github.com/hajimehoshi/ebiten/v2"
+    "slices"
+    "sort"
 )
 
 type InventoryWindow struct {
@@ -22,6 +24,7 @@ type InventoryWindow struct {
     currentSelection int
 
     filterMap   map[InventoryPage]func(item game.Item) bool
+    sortMap     map[InventoryPage]func(one game.Item, two game.Item) bool
     shouldClose bool
 }
 
@@ -261,7 +264,13 @@ func (i *InventoryWindow) getCurrentFilter() func(item game.Item) bool {
 }
 func (i *InventoryWindow) updateItemList() {
     party := i.engine.GetParty()
-    i.items = party.GetFilteredStackedInventory(i.getCurrentFilter())
+    if i.currentPage == InventoryPageAll {
+        items := party.GetFilteredStackedInventory(i.getCurrentFilter())
+        slices.Reverse(items)
+        i.items = items
+    } else {
+        i.items = i.sortInventory(party.GetFilteredStackedInventory(i.getCurrentFilter()))
+    }
 }
 
 func (i *InventoryWindow) drawItems(screen *ebiten.Image) {
@@ -367,10 +376,95 @@ func (i *InventoryWindow) loadFilter() {
         return true
     }
     i.filterMap = filtermap
+
+    sortMap := make(map[InventoryPage]func(one game.Item, two game.Item) bool)
+    sortMap[InventoryPageAll] = func(one game.Item, two game.Item) bool {
+        return one.Name() < two.Name()
+    }
+    sortMap[InventoryPageWeapons] = func(one game.Item, two game.Item) bool {
+        weaponOne := one.(*game.Weapon)
+        weaponTwo := two.(*game.Weapon)
+
+        if weaponOne.IsEquipped() && !weaponTwo.IsEquipped() {
+            return true
+        } else if !weaponOne.IsEquipped() && weaponTwo.IsEquipped() {
+            return false
+        }
+
+        if weaponOne.GetBaseDamage() > weaponTwo.GetBaseDamage() {
+            return true
+        } else if weaponOne.GetBaseDamage() < weaponTwo.GetBaseDamage() {
+            return false
+        }
+
+        return one.Name() < two.Name()
+    }
+
+    sortMap[InventoryPageArmor] = func(one game.Item, two game.Item) bool {
+        armorOne := one.(*game.Armor)
+        armorTwo := two.(*game.Armor)
+
+        if armorOne.IsEquipped() && !armorTwo.IsEquipped() {
+            return true
+        } else if !armorOne.IsEquipped() && armorTwo.IsEquipped() {
+            return false
+        }
+
+        if armorOne.GetProtection() > armorTwo.GetProtection() {
+            return true
+        } else if armorOne.GetProtection() < armorTwo.GetProtection() {
+            return false
+        }
+
+        return one.Name() < two.Name()
+    }
+
+    sortMap[InventoryPageAccessories] = func(one game.Item, two game.Item) bool {
+        armorOne := one.(*game.Armor)
+        armorTwo := two.(*game.Armor)
+
+        if armorOne.IsEquipped() && !armorTwo.IsEquipped() {
+            return true
+        } else if !armorOne.IsEquipped() && armorTwo.IsEquipped() {
+            return false
+        }
+
+        if armorOne.GetProtection() > armorTwo.GetProtection() {
+            return true
+        } else if armorOne.GetProtection() < armorTwo.GetProtection() {
+            return false
+        }
+
+        return one.Name() < two.Name()
+    }
+
+    sortMap[InventoryPageConsumables] = func(one game.Item, two game.Item) bool {
+        return one.Name() < two.Name()
+    }
+
+    sortMap[InventoryPageScrolls] = func(one game.Item, two game.Item) bool {
+        return one.Name() < two.Name()
+    }
+
+    sortMap[InventoryPageMisc] = func(one game.Item, two game.Item) bool {
+        return one.Name() < two.Name()
+    }
+
+    i.sortMap = sortMap
 }
 
 func (i *InventoryWindow) ActionCancel() {
     i.shouldClose = true
+}
+
+func (i *InventoryWindow) sortInventory(inventory [][]game.Item) [][]game.Item {
+    // sort by name
+    sort.SliceStable(inventory, func(one, two int) bool {
+        firstItem := inventory[one][0]
+        secondItem := inventory[two][0]
+        return i.sortMap[i.currentPage](firstItem, secondItem)
+    })
+    return inventory
 }
 
 func NewInventoryWindow(engine game.Engine, gridRenderer *renderer.DualGridRenderer) *InventoryWindow {

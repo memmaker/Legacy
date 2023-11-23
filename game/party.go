@@ -11,20 +11,21 @@ import (
 )
 
 type Party struct {
-    members         []*Actor
-    partyInventory  [][]Item
-    keys            map[string][]*Key
-    gridMap         *gridmap.GridMap[*Actor, Item, Object]
-    fov             *geometry.FOV
-    gold            int
-    food            int
-    lockpicks       int
-    stepsBeforeRest int
-    rules           *Rules
-    prevPositions   []geometry.Point
-    currentVehicle  *Vehicle
-    splitControlled *Actor
-    usedKeys        map[string]bool
+    members            []*Actor
+    partyInventory     [][]Item
+    keys               map[string][]*Key
+    gridMap            *gridmap.GridMap[*Actor, Item, Object]
+    fov                *geometry.FOV
+    gold               int
+    food               int
+    lockpicks          int
+    stepsBeforeRest    int
+    rules              *Rules
+    prevPositions      []geometry.Point
+    currentVehicle     *Vehicle
+    splitControlled    *Actor
+    usedKeys           map[string]bool
+    activeSpellEffects map[OngoingSpellEffect]int
 }
 
 func (p *Party) Name() string {
@@ -37,11 +38,12 @@ func (p *Party) Pos() geometry.Point {
 
 func NewParty(leader *Actor) *Party {
     p := &Party{
-        members:        []*Actor{leader},
-        partyInventory: [][]Item{},
-        keys:           make(map[string][]*Key),
-        usedKeys:       make(map[string]bool),
-        fov:            geometry.NewFOV(geometry.NewRect(-6, -6, 6, 6)),
+        members:            []*Actor{leader},
+        partyInventory:     [][]Item{},
+        keys:               make(map[string][]*Key),
+        usedKeys:           make(map[string]bool),
+        fov:                geometry.NewFOV(geometry.NewRect(-6, -6, 6, 6)),
+        activeSpellEffects: make(map[OngoingSpellEffect]int),
     }
     leader.SetParty(p)
     return p
@@ -656,6 +658,16 @@ func (p *Party) HasUsedKey(key string) bool {
 func (p *Party) CanSee(pos geometry.Point) bool {
     return p.fov.Visible(pos)
 }
+
+func (p *Party) AddSpellEffect(effect OngoingSpellEffect, duration int) {
+    p.activeSpellEffects[effect] = duration
+}
+
+func (p *Party) HasSpellEffect(effect OngoingSpellEffect) bool {
+    _, exists := p.activeSpellEffects[effect]
+    return exists
+}
+
 func moneyFormat(value int) string {
     return strconv.Itoa(value) + "g"
 }

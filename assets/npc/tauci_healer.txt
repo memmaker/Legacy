@@ -30,7 +30,4 @@ Text: "Look at my fine =wares=! I have the best potions in the whole country!"
 
 Key: wares
 Effect: sells
-NeedsFlag: nice_guy
-SetsFlag: buyer_of_wares
-NeedsSkill: barter(1)
 Text: "Would you like to buy some of my fine magical potions?"

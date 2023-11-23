@@ -6,7 +6,6 @@ import (
     "Legacy/util"
     "fmt"
     "image/color"
-    "math/rand"
 )
 
 type Door struct {
@@ -14,8 +13,9 @@ type Door struct {
     key               string
     isLocked          bool
     isMagicallyLocked bool
-    lockStrength      float64
-    frameStrength     float64
+    lockStrength      DifficultyLevel
+    frameStrength     DifficultyLevel
+    spellStrength     DifficultyLevel
     isBroken          bool
     listenText        []string
     knockEvent        string
@@ -42,8 +42,9 @@ func (d *Door) ToRecordAndType() (recfile.Record, string) {
         {Name: "key", Value: d.key},
         {Name: "isLocked", Value: recfile.BoolStr(d.isLocked)},
         {Name: "isMagicallyLocked", Value: recfile.BoolStr(d.isMagicallyLocked)},
-        {Name: "lockStrength", Value: recfile.FloatStr(d.lockStrength)},
-        {Name: "frameStrength", Value: recfile.FloatStr(d.frameStrength)},
+        {Name: "lockStrength", Value: d.lockStrength.ToString()},
+        {Name: "frameStrength", Value: d.frameStrength.ToString()},
+        {Name: "spellStrength", Value: d.spellStrength.ToString()},
         {Name: "isBroken", Value: recfile.BoolStr(d.isBroken)},
         //{Name: "listenText", Value: recfile.StringSliceStr(d.listenText)},
         {Name: "knockEvent", Value: d.knockEvent},
@@ -70,9 +71,11 @@ func NewDoorFromRecord(record recfile.Record) *Door {
         case "isMagicallyLocked":
             door.isMagicallyLocked = field.AsBool()
         case "lockStrength":
-            door.lockStrength = field.AsFloat()
+            door.lockStrength = DifficultyLevelFromString(field.Value)
         case "frameStrength":
-            door.frameStrength = field.AsFloat()
+            door.frameStrength = DifficultyLevelFromString(field.Value)
+        case "spellStrength":
+            door.spellStrength = DifficultyLevelFromString(field.Value)
         case "isBroken":
             door.isBroken = field.AsBool()
         //case "listenText": //TODO
@@ -93,22 +96,22 @@ func NewDoor() *Door {
         },
     }
 }
-func NewLockedDoor(key string, strength float64) *Door {
+func NewLockedDoor(key string, lockStrength DifficultyLevel) *Door {
     return &Door{
         BaseObject: BaseObject{
             icon: 184,
         },
         key:          key,
-        lockStrength: strength,
+        lockStrength: lockStrength,
         isLocked:     true,
     }
 }
-func NewMagicallyLockedDoor(strength float64) *Door {
+func NewMagicallyLockedDoor(spellStrength DifficultyLevel) *Door {
     return &Door{
         BaseObject: BaseObject{
             icon: 185,
         },
-        lockStrength:      strength,
+        spellStrength:     spellStrength,
         isLocked:          true,
         isMagicallyLocked: true,
     }
@@ -206,11 +209,13 @@ func (d *Door) GetContextActions(engine Engine) []util.MenuItem {
             })
         }
         if !d.isLocked && d.key != "" && party.GetLockpicks() > 0 {
+            skill := ThievingSkillLockpicking
+            difficulty := d.lockStrength
             actions = append(actions, util.MenuItem{
-                Text: "Lock (lockpick)",
+                Text: fmt.Sprintf("Lock (lockpick) - %s", engine.GetRelativeDifficulty(skill, difficulty).ToString()),
                 Action: func() {
                     if !d.isLocked && d.key != "" && party.GetLockpicks() > 0 {
-                        if rand.Float64() > d.lockStrength {
+                        if engine.SkillCheckAvatar(skill, difficulty) {
                             d.isLocked = true
                             engine.Print("You locked the door.")
                         } else {
@@ -224,11 +229,13 @@ func (d *Door) GetContextActions(engine Engine) []util.MenuItem {
     }
 
     if d.isLocked && !d.isMagicallyLocked && !d.isBroken {
+        skill := PhysicalSkillTackle
+        difficulty := d.frameStrength
         actions = append(actions, util.MenuItem{
-            Text: "Break",
+            Text: fmt.Sprintf("Break - %s", engine.GetRelativeDifficulty(skill, difficulty).ToString()),
             Action: func() {
                 if d.isLocked && !d.isMagicallyLocked && !d.isBroken {
-                    if rand.Float64() > d.frameStrength {
+                    if engine.SkillCheckAvatar(skill, difficulty) {
                         d.isBroken = true
                         d.isLocked = false
                         engine.DamageAvatar(8)
@@ -244,11 +251,13 @@ func (d *Door) GetContextActions(engine Engine) []util.MenuItem {
             },
         })
         if breakingTool := engine.GetBreakingToolName(); breakingTool != "" {
+            skillForTool := PhysicalSkillTools
+            difficultyForTool := d.frameStrength.ReducedBy(1)
             actions = append(actions, util.MenuItem{
-                Text: fmt.Sprintf("Break (%s)", breakingTool),
+                Text: fmt.Sprintf("Break (%s) - %s", breakingTool, engine.GetRelativeDifficulty(skillForTool, difficultyForTool).ToString()),
                 Action: func() {
                     if d.isLocked && !d.isMagicallyLocked && !d.isBroken {
-                        if rand.Float64()+0.5 > d.frameStrength {
+                        if engine.SkillCheckAvatar(skillForTool, difficultyForTool) {
                             d.isBroken = true
                             d.isLocked = false
                             engine.Print("You broke the door.")
@@ -274,11 +283,13 @@ func (d *Door) GetContextActions(engine Engine) []util.MenuItem {
                 },
             })
         } else if party.GetLockpicks() > 0 {
+            skillForPick := ThievingSkillLockpicking
+            difficultyForPick := d.lockStrength
             actions = append(actions, util.MenuItem{
-                Text: "Pick lock",
+                Text: fmt.Sprintf("Pick lock - %s", engine.GetRelativeDifficulty(skillForPick, difficultyForPick).ToString()),
                 Action: func() {
                     if d.isLocked && !d.isMagicallyLocked && !d.isBroken && party.GetLockpicks() > 0 {
-                        if rand.Float64() > d.lockStrength {
+                        if engine.SkillCheckAvatar(skillForPick, difficultyForPick) {
                             d.isLocked = false
                             engine.Print("You picked the lock.")
                         } else {
@@ -300,4 +311,8 @@ func (d *Door) SetListenText(text []string) {
 
 func (d *Door) SetBreakEvent(event string) {
     d.breakEvent = event
+}
+
+func (d *Door) SetFrameStrength(level DifficultyLevel) {
+    d.frameStrength = level
 }

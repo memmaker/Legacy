@@ -41,7 +41,7 @@ Effect: quits
 Text: "Goodbye."
 
 Key: the rat king's offer
-Condition: isFlagSet('rat_king_quest_given')
+Condition: hasFlag('rat_king_quest_given')
 Text:
 + "You are saying that the king of those rats
 + lives in our cellar? And he wants us to
@@ -119,12 +119,12 @@ This country is doing just \
 fine without you."
 
 Key: help
-Condition: !isFlagSet('rat_quest_accepted')
+Condition: !hasFlag('rat_quest_accepted')
 Text: "Well, there is =one thing= \
 you could do for me."
 
 Key: one thing
-Condition: !isFlagSet('rat_quest_accepted')
+Condition: !hasFlag('rat_quest_accepted')
 Effect: setFlag(rat_quest_given)
 Text:
 + "We have a bit of a problem

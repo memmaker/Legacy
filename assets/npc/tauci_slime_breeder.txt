@@ -7,6 +7,7 @@ Description: He is covered in green goo.
 %rec: Inventory
 
 Item: namedWeapon(slime whisperer)
+Item: flavor(yellow powder, 5, a yellow powder in a small bag)
 
 %rec: Conversation
 
@@ -20,7 +21,7 @@ Effect: quits
 Text: "Goodbye!"
 
 Key: tranquilizer
-Condition: !isFlagSet('slime_tranquilizer')
+Condition: !hasFlag('slime_tranquilizer')
 Effect: giveItem(slime whisperer)
 Effect: setFlag(slime_tranquilizer)
 Text: "Here you go, enjoy!"

@@ -220,6 +220,8 @@ func (g *GridEngine) openDebugMenu() {
                 g.playerParty.AddItem(game.NewTool(game.ToolTypePickaxe, "a pickaxe"))
                 g.playerParty.AddItem(game.NewTool(game.ToolTypeShovel, "a shovel"))
                 g.giveAllArmorsAndWeapons()
+                g.giveAllSpells()
+                g.Flags().SetFlag("needs_form_32", 1)
                 g.Print("DEBUG(impulse 9)")
             },
         },
@@ -264,7 +266,13 @@ func (g *GridEngine) openDebugMenu() {
         {
             Text: "Show XP Table",
             Action: func() {
-                g.ShowScrollableText(g.rules.GetXPTable(2, 30), color.White, false)
+                g.ShowScrollableText(g.rules.GetXPTable(2, 21), color.White, false)
+            },
+        },
+        {
+            Text: "Show Skill Check Tables",
+            Action: func() {
+                g.ShowScrollableText(g.rules.GetSkillCheckTable(), color.White, false)
             },
         },
     })
@@ -305,7 +313,7 @@ func (g *GridEngine) loadGameFromDirectory(directory string) {
 
     // set the current map
     // place the party on the map
-    g.currentMap = g.mapsInMemory[currentMapName]
+    g.setMap(g.mapsInMemory[currentMapName])
 
     g.initMapWindow(g.currentMap.MapWidth, g.currentMap.MapHeight)
 

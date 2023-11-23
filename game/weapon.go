@@ -61,6 +61,16 @@ func NewOnHitEffect(name string) OnHitEffect {
         }
         effect.toolTipLeft = "slime"
         effect.toolTipRight = "sleeping (100%)"
+    case "greed":
+        effect.condition = func(engine Engine, weapon *Weapon, attacker, victim *Actor) bool {
+            return rand.Float64() < 0.33 && !victim.IsAlive()
+        }
+        effect.apply = func(engine Engine, weapon *Weapon, attacker, victim *Actor) {
+            amount := rand.Intn(victim.level*300) + 100
+            victim.AddGold(amount)
+        }
+        effect.toolTipLeft = "greed"
+        effect.toolTipRight = "loot more gold (33%)"
     }
     return effect
 }
@@ -175,18 +185,24 @@ func (a *Weapon) Icon(u uint64) int32 {
     return int32(220)
 }
 func (a *Weapon) GetContextActions(engine Engine) []util.MenuItem {
-    equipAction := util.MenuItem{
-        Text: "Equip",
-        Action: func() {
-            engine.ShowEquipMenu(a)
-        },
-    }
     baseActions := inventoryItemActions(a, engine)
     if !a.IsHeldByPlayer(engine) {
         return baseActions
     }
-    equipActions := []util.MenuItem{equipAction}
-    return append(equipActions, baseActions...)
+
+    if a.IsEquipped() {
+        return append([]util.MenuItem{{
+            Text: "Unequip",
+            Action: func() {
+                a.Unequip()
+            }}}, baseActions...)
+    } else {
+        return append([]util.MenuItem{{
+            Text: "Equip",
+            Action: func() {
+                engine.ShowEquipMenu(a)
+            }}}, baseActions...)
+    }
 }
 
 func (a *Weapon) CanStackWith(other Item) bool {
@@ -405,6 +421,16 @@ func NewNamedWeapon(weaponName string) *Weapon {
         weapon.SetFixedDamage(0)
         weapon.SetName("slime whisperer")
         weapon.AddOnHitEffectByName("slime whisperer")
+        return weapon
+    case "robbers_bow":
+        weapon := NewWeapon(ItemTierCommon, WeaponTypeBow, WeaponMaterialIron)
+        weapon.SetName("robber's bow")
+        weapon.AddOnHitEffectByName("greed")
+        return weapon
+    case "robbers_dagger":
+        weapon := NewWeapon(ItemTierCommon, WeaponTypeDagger, WeaponMaterialIron)
+        weapon.SetName("robber's dagger")
+        weapon.AddOnHitEffectByName("greed")
         return weapon
     }
     println("ERR: unknown weapon name:", weaponName)

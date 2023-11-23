@@ -1,0 +1,59 @@
+%rec: Details
+
+Name: Josie Banks
+Health: 10
+Torso: armor(chainmail, torso, 4)
+Head: armor(mail coif, head, 2)
+Description: She is very much interested in her fingernails.
+
+%rec: Inventory
+
+Item: key(bank key, tauci_bank, 4)
+Item: flavor(signed form 32, 10, a signed form 32.)
+
+%rec: Conversation
+
+Key: _opening
+AddsKeyword: bye
+Condition: !hasFlag('talked_to_tauci_official_two')
+Effect: setFlagTo(josie_stage, 1)
+Text:
++ "I am very busy, please go over to the other window.
++ My colleague, Jim, will be happy to help you."
+
+
+Key: _opening
+AddsKeyword: bye
+Condition: getFlag('jim_stage') == 1 || getFlag('jim_stage') == 2
+Effect: setFlagTo(jim_stage, 2)
+Text:
++ "Regardless of what Jim told you, I am very busy.
++ He is just trying to get rid of you.
++ And it would be his turn to help you anyway."
+
+Key: _opening
+AddsKeyword: bank account
+AddsKeyword: form 32
+Condition: getFlag('josie_stage') == 2
+Text:
++ "Alright, I guess I can help you now.
++ What do you need?"
+
+Key: bank account
+Text:
++ "You need a bank account? Right, your best bet is
++ to go over to the bank and ask them for one. I am
++ sure they will be happy to help you. We only deal
++ with regulations and paperwork here."
+
+Key: form 32
+Condition: hasFlag('needs_form_32')
+Effect: setFlagTo(josie_stage, 3)
+Text:
++ "Oh, you need a form 32? Ok, I can help you with that.
++ That's our daily business, you know. Very simple =procedure=.
++ Just go over to the other window and ask Jim for a form 32."
+
+Key: bye
+Effect: quits
+Text: "See you later!"

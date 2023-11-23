@@ -33,26 +33,26 @@ He thinks he's the king, but he's just a miserable human being.
 I'd like to make him disappear, if you know what I mean."
 
 Key: chancellor's quest
-Condition: isFlagSet('rat_quest_given') && !isFlagSet('rat_quest_accepted') && !isFlagSet('rat_quest_rejected')
+Condition: hasFlag('rat_quest_given') && !hasFlag('rat_quest_accepted') && !hasFlag('rat_quest_rejected')
 AddsKeyword: your offer?
 Text: "Yes, I've heard about the 'assignment' you've been offered.
 + I'm sure I can offer you a better deal."
 
 Key: extermination
-Condition: isFlagSet('rat_quest_accepted')
+Condition: hasFlag('rat_quest_accepted')
 AddsKeyword: your offer?
 Text: "You told the chancellor you'd do it?
 + Maybe you'll reconsider when you hear what I have to say."
 
 Key: rejected quest
-Condition: isFlagSet('rat_quest_rejected')
+Condition: hasFlag('rat_quest_rejected')
 AddsKeyword: your offer?
 Text: "I've heard about the 'assignment' you've been offered.
 + I'm glad you turned it down. Maybe I can make you a better offer."
 
 Key: your offer?
 Effect: setFlag(rat_king_quest_given)
-Condition: !isFlagSet('tauci_elimination_accepted')
+Condition: !hasFlag('tauci_elimination_accepted')
 Text:
 + "I'll give you a =royal reward= if you can get rid of those pesky Taucis.
 + What do you say?"

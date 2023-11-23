@@ -38,8 +38,10 @@ func (g *GridEngine) PlayerMovement(direction geometry.Point) {
         object := g.currentMap.ObjectAt(newPos)
         object.OnActorWalkedOn(g.GetAvatar())
     }
+
+    g.checkMoveHooks(g.GetAvatar(), newPos)
+
     g.onAvatarMovedOrTeleported(g.GetAvatar().Pos())
-    g.movementRoutine.Stop()
 }
 
 func (g *GridEngine) onAvatarMovedOrTeleported(newLocation geometry.Point) {
@@ -56,6 +58,11 @@ func (g *GridEngine) onAvatarMovedOrTeleported(newLocation geometry.Point) {
     }
     // check if we are near any aggressive actors, that would want to start combat
     for _, actor := range g.currentMap.GetFilteredActorsInRadius(newLocation, 11, g.aggressiveActorsFilter(newLocation)) {
+        randomPosNearby := g.currentMap.GetRandomFreeNeighbor(newLocation)
+        path := g.currentMap.GetJPSPath(actor.Pos(), randomPosNearby, g.currentMap.IsCurrentlyPassable)
+        if len(path) > actor.GetNPCEngagementRange() {
+            continue
+        }
         g.EnemyStartsCombat(actor)
         return
     }
@@ -73,6 +80,7 @@ func (g *GridEngine) moveActorInCombat(actor *game.Actor, dest geometry.Point) {
     if g.IsPlayerControlled(actor) {
         g.onAvatarMovedOrTeleported(actor.Pos()) // UNCOMMENT FOR CAM FOLLOW BEHAVIOR
     }
+    g.checkMoveHooks(actor, dest)
 }
 
 func (g *GridEngine) Update() error {
@@ -283,10 +291,15 @@ func (g *GridEngine) transitionToLocation(targetMap string, destPos geometry.Poi
     g.initMapWindow(nextMap.MapWidth, nextMap.MapHeight)
 
     // set the new map
-    g.currentMap = nextMap
+    g.setMap(nextMap)
 
     // add the party to the new map
     g.PlaceParty(destPos)
+}
+
+func (g *GridEngine) setMap(nextMap *gridmap.GridMap[*game.Actor, game.Item, game.Object]) {
+    g.currentMap = nextMap
+    g.levelHooks = game.GetHooksForLevel(g, g.currentMap.GetName())
 }
 
 type Interactables struct {
@@ -423,10 +436,17 @@ func (g *GridEngine) contextActionsFromInteractables(interactables Interactables
 
     for _, a := range interactables.Actors {
         actor := a
+        var additionalActions []util.MenuItem
+        actionHooks := g.levelHooks.ActorActionHooks
+        for _, hook := range actionHooks {
+            if hook.Applies(actor) {
+                additionalActions = append(additionalActions, hook.Action(actor)...)
+            }
+        }
         contextActions = append(contextActions, util.MenuItem{
             Text: actor.Name(),
             Action: func() {
-                g.openMenuWithTitle(actor.Name(), actor.GetContextActions(g))
+                g.openMenuWithTitle(actor.Name(), append(additionalActions, actor.GetContextActions(g)...))
             },
         })
     }

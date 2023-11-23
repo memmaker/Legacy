@@ -1,6 +1,6 @@
 %rec: Details
 
-Name: Banksy
+Name: Mr. Banks
 Health: 10
 Torso: armor(chainmail, torso, 4)
 Head: armor(mail coif, head, 2)
@@ -9,15 +9,51 @@ Description: He clearly wants to sell you something..
 %rec: Inventory
 
 Item: key(bank key, tauci_bank, 4)
+Item: flavor(form 32, 10, a blank form 32. This is needed for bank account registration.)
+Item: flavor(form 32, 10, a blank form 32. This is needed for bank account registration.)
+Item: flavor(form 32, 10, a blank form 32. This is needed for bank account registration.)
 
 %rec: Conversation
 
+Key: _first_time
+AddsKeyword: bye
+Text:
++ "Hello there, potential customer! I'm Mr. Banks, the owner of this fine establishment.
++ May I interest you in a =new account=?"
+
 Key: _opening
+AddsKeyword: new account
 Text: "Look at my fine =offers=! I have the best financial products in the whole country!"
+
+Key: new account
+Condition: hasItem('signed form 32', 3)
+Effect: setFlag(has_bank_account)
+Text:
++ "Ah, I can see you have already filled out the needed paperwork.
++ Let me just get your account ready for you."
+
+Key: new account
+Condition: !hasItem('signed form 32', 3)
+Effect: setFlag(needs_form_32)
+Text:
++ "Of course! Please hand me your triple copies of =form 32= and I'll get you started."
+
+Key: form 32
+Text:
++ "Oh, yes, it's a very simple form but also incredibly important.
++ It's just a few pages, but you need to fill out three copies,
++ for our records, for the =government=, and for your own records.
++ You can get the form at the regulations office in the northern part of town."
+
+Key: government
+Text:
++ "Yes, the government needs to know about all of our customers.
++ It's a very important part of our business."
+
 
 Key: offers
 Text: "I have the best financial products in the whole country!"
 
-Key: wares
-Effect: sells
-Text: "Would you like to buy some of my fine armors?"
+Key: bye
+Effect: quits
+Text: "See you later!"

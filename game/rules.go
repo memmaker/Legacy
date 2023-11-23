@@ -4,11 +4,13 @@ import (
     "Legacy/util"
     "fmt"
     "math"
+    "math/rand"
     "strings"
 )
 
 type Rules struct {
-    mirrorMap map[string]TeleportTarget
+    mirrorMap       map[string]TeleportTarget
+    difficultyTable map[DifficultyLevel]float64
 }
 type TeleportTarget struct {
     MapName  string
@@ -17,6 +19,17 @@ type TeleportTarget struct {
 
 func NewRules() *Rules {
     return &Rules{
+        difficultyTable: map[DifficultyLevel]float64{
+            DifficultyLevelTrivial:        0.99,
+            DifficultyLevelVeryEasy:       0.8,
+            DifficultyLevelEasy:           0.65,
+            DifficultyLevelMedium:         0.5,
+            DifficultyLevelHard:           0.35,
+            DifficultyLevelVeryHard:       0.2,
+            DifficultyLevelNearImpossible: 0.1,
+            DifficultyLevelImpossible:     0.01,
+        },
+
         mirrorMap: map[string]TeleportTarget{
             "celador": {
                 MapName:  "WorldMap",
@@ -38,6 +51,16 @@ func NewRules() *Rules {
     }
 }
 
+func (r *Rules) RollSkillCheck(skillLevel SkillLevel, difficultyLevel DifficultyLevel) bool {
+    relativeDiff := r.GetRelativeDifficulty(skillLevel, difficultyLevel)
+    chance := r.difficultyTable[relativeDiff]
+    return RollChance(chance)
+}
+
+func RollChance(chance float64) bool {
+    return rand.Float64() < chance
+}
+
 func (r *Rules) GetBaseValueOfLockpick() int {
     return 50
 }
@@ -47,7 +70,14 @@ func (r *Rules) GetBaseValueOfFood() int {
 }
 
 func (r *Rules) NeededXpForLevel(level int) int {
-    return int(7892.43*math.Pow(math.E, 0.0503654*float64(level)) - 7800.12)
+    //403.4093
+    //⋅
+    //1.3069
+    //LEVEL
+    x := 0.035
+    y := 1.8
+    return int(math.Pow(float64(level)/x, y))
+    //return int(7892.43*math.Pow(math.E, 0.0503654*float64(level)) - 7800.12)
 }
 
 func (r *Rules) CanLevelUp(level, xp int) (bool, int) {
@@ -63,15 +93,33 @@ func (r *Rules) GetTrainerCost(level int) int {
 
 func (r *Rules) GetXPTable(from, to int) []string {
     var rows []util.TableRow
+    totalXP := 0
+    xpForLastLevel := 0
     for i := from; i <= to; i++ {
+        xpForLevel := r.NeededXpForLevel(i)
+        diff := xpForLevel - xpForLastLevel
         row := util.TableRow{
             Label: fmt.Sprintf("%d", i),
             Columns: []string{
-                fmt.Sprintf("%d", r.NeededXpForLevel(i)),
+                fmt.Sprintf("%d (+%d)", xpForLevel, diff),
             },
         }
         rows = append(rows, row)
+        xpForLastLevel = xpForLevel
+        totalXP += xpForLevel
     }
+    rows = append(rows, util.TableRow{
+        Label: "---",
+        Columns: []string{
+            "------",
+        },
+    })
+    rows = append(rows, util.TableRow{
+        Label: "Sum",
+        Columns: []string{
+            fmt.Sprintf("%d", totalXP),
+        },
+    })
     return util.TableLayout(rows)
 }
 
@@ -134,4 +182,39 @@ func (r *Rules) GetMinutesPerStepInLevels() int {
 
 func (r *Rules) GetMinutesPerStepOnWorldmap() int {
     return 20
+}
+
+func (r *Rules) GetRelativeDifficulty(skill SkillLevel, difficulty DifficultyLevel) DifficultyLevel {
+    diffAsInt := int(difficulty)
+    skillAsInt := int(skill - 1)
+    relativeDifficulty := diffAsInt - skillAsInt
+    fromInt := DifficultyLevelFromInt(relativeDifficulty)
+    return fromInt
+}
+
+func (r *Rules) GetSkillCheckTable() []string {
+    var rows []util.TableRow
+    for i := 1; i <= 4; i++ {
+        skillLevel := SkillLevel(i)
+        for j := 1; j <= 4; j++ {
+            difficultyLevel := DifficultyLevelFromInt(j)
+            relativeDifficulty := r.GetRelativeDifficulty(skillLevel, difficultyLevel)
+            successes := 0
+            for k := 1; k <= 1000; k++ {
+                if r.RollSkillCheck(skillLevel, difficultyLevel) {
+                    successes++
+                }
+            }
+            successRate := int((float64(successes) / 1000.0) * 100.0)
+
+            row := util.TableRow{
+                Label:   skillLevel.ToString(),
+                Columns: []string{difficultyLevel.ToString(), relativeDifficulty.ToString(), fmt.Sprintf("%d%%", successRate)},
+            }
+            rows = append(rows, row)
+        }
+
+    }
+    layout := util.TableLayout(rows)
+    return layout
 }

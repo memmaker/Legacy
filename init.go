@@ -63,7 +63,7 @@ func (g *GridEngine) Init() {
     g.flags = game.NewFlags()
 
     //g.currentMap = g.loadMap("WorldMap")
-    g.currentMap = g.loadMap("Bed_Room")
+    g.setMap(g.loadMap("Bed_Room"))
     g.initMapWindow(g.currentMap.MapWidth, g.currentMap.MapHeight)
     //g.currentMap = g.loadMap("Tauci_Castle")
     g.PlaceParty(g.spawnPosition)
@@ -347,7 +347,7 @@ func (g *GridEngine) loadMap(mapName string) *gridmap.GridMap[*game.Actor, game.
             combatFaction = entity.PropertyByIdentifier("CombatFaction").AsString()
         }
 
-        textureIndex := g.resolveLDTKIcon(entity.PropertyByIdentifier("Icon"))
+        textureIndex, enumsForIcon := g.resolveLDTKIcon(entity.PropertyByIdentifier("Icon"))
 
         npcFilename := path.Join("assets", "npc", name+".txt")
         // NOVA
@@ -365,6 +365,10 @@ func (g *GridEngine) loadMap(mapName string) *gridmap.GridMap[*game.Actor, game.
         npc.SetInternalName(name)
         npc.SetDiscoveryMessage(isHidden, discoveryMessage)
         npc.SetCombatFaction(combatFaction)
+
+        if !enumsForIcon.Contains("IsHumanoid") {
+            npc.SetDeathIcon(224)
+        }
 
         // vendor inventory
         vendorProp := entity.PropertyByIdentifier("AddVendorInventory")
@@ -400,14 +404,15 @@ func (g *GridEngine) loadMap(mapName string) *gridmap.GridMap[*game.Actor, game.
 
     return loadedMap
 }
-func (g *GridEngine) resolveLDTKIcon(prop *ldtk_go.Property) int32 {
+func (g *GridEngine) resolveLDTKIcon(prop *ldtk_go.Property) (int32, ldtk_go.EnumSet) {
     tileData := prop.Value.(map[string]interface{})
     tileset := g.ldtkMapProject.TilesetByUID(int(tileData["tilesetUid"].(float64)))
     tilesetWidth := tileset.Width / tileset.GridSize
     atlasX := int(tileData["x"].(float64) / float64(tileset.GridSize))
     atlasY := int(tileData["y"].(float64) / float64(tileset.GridSize))
     textureIndex := atlasY*tilesetWidth + atlasX
-    return int32(textureIndex)
+    enumsForTile := tileset.EnumsForTile(textureIndex)
+    return int32(textureIndex), enumsForTile
 }
 func (g *GridEngine) initMapWindow(mapWidth int, mapHeight int) {
     g.mapWindow = renderer.NewMapWindow(
@@ -417,6 +422,9 @@ func (g *GridEngine) initMapWindow(mapWidth int, mapHeight int) {
         g.mapLookup,
     )
     g.mapRenderer = renderer.NewRenderer(g.gridRenderer, g.mapWindow)
+    g.mapRenderer.SetDisableFieldOfView(func() bool {
+        return g.playerParty.HasSpellEffect(game.OngoingSpellEffectBirdsEye)
+    })
 }
 
 func (g *GridEngine) handleMetaEntity(loadedMap *gridmap.GridMap[*game.Actor, game.Item, game.Object], entity *ldtk_go.Entity, gridPos geometry.Point) {
@@ -553,7 +561,8 @@ func (g *GridEngine) getDoorFromEntity(entity *ldtk_go.Entity) *game.Door {
 
 func (g *GridEngine) getLockedDoorFromEntity(entity *ldtk_go.Entity) game.Object {
     key := entity.PropertyByIdentifier("Key").AsString()
-    strength := entity.PropertyByIdentifier("Strength").AsFloat64()
+    lockStrength := entity.PropertyByIdentifier("LockStrength").AsString()
+    frameStrength := entity.PropertyByIdentifier("FrameStrength").AsString()
     var onBreakEvent string
     if !entity.PropertyByIdentifier("OnBreakEvent").IsNull() {
         onBreakEvent = entity.PropertyByIdentifier("OnBreakEvent").AsString()
@@ -562,7 +571,8 @@ func (g *GridEngine) getLockedDoorFromEntity(entity *ldtk_go.Entity) game.Object
     if !entity.PropertyByIdentifier("OnListenText").IsNull() {
         onListenText = strings.Split(entity.PropertyByIdentifier("OnListenText").AsString(), "\n")
     }
-    door := game.NewLockedDoor(key, strength)
+    door := game.NewLockedDoor(key, game.DifficultyLevelFromString(strings.ReplaceAll(lockStrength, "_", " ")))
+    door.SetFrameStrength(game.DifficultyLevelFromString(strings.ReplaceAll(frameStrength, "_", " ")))
     door.SetBreakEvent(onBreakEvent)
     door.SetListenText(onListenText)
     return door
@@ -573,8 +583,8 @@ func (g *GridEngine) getMagicallyLockedDoorFromEntity(entity *ldtk_go.Entity) ga
     if !entity.PropertyByIdentifier("OnListenText").IsNull() {
         onListenText = strings.Split(entity.PropertyByIdentifier("OnListenText").AsString(), "\n")
     }
-    strength := entity.PropertyByIdentifier("Strength").AsFloat64()
-    door := game.NewMagicallyLockedDoor(strength)
+    strength := entity.PropertyByIdentifier("SpellStrength").AsString()
+    door := game.NewMagicallyLockedDoor(game.DifficultyLevelFromString(strings.ReplaceAll(strength, "_", " ")))
     door.SetListenText(onListenText)
     return door
 }
@@ -659,15 +669,19 @@ func (g *GridEngine) getChestFromEntity(entity *ldtk_go.Entity, mapDisplayName s
     }
     var chest *game.Chest
     if !entity.PropertyByIdentifier("Icon").IsNull() && !entity.PropertyByIdentifier("Name").IsNull() {
-        textureIndex := g.resolveLDTKIcon(entity.PropertyByIdentifier("Icon"))
+        textureIndex, _ := g.resolveLDTKIcon(entity.PropertyByIdentifier("Icon"))
         name := entity.PropertyByIdentifier("Name").AsString()
         chest = game.NewContainer(lootLevel, lootList, name, textureIndex)
     } else {
         chest = game.NewChest(lootLevel, lootList)
     }
-
+    chest.SetWalkable(entity.PropertyByIdentifier("IsWalkable").AsBool())
     chest.SetLockedWithKey(needsKey)
     chest.SetDiscoveryMessage(isHidden, discoveryMessage)
+    lockStrengthProp := entity.PropertyByIdentifier("LockStrength")
+    if !lockStrengthProp.IsNull() {
+        chest.SetLockStrength(game.DifficultyLevelFromString(lockStrengthProp.AsString()))
+    }
     if len(fixedLoot) > 0 {
         chest.SetFixedLoot(fixedLoot)
     }
