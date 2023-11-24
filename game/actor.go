@@ -152,15 +152,16 @@ type Actor struct {
 
     attributes AttributeHolder
 
-    skillset        SkillSet
-    buffs           map[BuffType][]Buff
-    color           color.Color
-    isTinted        bool
-    combatFaction   string
-    isAggressive    bool
-    engagementRange int
-    statusEffects   map[StatusEffect]int
-    deathIcon       int32
+    skillset         SkillSet
+    buffs            map[BuffType][]Buff
+    color            color.Color
+    isTinted         bool
+    combatFaction    string
+    isAggressive     bool
+    engagementRange  int
+    statusEffects    map[StatusEffect]int
+    deathIcon        int32
+    zoneOfEngagement map[geometry.Point]int
 }
 
 func NewActor(name string, icon int32) *Actor {
@@ -496,12 +497,15 @@ func (a *Actor) GetContextActions(engine Engine) []util.MenuItem {
                 engine.ShowScrollableText(a.LookDescription(), color.White, false)
             },
         }
+
+        stealDiff := engine.GetRelativeDifficulty(ThievingSkillPickpocket, a.GetAbsoluteDifficultyByAttribute(Perception)).ToString()
+
         steal := util.MenuItem{
-            Text:   "Steal",
+            Text:   fmt.Sprintf("Steal - %s", stealDiff),
             Action: func() { engine.OpenPickpocketMenu(a) },
         }
         plant := util.MenuItem{
-            Text:   "Plant",
+            Text:   fmt.Sprintf("Plant - %s", stealDiff),
             Action: func() { engine.OpenPlantMenu(a) },
         }
         attack := util.MenuItem{
@@ -510,8 +514,9 @@ func (a *Actor) GetContextActions(engine Engine) []util.MenuItem {
                 engine.PlayerStartsCombat(a)
             },
         }
+        backstabDiff := engine.GetRelativeDifficulty(PhysicalSkillBackstab, a.GetAbsoluteDifficultyByAttribute(Perception)).ToString()
         backstab := util.MenuItem{
-            Text: "Backstab",
+            Text: fmt.Sprintf("Backstab - %s", backstabDiff),
             Action: func() {
                 engine.PlayerTriesBackstab(a)
             },
@@ -1349,7 +1354,33 @@ func (a *Actor) GetTotalEncumberance() int {
     return total
 }
 
-func (a *Actor) GetAntagonistDifficultyByAttribute(attribute AttributeName) DifficultyLevel {
+func (a *Actor) GetAbsoluteDifficultyByAttribute(attribute AttributeName) DifficultyLevel {
     attributeValue := a.attributes.GetAttribute(attribute)
     return DifficultyLevelFromInt(attributeValue - 5)
+}
+
+func (a *Actor) GetRelativeDifficultyBySkill(skill SkillName, otherSkillLevel SkillLevel) DifficultyLevel {
+    ourSkillLevel := a.skillset.GetLevel(skill)
+    if otherSkillLevel == ourSkillLevel {
+        return DifficultyLevelMedium // 2
+    }
+    if otherSkillLevel > ourSkillLevel {
+        diff := int(otherSkillLevel - ourSkillLevel)
+        return DifficultyLevelFromInt(2 - diff)
+    }
+    diff := int(ourSkillLevel - otherSkillLevel)
+    return DifficultyLevelFromInt(2 + diff)
+}
+
+func (a *Actor) SetNPCEngagementZone(zone map[geometry.Point]int) {
+    a.zoneOfEngagement = zone
+}
+
+func (a *Actor) IsInEngagementZone(point geometry.Point) bool {
+    _, ok := a.zoneOfEngagement[point]
+    return ok
+}
+
+func (a *Actor) GetEngagementZone() map[geometry.Point]int {
+    return a.zoneOfEngagement
 }

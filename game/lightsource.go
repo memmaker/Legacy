@@ -4,6 +4,7 @@ import (
     "Legacy/util"
     "fmt"
     "image/color"
+    "math/rand"
 )
 
 type LightSource struct {
@@ -12,9 +13,9 @@ type LightSource struct {
     unlitIcon         int32
     litIcon           int32
     isAttached        bool
-    tickCount         int
     litAttachedFrames []int32
     unlitAttachedIcon int32
+    randomOffset      uint64
 }
 
 func (b *LightSource) GetTooltipLines() []string {
@@ -84,16 +85,8 @@ func (b *LightSource) attachedIcon(tick uint64) int32 {
     if !b.isLit {
         return b.unlitAttachedIcon
     }
-    b.tickCount++
-    if b.tickCount > 30 {
-        b.tickCount = 0
-    }
-
-    if b.tickCount < 15 {
-        return b.litAttachedFrames[0]
-    } else {
-        return b.litAttachedFrames[1]
-    }
+    frameIndex := util.GetFrameFromTick(tick+b.randomOffset, 0.2, len(b.litAttachedFrames))
+    return b.litAttachedFrames[frameIndex]
 }
 func NewCandle(isLit bool) *LightSource {
     return &LightSource{
@@ -117,6 +110,7 @@ func NewLeftTorch(isLit bool) *LightSource {
         unlitIcon:         214,
         litIcon:           213,
         isAttached:        true,
+        randomOffset:      uint64(rand.Intn(15)),
     }
 }
 
@@ -131,5 +125,6 @@ func NewRightTorch(isLit bool) *LightSource {
         unlitIcon:         214,
         litIcon:           213,
         isAttached:        true,
+        randomOffset:      uint64(rand.Intn(15)),
     }
 }

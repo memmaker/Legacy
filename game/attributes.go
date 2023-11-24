@@ -39,7 +39,15 @@ type AttributeHolder struct {
 
 func NewAttributeHolder() AttributeHolder {
     return AttributeHolder{
-        attributes: map[AttributeName]int{},
+        attributes: map[AttributeName]int{
+            Strength:     5,
+            Perception:   5,
+            Endurance:    5,
+            Charisma:     5,
+            Intelligence: 5,
+            Agility:      5,
+            Luck:         5,
+        },
     }
 }
 

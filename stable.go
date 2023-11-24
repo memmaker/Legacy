@@ -1,9 +1,11 @@
 package main
 
 import (
+    "Legacy/ega"
     "Legacy/game"
     "Legacy/geometry"
     "Legacy/gridmap"
+    "Legacy/renderer"
     "Legacy/ui"
     "Legacy/util"
     "fmt"
@@ -34,42 +36,71 @@ func (g *GridEngine) PlayerMovement(direction geometry.Point) {
             g.AddBuff(actor, "Weak", game.BuffTypeDefense, -3)
         }
     }
-    if g.currentMap.IsObjectAt(newPos) {
-        object := g.currentMap.ObjectAt(newPos)
-        object.OnActorWalkedOn(g.GetAvatar())
-    }
 
-    g.checkMoveHooks(g.GetAvatar(), newPos)
-
-    g.onAvatarMovedOrTeleported(g.GetAvatar().Pos())
+    g.onActorMovedOrTeleported(g.currentMap, g.GetAvatar(), newPos)
 }
 
-func (g *GridEngine) onAvatarMovedOrTeleported(newLocation geometry.Point) {
-    g.onViewedActorMoved(newLocation)
+func (g *GridEngine) onActorMovedOrTeleported(loadedMap *gridmap.GridMap[*game.Actor, game.Item, game.Object], actor *game.Actor, newPos geometry.Point) {
+    if g.IsPlayerControlled(actor) {
+        g.onPartyMemberMovedOrTeleported(loadedMap, actor, newPos)
+    } else {
+        g.onNPCMovedOrTeleported(loadedMap, actor, newPos)
+    }
+    if loadedMap.IsObjectAt(newPos) {
+        object := g.currentMap.ObjectAt(newPos)
+        object.OnActorWalkedOn(actor)
+    }
+    g.checkMoveHooks(actor, newPos)
+}
 
-    if trigger, isAtTrigger := g.currentMap.GetNamedTriggerAt(newLocation); isAtTrigger {
+func (g *GridEngine) onNPCMovedOrTeleported(loadedMap *gridmap.GridMap[*game.Actor, game.Item, game.Object], actor *game.Actor, pos geometry.Point) {
+    // calculate the zone of the actor
+    engagementZone := loadedMap.GetDijkstraMap(pos, actor.GetNPCEngagementRange())
+    actor.SetNPCEngagementZone(engagementZone)
+}
+
+func (g *GridEngine) checkMoveHooks(actor *game.Actor, newPos geometry.Point) {
+    moveHooks := g.levelHooks.MovementHooks
+    for i := len(moveHooks) - 1; i >= 0; i-- {
+        hook := moveHooks[i]
+        if hook.Applies(actor, newPos) {
+            hook.Action(actor, newPos)
+            if hook.Consume {
+                g.levelHooks.MovementHooks = append(g.levelHooks.MovementHooks[:i], g.levelHooks.MovementHooks[i+1:]...)
+            }
+        }
+    }
+}
+
+func (g *GridEngine) onPartyMemberMovedOrTeleported(loadedMap *gridmap.GridMap[*game.Actor, game.Item, game.Object], partyMember *game.Actor, newLocation geometry.Point) {
+
+    if partyMember == g.GetAvatar() {
+        g.onViewedActorMoved(newLocation)
+    }
+
+    if trigger, isAtTrigger := loadedMap.GetNamedTriggerAt(newLocation); isAtTrigger {
         g.TriggerEvent(trigger.Name)
         if trigger.OneShot {
-            g.currentMap.RemoveNamedTrigger(trigger.Name)
+            loadedMap.RemoveNamedTrigger(trigger.Name)
         }
     }
     if g.IsInCombat() {
         return
     }
     // check if we are near any aggressive actors, that would want to start combat
-    for _, actor := range g.currentMap.GetFilteredActorsInRadius(newLocation, 11, g.aggressiveActorsFilter(newLocation)) {
-        randomPosNearby := g.currentMap.GetRandomFreeNeighbor(newLocation)
-        path := g.currentMap.GetJPSPath(actor.Pos(), randomPosNearby, g.currentMap.IsCurrentlyPassable)
-        if len(path) > actor.GetNPCEngagementRange() {
-            continue
+    for _, actor := range loadedMap.GetFilteredActorsInRadius(newLocation, 11, g.aggressiveActorsFilter(newLocation)) {
+        if actor.IsInEngagementZone(newLocation) {
+            if !g.isSneaking || !g.SkillCheckVs(partyMember, game.ThievingSkillSneak, actor, game.Perception) {
+                g.EnemyStartsCombat(actor)
+                return
+            }
         }
-        g.EnemyStartsCombat(actor)
-        return
     }
 }
 func (g *GridEngine) aggressiveActorsFilter(loc geometry.Point) func(actor *game.Actor) bool {
     return func(actor *game.Actor) bool {
         return actor.IsAggressive() &&
+            !g.IsPlayerControlled(actor) &&
             actor.IsAlive() &&
             g.playerParty.CanSee(actor.Pos()) &&
             geometry.DistanceManhattan(actor.Pos(), loc) <= actor.GetNPCEngagementRange()
@@ -77,10 +108,7 @@ func (g *GridEngine) aggressiveActorsFilter(loc geometry.Point) func(actor *game
 }
 func (g *GridEngine) moveActorInCombat(actor *game.Actor, dest geometry.Point) {
     g.currentMap.MoveActor(actor, dest)
-    if g.IsPlayerControlled(actor) {
-        g.onAvatarMovedOrTeleported(actor.Pos()) // UNCOMMENT FOR CAM FOLLOW BEHAVIOR
-    }
-    g.checkMoveHooks(actor, dest)
+    g.onActorMovedOrTeleported(g.currentMap, actor, dest)
 }
 
 func (g *GridEngine) Update() error {
@@ -181,6 +209,7 @@ func (g *GridEngine) Draw(screen *ebiten.Image) {
     g.drawUIOverlay(screen)
 
     g.mapRenderer.Draw(g.playerParty.GetFoV(), screen, g.CurrentTick())
+    g.drawMapOverlays(screen)
 
     if g.combatManager.IsInCombat() {
         g.drawWarTimeStatusBar(screen)
@@ -208,6 +237,38 @@ func (g *GridEngine) Draw(screen *ebiten.Image) {
 
     if g.currentTooltip != nil && g.ticksUntilTooltipAppears == 0 {
         g.currentTooltip.Draw(screen)
+    }
+}
+
+func (g *GridEngine) drawMapOverlays(screen *ebiten.Image) {
+    if g.IsInCombat() || !g.isSneaking {
+        return
+    }
+    offset := g.gridRenderer.GetScaledSmallGridSize()
+    offsetPoint := geometry.Point{X: offset, Y: offset}
+    icon := int32(229)
+    color := ega.BrightRed
+    overlayPositions := make(map[geometry.Point]bool)
+
+    for _, actor := range g.currentMap.Actors() { // TODO: this is a bit expensive, maybe cache it?
+        if !actor.IsAggressive() {
+            continue
+        }
+        dist := geometry.DistanceManhattan(actor.Pos(), g.GetAvatar().Pos())
+        if dist > 10+actor.GetNPCEngagementRange() {
+            continue
+        }
+        zone := actor.GetEngagementZone()
+        for pos, _ := range zone {
+            if g.IsMapPosOnScreen(pos) && g.playerParty.CanSee(pos) && g.currentMap.IsCurrentlyPassable(pos) {
+                overlayPositions[pos] = true
+            }
+        }
+    }
+
+    for p, _ := range overlayPositions {
+        screenPos := g.MapToScreenCoordinates(p)
+        g.gridRenderer.DrawOnBigGridWithColor(screen, screenPos, offsetPoint, renderer.AtlasEntities, icon, color)
     }
 }
 
@@ -255,7 +316,7 @@ func (g *GridEngine) drawWarTimeStatusBar(screen *ebiten.Image) {
        }
     */
 }
-func (g *GridEngine) transitionToNamedLocation(targetMap, targetLocation string) {
+func (g *GridEngine) TransitionToNamedLocation(targetMap, targetLocation string) {
     g.ensureMapInMemory(targetMap)
     nextMap := g.mapsInMemory[targetMap]
     location := nextMap.GetNamedLocation(targetLocation)
@@ -418,7 +479,7 @@ func (g *GridEngine) contextActionsFromInteractables(interactables Interactables
         contextActions = append(contextActions, util.MenuItem{
             Text: "Go to",
             Action: func() {
-                g.transitionToNamedLocation(transition.TargetMap, transition.TargetLocation)
+                g.TransitionToNamedLocation(transition.TargetMap, transition.TargetLocation)
             },
         })
     }

@@ -199,6 +199,7 @@ func (g *GridEngine) handleShortcuts() {
     // (J)ournal
     // (M)agic
     // (S)earch
+    // S(N)eak
     // (B)ows
     // (D)ivide party
     // (T)ry to join party
@@ -235,6 +236,9 @@ func (g *GridEngine) handleShortcuts() {
         g.openPrintLog()
     } else if inpututil.IsKeyJustPressed(ebiten.KeyM) {
         g.openSpellMenu()
+    } else if inpututil.IsKeyJustPressed(ebiten.KeyN) {
+        g.isSneaking = !g.isSneaking
+        g.Print(fmt.Sprintf("Sneaking: %t", g.isSneaking))
     } else if inpututil.IsKeyJustPressed(ebiten.KeyS) {
         g.searchForHiddenObjects()
     } else if inpututil.IsKeyJustPressed(ebiten.KeyR) {

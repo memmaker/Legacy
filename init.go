@@ -396,6 +396,7 @@ func (g *GridEngine) loadMap(mapName string) *gridmap.GridMap[*game.Actor, game.
         isAlive := entity.PropertyByIdentifier("IsAlive").AsBool()
         if isAlive {
             loadedMap.AddActor(npc, pos)
+            g.onActorMovedOrTeleported(loadedMap, npc, pos)
         } else {
             npc.SetHealth(0)
             loadedMap.AddDownedActor(npc, pos)
@@ -441,15 +442,20 @@ func (g *GridEngine) handleTransition(loadedMap *gridmap.GridMap[*game.Actor, ga
     loadedMap.SetNamedLocation(nameOfLocation, gridPos)
     if nameOfLocation == "player_spawn" {
         g.spawnPosition = gridPos
-    } else if isTransition, transition := g.entityToTransition(metaEntity); isTransition {
+    } else if transition := g.entityToTransition(metaEntity); !transition.IsEmpty() {
         loadedMap.SetTransitionAt(gridPos, transition)
     }
 }
 
-func (g *GridEngine) entityToTransition(metaEntity *ldtk_go.Entity) (bool, gridmap.Transition) {
+func (g *GridEngine) entityToTransition(metaEntity *ldtk_go.Entity) gridmap.Transition {
     targetProp := metaEntity.PropertyByIdentifier("Target")
+    return g.resolveTransitionTarget(targetProp)
+}
+
+func (g *GridEngine) resolveTransitionTarget(targetProp *ldtk_go.Property) gridmap.Transition {
+    var mapName, destLoc string
     if targetProp.IsNull() {
-        return false, gridmap.Transition{}
+        return gridmap.Transition{}
     }
     ref := targetProp.Value.(map[string]interface{})
     levelId := ref["levelIid"].(string)
@@ -457,16 +463,16 @@ func (g *GridEngine) entityToTransition(metaEntity *ldtk_go.Entity) (bool, gridm
     targetLevel := g.ldtkMapProject.LevelByIID(levelId)
     refEntity := g.ldtkMapProject.EntityByIID(entityId)
 
-    mapName := targetLevel.Identifier
-    destLoc := refEntity.PropertyByIdentifier("NameOfLocation").AsString()
+    mapName = targetLevel.Identifier
+    destLoc = refEntity.PropertyByIdentifier("NameOfLocation").AsString()
 
     if destLoc != "" && mapName != "" {
-        return true, gridmap.Transition{
+        return gridmap.Transition{
             TargetMap:      mapName,
             TargetLocation: destLoc,
         }
     }
-    return false, gridmap.Transition{}
+    return gridmap.Transition{}
 }
 
 func (g *GridEngine) NovaPlays() bool {
@@ -479,14 +485,16 @@ func (g *GridEngine) RemovePartyFromMap(loadedMap *gridmap.GridMap[*game.Actor, 
 }
 func (g *GridEngine) PlaceParty(startPos geometry.Point) {
     g.playerParty.PlaceOnMap(g.currentMap, startPos)
-    g.onAvatarMovedOrTeleported(startPos)
+    for _, member := range g.playerParty.GetMembers() {
+        g.onActorMovedOrTeleported(g.currentMap, member, member.Pos())
+    }
 }
 func (g *GridEngine) PlacePartyBackOnCurrentMap() {
     g.playerParty.SetGridMap(g.currentMap)
     for _, member := range g.playerParty.GetMembers() {
         g.currentMap.AddActor(member, member.Pos())
+        g.onActorMovedOrTeleported(g.currentMap, member, member.Pos())
     }
-    g.onAvatarMovedOrTeleported(g.playerParty.GetMember(0).Pos())
 }
 func (g *GridEngine) getItemFromEntity(entity *ldtk_go.Entity, mapDisplayName string) game.Item {
     var returnedItem game.Item
@@ -545,6 +553,10 @@ func (g *GridEngine) getObjectFromEntity(entity *ldtk_go.Entity, mapDisplayName 
         return game.NewBalloon()
     case "Ship":
         return game.NewShip()
+    case "Well":
+        return g.getWellFromEntity(entity)
+    case "Clock":
+        return g.getClockFromEntity(entity)
     }
     return nil
 }
@@ -634,7 +646,24 @@ func (g *GridEngine) getShrineFromEntity(entity *ldtk_go.Entity) game.Object {
     principle := entity.PropertyByIdentifier("Principle").Value.(string)
     return game.NewShrine(name, game.Principle(principle))
 }
+func (g *GridEngine) getClockFromEntity(entity *ldtk_go.Entity) game.Object {
+    //name := entity.PropertyByIdentifier("Name").AsString()
+    return game.NewClock()
+}
+func (g *GridEngine) getWellFromEntity(entity *ldtk_go.Entity) game.Object {
+    hasRope := entity.PropertyByIdentifier("HasRope").AsBool()
+    hasPlanks := entity.PropertyByIdentifier("HasPlanks").AsBool()
+    transitionTargetProp := entity.PropertyByIdentifier("TransitionTo")
+    transition := g.resolveTransitionTarget(transitionTargetProp)
 
+    well := game.NewWell()
+    well.SetRope(hasRope)
+    well.SetPlanks(hasPlanks)
+    if !transition.IsEmpty() {
+        well.SetTransitionTarget(transition)
+    }
+    return well
+}
 func (g *GridEngine) getChestFromEntity(entity *ldtk_go.Entity, mapDisplayName string) game.Object {
     needsKey := ""
     needsKeyValue := entity.PropertyByIdentifier("NeedsKey").Value

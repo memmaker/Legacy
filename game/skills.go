@@ -158,9 +158,10 @@ const (
     SkillCategoryPerception SkillCategory = "Perception"
 )
 const (
-    PhysicalSkillTackle SkillName = "Tackle"
-    PhysicalSkillTools  SkillName = "Tool usage"
-    PhysicalSkillRepair SkillName = "Repair"
+    PhysicalSkillBackstab SkillName = "Backstab"
+    PhysicalSkillTackle   SkillName = "Tackle"
+    PhysicalSkillTools    SkillName = "Tool usage"
+    PhysicalSkillRepair   SkillName = "Repair"
 
     ThievingSkillLockpicking  SkillName = "Lockpicking"
     ThievingSkillPickpocket   SkillName = "Pickpocket"

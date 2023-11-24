@@ -111,6 +111,7 @@ type GridEngine struct {
     lastInteractionWasMouse bool
     altIsPressed            bool
     levelHooks              game.LevelHooks
+    isSneaking              bool
 }
 
 func (g *GridEngine) HasSkill(skill game.SkillName) bool {
@@ -130,7 +131,10 @@ func (g *GridEngine) SkillCheckAvatar(skill game.SkillName, difficulty game.Diff
     return g.SkillCheck(g.GetAvatar(), skill, difficulty)
 }
 func (g *GridEngine) SkillCheckAvatarVs(skill game.SkillName, antagonist *game.Actor, attribute game.AttributeName) bool {
-    return g.SkillCheck(g.GetAvatar(), skill, antagonist.GetAntagonistDifficultyByAttribute(attribute))
+    return g.SkillCheck(g.GetAvatar(), skill, antagonist.GetAbsoluteDifficultyByAttribute(attribute))
+}
+func (g *GridEngine) SkillCheckVs(actor *game.Actor, skill game.SkillName, antagonist *game.Actor, attribute game.AttributeName) bool {
+    return g.SkillCheck(actor, skill, antagonist.GetAbsoluteDifficultyByAttribute(attribute))
 }
 func (g *GridEngine) SkillCheck(actor *game.Actor, skill game.SkillName, difficulty game.DifficultyLevel) bool {
     skills := actor.GetSkills()
@@ -287,7 +291,7 @@ func (g *GridEngine) TeleportTo(mirrorText string) {
     if mapName == "" || locationName == "" {
         return
     }
-    g.transitionToNamedLocation(mapName, locationName)
+    g.TransitionToNamedLocation(mapName, locationName)
 }
 
 func (g *GridEngine) GetBreakingToolName() string {
@@ -686,7 +690,6 @@ func (g *GridEngine) TryPlantItem(item game.Item, victim *game.Actor) {
     g.flags.IncrementFlag("plant_attempts")
     if g.SkillCheckAvatarVs(game.ThievingSkillPickpocket, victim, game.Perception) {
         g.PlantItem(item, victim)
-
         g.Print(fmt.Sprintf("You planted \"%s\"", item.Name()))
         g.flags.IncrementFlag("plant_successes")
     } else {
@@ -1160,20 +1163,6 @@ func (g *GridEngine) checkPlantHooks(item game.Item, owner *game.Actor) {
         }
     }
 }
-
-func (g *GridEngine) checkMoveHooks(actor *game.Actor, newPos geometry.Point) {
-    moveHooks := g.levelHooks.MovementHooks
-    for i := len(moveHooks) - 1; i >= 0; i-- {
-        hook := moveHooks[i]
-        if hook.Applies(actor, newPos) {
-            hook.Action(actor, newPos)
-            if hook.Consume {
-                g.levelHooks.MovementHooks = append(g.levelHooks.MovementHooks[:i], g.levelHooks.MovementHooks[i+1:]...)
-            }
-        }
-    }
-}
-
 func fromEnum(asString string) string {
     asString = strings.ToLower(asString)
     return strings.ReplaceAll(asString, "_", " ")

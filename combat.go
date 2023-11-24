@@ -477,6 +477,9 @@ func (c *CombatState) closeIntoMeleeRange(ourActor *game.Actor, listOfEnemies []
                 currentPath := currentMap.GetJPSPath(ourActor.Pos(), freeNeighbor, func(point geometry.Point) bool {
                     return currentMap.Contains(point) && currentMap.IsWalkableFor(point, ourActor)
                 })
+                if len(currentPath) > 0 {
+                    currentPath = currentPath[1:] // remove the first element, which is the current position
+                }
                 if nearestEnemy == nil || (len(currentPath) > 0 && ((len(currentPath) < len(nearestPath)) || len(nearestPath) == 0)) {
                     nearestEnemy = enemy
                     nearestPath = currentPath

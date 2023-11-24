@@ -38,7 +38,7 @@ Text: "On Mondays I eat... I eat... I cannot remember. I am too hungry to think.
 Target: _yes_help
 Option: yes
 # -> Problem, hardcoded difficulty does not adjust to skill level
-OptionSkillCheckVersus: Bluff, Perception
+OptionSkillCheckVersus: Bluff, Intelligence
 OnOptionSuccess: _bluff_success
 OnOptionFailure: _bluff_failure
 Option: yes

@@ -18,6 +18,24 @@ type Transition struct {
     TargetMap      string
     TargetLocation string
 }
+
+func (t Transition) IsEmpty() bool {
+    return t.TargetMap == "" && t.TargetLocation == ""
+}
+
+func (t Transition) Encode() string {
+    return fmt.Sprintf("transition(%s, %s)", t.TargetMap, t.TargetLocation)
+}
+
+func MustDecodeTransition(str string) Transition {
+    var t Transition
+    _, err := fmt.Sscanf(str, "transition(%s, %s)", &t.TargetMap, &t.TargetLocation)
+    if err != nil {
+        panic(err)
+    }
+    return t
+}
+
 type MapObject interface {
     Pos() geometry.Point
     Icon(tick uint64) int32
@@ -409,7 +427,14 @@ func (m *GridMap[ActorType, ItemType, ObjectType]) WavePropagationFrom(pos geome
     }
     return soundAnimationMap
 }
-
+func (m *GridMap[ActorType, ItemType, ObjectType]) GetDijkstraMap(start geometry.Point, maxCost int) map[geometry.Point]int {
+    nodes := m.pathfinder.DijkstraMap(m, []geometry.Point{start}, maxCost)
+    dijkstraMap := make(map[geometry.Point]int)
+    for _, v := range nodes {
+        dijkstraMap[v.P] = v.Cost
+    }
+    return dijkstraMap
+}
 func (m *GridMap[ActorType, ItemType, ObjectType]) GetConnected(startLocation geometry.Point, traverse func(p geometry.Point) bool) []geometry.Point {
     results := make([]geometry.Point, 0)
     for _, node := range m.pathfinder.BreadthFirstMap(MapPather{neighborPredicate: traverse, allNeighbors: m.GetAllCardinalNeighbors}, []geometry.Point{startLocation}, 100) {

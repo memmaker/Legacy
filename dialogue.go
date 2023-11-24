@@ -91,7 +91,7 @@ func (g *GridEngine) toForcedMenuItems(npc *game.Actor, dialogue *game.Dialogue,
         if choice.SkillCheck != nil {
             baseDifficulty := choice.SkillCheck.Difficulty
             if choice.SkillCheck.IsVersusAntagonist {
-                baseDifficulty = npc.GetAntagonistDifficultyByAttribute(choice.SkillCheck.VersusAttribute)
+                baseDifficulty = npc.GetAbsoluteDifficultyByAttribute(choice.SkillCheck.VersusAttribute)
             }
             label = fmt.Sprintf("%s (%s - %s)", label, choice.SkillCheck.SkillName, g.GetRelativeDifficulty(choice.SkillCheck.SkillName, baseDifficulty).ToString())
         }

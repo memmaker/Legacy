@@ -10,9 +10,10 @@ import (
 type ToolType string
 
 const (
-    ToolTypePickaxe ToolType = "pickaxe"
-    ToolTypeShovel  ToolType = "shovel"
-    ToolTypeRope    ToolType = "rope"
+    ToolTypePickaxe      ToolType = "pickaxe"
+    ToolTypeShovel       ToolType = "shovel"
+    ToolTypeRope         ToolType = "rope"
+    ToolTypeWoodenPlanks ToolType = "wooden planks"
 )
 
 type Tool struct {

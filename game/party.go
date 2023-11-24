@@ -668,6 +668,26 @@ func (p *Party) HasSpellEffect(effect OngoingSpellEffect) bool {
     return exists
 }
 
+func (p *Party) HasTool(toolType ToolType) bool {
+    for _, itemStack := range p.partyInventory {
+        firstItemOfStack := itemStack[0]
+        if tool, ok := firstItemOfStack.(*Tool); ok && tool.kind == toolType {
+            return true
+        }
+    }
+    return false
+}
+
+func (p *Party) RemoveTool(toolType ToolType) {
+    for _, itemStack := range p.partyInventory {
+        firstItemOfStack := itemStack[0]
+        if tool, ok := firstItemOfStack.(*Tool); ok && tool.kind == toolType {
+            p.RemoveItem(tool)
+            return
+        }
+    }
+}
+
 func moneyFormat(value int) string {
     return strconv.Itoa(value) + "g"
 }

@@ -85,4 +85,5 @@ type Engine interface {
     SkillCheckAvatar(skill SkillName, difficulty DifficultyLevel) bool
     HasSkill(skill SkillName) bool
     GetRelativeDifficulty(skill SkillName, difficulty DifficultyLevel) DifficultyLevel
+    TransitionToNamedLocation(targetMap string, location string)
 }

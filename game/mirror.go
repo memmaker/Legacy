@@ -3,7 +3,6 @@ package game
 import (
     "Legacy/recfile"
     "Legacy/util"
-    "github.com/hajimehoshi/ebiten/v2"
     "image/color"
 )
 
@@ -100,10 +99,6 @@ func (s *Mirror) GetContextActions(engine Engine) []util.MenuItem {
 
 func (s *Mirror) frameFromTick(tick uint64) int32 {
     magicalBaseIcon := int32(207)
-    interval := ebiten.ActualTPS() * 2
-    if tick < uint64(interval) {
-        return magicalBaseIcon
-    }
-    delays := uint64(float64(tick) / interval)
-    return magicalBaseIcon + int32(delays%uint64(2))
+    frame := util.GetFrameFromTick(tick, 0.5, 2)
+    return magicalBaseIcon + frame
 }
