@@ -13,7 +13,11 @@ Item: flavor(cheese, 5, a bit of cheese)
 Key: _opening
 AddsKeyword: bye
 Text:
-+ "You should talk to our leader."
++ "You should talk to our =leader=."
+
+Key: leader
+Text:
++ "He's in the throne room. Just knock on the door."
 
 Key: bye
 Effect: quits

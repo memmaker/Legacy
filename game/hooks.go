@@ -27,7 +27,7 @@ type LevelHooks struct {
     PlantHooks       []PlantHook
 }
 
-// movement hook: when a slime walks over the powder it dies
+// GetNPCMovementRoutine hook: when a slime walks over the powder it dies
 // then allow throwing the powder
 // context action hook: when the slime is sleeping, allow taking it as inventory item
 func GetHooksForLevel(engine Engine, level string) LevelHooks {
@@ -61,7 +61,7 @@ func tauciCastleHooks(engine Engine) LevelHooks {
             return false
         },
         Action: func(mover *Actor, pos geometry.Point) {
-            mover.Damage(mover.GetHealth()) // happens during combat
+            mover.Damage(engine, mover.GetHealth()) // happens during combat
         },
     }
     allHooks.MovementHooks = append(allHooks.MovementHooks, slimeMovesHook)

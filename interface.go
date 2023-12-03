@@ -18,8 +18,8 @@ func (g *GridEngine) ManaSpent(caster *game.Actor, cost int) {
 }
 func (g *GridEngine) DamageAvatar(amount int) {
     bloodIcon := int32(104)
-    g.HitAnimation(g.GetAvatar().Pos(), renderer.AtlasWorld, bloodIcon, color.White, func() {
-        g.GetAvatar().Damage(amount)
+    g.CombatHitAnimation(g.GetAvatar().Pos(), renderer.AtlasWorld, bloodIcon, color.White, func() {
+        g.GetAvatar().Damage(g, amount)
     })
 }
 

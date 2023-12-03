@@ -60,7 +60,7 @@ func (w *Clock) Description() []string {
 }
 
 func (w *Clock) Icon(tick uint64) int32 {
-    frame := util.GetFrameFromTick(tick, 1, 2)
+    frame := util.GetLoopingFrameFromTick(tick, 1, 2)
     if frame == 0 {
         return 234
     } else {

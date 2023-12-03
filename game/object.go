@@ -4,6 +4,7 @@ import (
     "Legacy/geometry"
     "Legacy/recfile"
     "Legacy/util"
+    "fmt"
     "image/color"
 )
 
@@ -52,6 +53,19 @@ func (a *BaseObject) Description() []string {
     return a.description
 }
 
+func (a *BaseObject) GetDebugInfos() []string {
+    return []string{
+        fmt.Sprintf("Name: %s", a.name),
+        fmt.Sprintf("Pos: %s", a.pos),
+        fmt.Sprintf("Icon: %d", a.icon),
+        fmt.Sprintf("Description: %s", a.description),
+    }
+}
+
+func (a *BaseObject) Searched() (bool, []string) {
+    return false, nil
+}
+
 type Object interface {
     Pos() geometry.Point
     Icon(uint64) int32
@@ -65,8 +79,10 @@ type Object interface {
     Description() []string
     IsHidden() bool
     Discover() []string
+    Searched() (bool, []string)
     ToRecordAndType() (recfile.Record, string)
     OnActorWalkedOn(person *Actor)
+    GetDebugInfos() []string
 }
 
 func NewObjectFromRecord(record recfile.Record, objectTypeName string) Object {
@@ -77,8 +93,8 @@ func NewObjectFromRecord(record recfile.Record, objectTypeName string) Object {
         return NewDoorFromRecord(record)
     case "shrine":
         return NewShrineFromRecord(record)
-    case "fireplace":
-        return NewFireplaceFromRecord(record)
+    case "barbeceu":
+        return NewBarbecueFromRecord(record)
     }
     panic("unknown object type")
 }

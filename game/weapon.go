@@ -57,7 +57,7 @@ func NewOnHitEffect(name string) OnHitEffect {
             return victim.GetCombatFaction() == "slime"
         }
         effect.apply = func(engine Engine, weapon *Weapon, attacker, victim *Actor) {
-            victim.AddStatusEffect(StatusEffectSleeping, 5)
+            engine.AddStatusEffect(victim, StatusSleeping(), 1)
         }
         effect.toolTipLeft = "slime"
         effect.toolTipRight = "sleeping (100%)"
@@ -66,7 +66,7 @@ func NewOnHitEffect(name string) OnHitEffect {
             return rand.Float64() < 0.33 && !victim.IsAlive()
         }
         effect.apply = func(engine Engine, weapon *Weapon, attacker, victim *Actor) {
-            amount := rand.Intn(victim.level*300) + 100
+            amount := rand.Intn(victim.GetLevel()*300) + 100
             victim.AddGold(amount)
         }
         effect.toolTipLeft = "greed"

@@ -22,6 +22,8 @@ type ScrollableTextWindow struct {
 
     shouldClose bool
     title       string
+    rightAction func()
+    leftAction  func()
 }
 
 func (r *ScrollableTextWindow) OnMouseWheel(x int, y int, dy float64) bool {
@@ -50,6 +52,10 @@ func (r *ScrollableTextWindow) OnCommand(command CommandType) bool {
 }
 
 func (r *ScrollableTextWindow) ActionLeft() {
+    if r.leftAction != nil {
+        r.leftAction()
+        return
+    }
     // page up
     if r.needsScroll() {
         pageSize := r.bottomRight.Y - r.topLeft.Y - 4
@@ -58,6 +64,10 @@ func (r *ScrollableTextWindow) ActionLeft() {
 }
 
 func (r *ScrollableTextWindow) ActionRight() {
+    if r.rightAction != nil {
+        r.rightAction()
+        return
+    }
     // page down
     if r.needsScroll() {
         pageSize := r.bottomRight.Y - r.topLeft.Y - 4
@@ -161,4 +171,12 @@ func (r *ScrollableTextWindow) SetTitle(name string) {
 
 func (r *ScrollableTextWindow) ActionCancel() {
     r.shouldClose = true
+}
+
+func (r *ScrollableTextWindow) SetRightAction(rightAction func()) {
+    r.rightAction = rightAction
+}
+
+func (r *ScrollableTextWindow) SetLeftAction(leftAction func()) {
+    r.leftAction = leftAction
 }

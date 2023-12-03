@@ -15,8 +15,30 @@ func MaxLen(text []string) int {
     }
     return maxLength
 }
-func rightPad(s string, pLen int) string {
+func RightPad(s string, pLen int) string {
     return s + strings.Repeat(" ", pLen-len(s))
+}
+
+func RightPadCount(s string, count int) string {
+    return s + strings.Repeat(" ", count)
+}
+
+func LeftPadCount(s string, count int) string {
+    return strings.Repeat(" ", count) + s
+}
+
+func RightPadCountMulti(lines []string, count int) []string {
+    for i, line := range lines {
+        lines[i] = RightPadCount(line, count)
+    }
+    return lines
+}
+
+func LeftPadCountMulti(lines []string, count int) []string {
+    for i, line := range lines {
+        lines[i] = LeftPadCount(line, count)
+    }
+    return lines
 }
 
 func rightAlignColumns(cols []string, width []int) string {
@@ -38,7 +60,7 @@ func TableLine(labelWidth, colWidth int, label string, columns ...string) string
     for i, _ := range columns {
         colWidths[i] = colWidth
     }
-    return fmt.Sprintf("%s%s", rightPad(label, labelWidth+1), rightAlignColumns(columns, colWidths))
+    return fmt.Sprintf("%s%s", RightPad(label, labelWidth+1), rightAlignColumns(columns, colWidths))
 }
 func TableLayout(tableData []TableRow) []string {
     var maxLabelLen int
@@ -57,7 +79,7 @@ func TableLayout(tableData []TableRow) []string {
 
     var result []string
     for _, row := range tableData {
-        result = append(result, fmt.Sprintf("%s%s", rightPad(row.Label, maxLabelLen+1), rightAlignColumns(row.Columns, colWidths)))
+        result = append(result, fmt.Sprintf("%s%s", RightPad(row.Label, maxLabelLen+1), rightAlignColumns(row.Columns, colWidths)))
     }
     return result
 }

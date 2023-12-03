@@ -316,3 +316,26 @@ func (d *Door) SetBreakEvent(event string) {
 func (d *Door) SetFrameStrength(level DifficultyLevel) {
     d.frameStrength = level
 }
+
+func (d *Door) NeedsKey() bool {
+    return d.key != ""
+}
+
+func (d *Door) Reset() {
+    d.isBroken = false
+    if d.NeedsKey() {
+        d.isLocked = true
+    }
+}
+
+func (d *Door) SetKnockEvent(event string) {
+    d.knockEvent = event
+}
+
+func (d *Door) GetKeyName() string {
+    return d.key
+}
+
+func (d *Door) Unlock() {
+    d.isLocked = false
+}

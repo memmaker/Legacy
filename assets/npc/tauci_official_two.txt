@@ -75,13 +75,13 @@ Text:
 
 
 Key: signed form 32
-Condition: !hasItem('blank form 32')
+Condition: !hasItem('blank form 32',1)
 Text:
 + "Oh, you need a signed form 32? Do you have the blank form with you?
 + No, that's not going to work. You need to get a blank form 32 first."
 
 Key: signed form 32
-Condition: hasItem('blank form 32')
+Condition: hasItem('blank form 32',1)
 Text:
 + "Perfect, you have a blank form 32.
 + Let me just sign it for you."

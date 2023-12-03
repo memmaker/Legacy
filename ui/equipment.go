@@ -19,6 +19,8 @@ type EquipmentWindow struct {
     armorSlotLines map[int]game.ArmorSlot
     engine         game.Engine
     lastMouseLine  int
+    actionRight    func()
+    actionLeft     func()
 }
 
 func (e *EquipmentWindow) OnMouseWheel(x int, y int, dy float64) bool {
@@ -305,11 +307,15 @@ func (e *EquipmentWindow) ActionDown() {
 }
 
 func (e *EquipmentWindow) ActionLeft() {
-
+    if e.actionLeft != nil {
+        e.actionLeft()
+    }
 }
 
 func (e *EquipmentWindow) ActionRight() {
-
+    if e.actionRight != nil {
+        e.actionRight()
+    }
 }
 
 func (e *EquipmentWindow) ActionConfirm() {
@@ -411,7 +417,7 @@ func (e *EquipmentWindow) chooseEquipment(equipAction func(item game.Item), filt
             Text:      armorLabel,
             Action: func() {
                 equipAction(equippable)
-                e.engine.OpenEquipmentDetails(e.actor)
+                e.engine.OpenEquipmentDetails(party.GetMemberIndex(e.actor))
             },
         }
         menuItems = append(menuItems, menuItem)
@@ -421,4 +427,12 @@ func (e *EquipmentWindow) chooseEquipment(equipAction func(item game.Item), filt
 
 func (e *EquipmentWindow) ActionCancel() {
     e.shouldClose = true
+}
+
+func (e *EquipmentWindow) SetActionRight(actionRight func()) {
+    e.actionRight = actionRight
+}
+
+func (e *EquipmentWindow) SetActionLeft(actionLeft func()) {
+    e.actionLeft = actionLeft
 }

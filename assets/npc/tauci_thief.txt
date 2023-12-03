@@ -12,23 +12,44 @@ Item: armor(a cloak, torso, 1)
 %rec: Conversation
 
 Key: _first_time
-Text: "Hello, Stranger. Are you with the guild?" \
+AddsKeyword: bye
+Text: "Hello, there. Are you with the guild?" \
 He is forming his hands into a triangle while talking to you.
 #
-OptionNeedsSkill: Lying(1)
+OptionCondition: !hasFlag('member_of_thieves_guild')
+OptionSkillCheckVersus: Bluff, Intelligence
 OnOptionSuccess: _with_guild
-OnOptionFail: _not_with_guild
-Option: yes (lie)
-#
-OptionNeedsFlag: _with_guild
-OnOptionSuccess: _with_guild
+OnOptionFailure: _failed_bluff
 Option: yes
 #
-OnOptionSuccess: _not_with_guild
+OptionCondition: hasFlag('member_of_thieves_guild')
+Target: _with_guild
+Option: yes
+#
+OptionCondition: !hasFlag('member_of_thieves_guild')
+Target: _not_with_guild
 Option: no
 #
+OptionCondition: hasFlag('member_of_thieves_guild')
+OptionSkillCheckVersus: Bluff, Intelligence
 OnOptionSuccess: _not_with_guild
-Option: no (lie)
+OnOptionFailure: _failed_bluff_not_with_guild
+Option: no
+#
+OptionCondition: !hasFlag('member_of_thieves_guild') && getAttribute('intelligence') > 5
+Target: _with_guild
+Option: You form your hands into a triangle instead of answering.
+#
+OptionCondition: hasFlag('member_of_thieves_guild')
+Target: _with_guild
+Option: Silently form the sign of the guild.
+
+
+Key: _opening
+AddsKeyword: with the guild
+Text:
++ "Ah, it's you again."
++ It's hard to ignore his =hand gestures=.
 
 Key: _with_guild
 Text: "Gosh, I'm so glad to \
@@ -47,34 +68,31 @@ window."
 "It was one of the houses \
 on the east side of town."
 
+Key: _failed_bluff
+Effect: quits
+Text:
++ "I'm sorry, I don't think
++ I know you."
++ He quickly turns away.
+
+Key: _failed_bluff_not_with_guild
+Text:
++ "Wait, I recall seeing you in the guild hall.
++ It's good to see you again."
+Redirect: _with_guild
+
 Key: _not_with_guild
 Effect: quits
 Text: "Yes, me neither." He quickly turns away.
-
-Key: _opening
-AddsKeyword: with the guild
-Text:
-+ "Ah, it's you again."
-+ It's hard to ignore his =hand gestures=.
 
 Key: hand gestures
 Text: "I am not sure what you are talking about."
 Effect: quits
 
 Key: with the guild
-Text: "Is that so? I am not sure, I can believe you. Are you sure you are with the guild? They don't usually send people like you."
-#
-OptionNeedsSkill: Lying(1)
-OnOptionSuccess: _with_guild
-OnOptionFail: _not_with_guild
-Option: yes (lie)
-#
-OptionNeedsFlag: _with_guild
-OnOptionSuccess: _with_guild
-Option: yes
-#
-OnOptionSuccess: _not_with_guild
-Option: no
-#
-OnOptionSuccess: _not_with_guild
-Option: no (lie)
+Text: "Is that so?"
+Redirect: _first_time
+
+Key: bye
+Effect: quits
+Text: "Goodbye. Don't mention this to anyone."

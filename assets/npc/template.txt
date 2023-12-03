@@ -11,25 +11,22 @@ Item: armor(nothing, torso, 0)
 
 %rec: Conversation
 
-Key: _first_time
+Key: { _first_time | _opening }
 Text: "{text}"
 + \
 "{text}"
 
 Key: name
-Effect: {quits | joins | sells}
-NeedsFlag: {flagname}
-SetsFlag: {flagname}
-GivesItem: {itemstring}
-NeedsItem: {itemname}
-NeedsSkill: {skillname}({level})
+Effect: { quits | joins | sells | combat }
 Text: "{text}"
 
 Key: job
-Text: ""
+AddsKeyword: {keyword}
+Condition: {govaluate expression}
+Text: {text}
 #
-Option: {targetKey}: {text}
-#
-OptionNeedsFlag: {flagname}
-OptionNeedsSkill: {skillname}({level})
-Option: {targetKey}: {text}
+OptionCondition: {govaluate expression}
+OptionSkillCheckVersus: {SkillName}, {AttributeName}
+OptionSkillCheck: {SkillName}, {Difficulty}
+Target: {targetKey}
+Option: {text}

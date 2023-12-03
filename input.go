@@ -121,6 +121,36 @@ func (g *GridEngine) handleMapMouseInput(screenX int, screenY int) {
             g.handleTooltipWithDelay(ui.NewTextTooltip(g.gridRenderer, actor.LookDescription(), geometry.Point{X: cellX, Y: cellY}), 0)
         }
     }
+    if g.debugInfoMode {
+        mapPos := g.ScreenToMap(screenX, screenY)
+        cellX, cellY := g.gridRenderer.ScreenToSmallCell(screenX, screenY)
+        toolTipText := g.getDebugInfo(mapPos)
+        g.handleTooltipWithDelay(ui.NewTextTooltip(g.gridRenderer, toolTipText, geometry.Point{X: cellX, Y: cellY}), 0)
+    }
+}
+
+func (g *GridEngine) getDebugInfo(mapPos geometry.Point) []string {
+    if g.currentMap.IsActorAt(mapPos) {
+        actor := g.currentMap.ActorAt(mapPos)
+        meleeHitChance := fmt.Sprintf("Melee CtH: %d%%", int(g.rules.GetMeleeHitChance(g.GetAvatar(), actor)*100))
+        rangedHitChance := fmt.Sprintf("Ranged CtH: %d%%", int(g.rules.GetRangedHitChance(g.GetAvatar(), actor)*100))
+        debugInfos := append([]string{mapPos.Encode()}, actor.GetDebugInfos()...)
+        debugInfos = append(debugInfos, meleeHitChance, rangedHitChance)
+        return debugInfos
+    }
+    if g.currentMap.IsDownedActorAt(mapPos) {
+        actor := g.currentMap.DownedActorAt(mapPos)
+        return append([]string{mapPos.Encode()}, actor.GetDebugInfos()...)
+    }
+    if g.currentMap.IsItemAt(mapPos) {
+        item := g.currentMap.ItemAt(mapPos)
+        return append([]string{mapPos.Encode()}, item.GetDebugInfos()...)
+    }
+    if g.currentMap.IsObjectAt(mapPos) {
+        object := g.currentMap.ObjectAt(mapPos)
+        return append([]string{mapPos.Encode()}, object.GetDebugInfos()...)
+    }
+    return []string{mapPos.Encode()}
 }
 
 func (g *GridEngine) IsScreenPosInsideMap(x int, y int) bool {
@@ -185,10 +215,13 @@ func (g *GridEngine) handleDebugKeys() {
         }
     }
 
-    if inpututil.IsKeyJustPressed(ebiten.KeyF11) {
+    if inpututil.IsKeyJustPressed(ebiten.KeyF12) {
         ebiten.SetFullscreen(!ebiten.IsFullscreen())
     } else if inpututil.IsKeyJustPressed(ebiten.KeyF10) {
         g.openDebugMenu()
+    } else if inpututil.IsKeyJustPressed(ebiten.KeyF11) {
+        g.debugInfoMode = !g.debugInfoMode
+        g.Print(fmt.Sprintf("Debug info mode: %t", g.debugInfoMode))
     }
 }
 
@@ -216,10 +249,11 @@ func (g *GridEngine) handleShortcuts() {
     // 1-4             - Character equipment (1-4)
     // 5               - Party overview
     // D + 1-4         - Character details (1-4)
+    // F + 1-4         - Character status effects (1-4)
     // Shift + 1-4 - Switch control to character (1-4)
     // O + 1-4     - Optimize equip for character (1-4)
     // U + 1-4     - Strip gear from character (1-4)
-    // F9 - Toggle fullscreen
+    // F12 - Toggle fullscreen
     g.altIsPressed = ebiten.IsKeyPressed(ebiten.KeyAlt)
 
     if inpututil.IsKeyJustPressed(ebiten.KeyP) && !g.IsWindowOpen() {
@@ -244,7 +278,7 @@ func (g *GridEngine) handleShortcuts() {
     } else if inpututil.IsKeyJustPressed(ebiten.KeyR) {
         g.TryRestParty()
     } else if inpututil.IsKeyJustPressed(ebiten.KeyB) {
-        g.combatManager.PlayerStartsRangedAttack()
+        g.combatManager.PlayerControlledRangedAttack()
     } else if inpututil.IsKeyJustPressed(ebiten.KeySpace) {
         g.openPartyMenu()
     } else if inpututil.IsKeyJustPressed(ebiten.KeyD) {
@@ -313,12 +347,11 @@ func (g *GridEngine) handleShortcuts() {
         } else if g.altIsPressed {
             g.openCharSkills(charIndex)
         } else if ebiten.IsKeyPressed(ebiten.KeyF) {
-            g.openCharBuffs(charIndex)
-        } else if ebiten.IsKeyPressed(ebiten.KeyD) {
-            g.openCharDetails(g.playerParty.GetMember(charIndex))
+            g.openCharStatusEffects(charIndex)
+        } else if ebiten.IsKeyPressed(ebiten.KeyE) {
+            g.openCharMainStats(charIndex)
         } else {
-            member := g.playerParty.GetMember(charIndex)
-            g.OpenEquipmentDetails(member)
+            g.OpenEquipmentDetails(charIndex)
         }
     }
 }

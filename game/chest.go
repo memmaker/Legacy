@@ -33,6 +33,7 @@ type Chest struct {
     isLocked       bool
     walkable       bool
     lockStrength   DifficultyLevel
+    internalName   string
 }
 
 func (s *Chest) GetItems() []Item {
@@ -74,6 +75,7 @@ func NewChest(lootLevel int, lootType []Loot) *Chest {
         emptyIcon: 204,
         lootLevel: lootLevel,
         lootType:  lootType,
+        walkable:  true,
     }
 }
 func NewFixedChest(contents []Item) *Chest {
@@ -85,6 +87,7 @@ func NewFixedChest(contents []Item) *Chest {
         emptyIcon:      204,
         items:          contents,
         hasCreatedLoot: true,
+        walkable:       true,
     }
 }
 
@@ -97,6 +100,7 @@ func NewContainer(lootLevel int, lootType []Loot, name string, icon int32) *Ches
         emptyIcon: icon,
         lootLevel: lootLevel,
         lootType:  lootType,
+        walkable:  true,
     }
 }
 func NewFixedContainer(contents []Item, name string, icon int32) *Chest {
@@ -135,6 +139,8 @@ func NewChestFromRecord(record recfile.Record) *Chest {
             chest.lootType = append(chest.lootType, Loot(field.Value))
         case "item":
             chest.items = append(chest.items, NewItemFromString(field.Value))
+        case "walkable":
+            chest.walkable = field.AsBool()
         }
     }
     return chest
@@ -150,6 +156,7 @@ func (s *Chest) ToRecordAndType() (recfile.Record, string) {
         {"needsKey", s.needsKey},
         {"lootLevel", recfile.IntStr(s.lootLevel)},
         {"hasCreatedLoot", recfile.BoolStr(s.hasCreatedLoot)},
+        {"walkable", recfile.BoolStr(s.walkable)},
     }
     for _, lootType := range s.lootType {
         record = append(record, recfile.Field{Name: "lootType", Value: string(lootType)})
@@ -164,9 +171,6 @@ func (s *Chest) ToRecordAndType() (recfile.Record, string) {
 func (s *Chest) Description() []string {
     var result []string
     result = append(result, fmt.Sprintf("You see %s.", s.Name()))
-    if s.isLocked {
-        result = append(result, "It appears to be locked.")
-    }
     return result
 }
 
@@ -183,7 +187,9 @@ func (s *Chest) IsWalkable(person *Actor) bool {
 func (s *Chest) IsTransparent() bool {
     return true
 }
-
+func (s *Chest) IsPassableForProjectile() bool {
+    return true
+}
 func (s *Chest) spawnLoot(engine Engine) {
     if s.hasCreatedLoot {
         return
@@ -248,6 +254,10 @@ func (s *Chest) SetFixedLoot(loot []Item) {
     s.hasCreatedLoot = true
 }
 
+func (s *Chest) AddFixedLoot(items []Item) {
+    s.items = append(s.items, items...)
+    s.hasCreatedLoot = true
+}
 func (s *Chest) IsEmpty() bool {
     if s.hasCreatedLoot {
         return len(s.items) == 0
@@ -261,4 +271,16 @@ func (s *Chest) SetWalkable(isWalkable bool) {
 
 func (s *Chest) SetLockStrength(difficultyLevel DifficultyLevel) {
     s.lockStrength = difficultyLevel
+}
+
+func (s *Chest) GetInternalName() string {
+    return s.internalName
+}
+
+func (s *Chest) SetInternalName(name string) {
+    s.internalName = name
+}
+
+func (s *Chest) ResetLock() {
+    s.isLocked = true
 }

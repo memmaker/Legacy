@@ -99,6 +99,6 @@ func (s *Mirror) GetContextActions(engine Engine) []util.MenuItem {
 
 func (s *Mirror) frameFromTick(tick uint64) int32 {
     magicalBaseIcon := int32(207)
-    frame := util.GetFrameFromTick(tick, 0.5, 2)
+    frame := util.GetLoopingFrameFromTick(tick, 0.5, 2)
     return magicalBaseIcon + frame
 }

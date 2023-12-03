@@ -11,7 +11,7 @@ type Scroll struct {
     BaseItem
     icon           int32
     filename       string
-    spell          *Spell
+    spell          *Action
     wearer         ItemWearer
     autoLayoutText bool
 }
@@ -79,13 +79,13 @@ func (b *Scroll) GetContextActions(engine Engine) []util.MenuItem {
     if b.spell != nil {
         if b.spell.IsTargeted() {
             actions = append(actions, util.MenuItem{
-                Text:   fmt.Sprintf("Cast \"%s\"", b.spell.name),
+                Text:   fmt.Sprintf("Execute \"%s\"", b.spell.name),
                 Action: func() { engine.PlayerStartsOffensiveSpell(engine.GetAvatar(), b.spell) },
             })
         } else {
             actions = append(actions, util.MenuItem{
-                Text:   fmt.Sprintf("Cast \"%s\"", b.spell.name),
-                Action: func() { b.spell.Cast(engine, engine.GetAvatar()) },
+                Text:   fmt.Sprintf("Execute \"%s\"", b.spell.name),
+                Action: func() { b.spell.Execute(engine, engine.GetAvatar()) },
             })
         }
 
@@ -106,7 +106,7 @@ func (b *Scroll) read(engine Engine) {
     engine.ShowScrollableText(text, color.White, b.autoLayoutText)
 }
 
-func (b *Scroll) SetSpell(spell *Spell) {
+func (b *Scroll) SetSpell(spell *Action) {
     b.spell = spell
 }
 
@@ -130,7 +130,7 @@ func NewScroll(title, filename string) *Scroll {
     }
 }
 
-func NewSpellScroll(title, filename string, spell *Spell) *Scroll {
+func NewSpellScroll(title, filename string, spell *Action) *Scroll {
     return &Scroll{
         BaseItem: BaseItem{
             name: title,

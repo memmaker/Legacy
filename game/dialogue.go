@@ -29,6 +29,7 @@ type DialogueChoice struct {
     Conditionals        []string    // Conditionals decide if the option is shown or not
     Checks              []string    // Checks decide if the option will transition to success or fail
     SkillCheck          *SkillCheck // SkillChecks decide if the option will transition to success or fail
+    Name                string
 }
 type ConversationNode struct {
     Text         [][]string
@@ -36,6 +37,7 @@ type ConversationNode struct {
     Effects      []string
     ForcedChoice []DialogueChoice
     Conditionals []string
+    Redirect     string
 }
 
 func (c ConversationNode) IsEmpty() bool {
@@ -46,6 +48,7 @@ type Dialogue struct {
     triggers        map[string][]ConversationNode
     previouslyAsked map[string]bool
     keyWordsGiven   map[string]bool
+    disabledOptions map[string]bool
 }
 
 func NewDialogue(triggers map[string][]ConversationNode) *Dialogue {
@@ -53,12 +56,13 @@ func NewDialogue(triggers map[string][]ConversationNode) *Dialogue {
         triggers:        triggers,
         previouslyAsked: make(map[string]bool),
         keyWordsGiven:   make(map[string]bool),
+        disabledOptions: make(map[string]bool),
     }
 }
 
-func firstMatch(partyMember *Actor, engine Engine, nodes []ConversationNode) (ConversationNode, bool) {
+func (d *Dialogue) firstMatch(partyMember *Actor, engine Engine, nodes []ConversationNode) (ConversationNode, bool) {
     for _, node := range nodes {
-        if len(node.Conditionals) == 0 || EvalConditionals(partyMember, engine, node.Conditionals) {
+        if len(node.Conditionals) == 0 || d.EvalConditionals(partyMember, engine, node.Conditionals) {
             return node, true
         }
     }
@@ -78,6 +82,8 @@ func NewDialogueFromRecords(records []recfile.Record, toPages func(height int, i
             switch fieldName {
             case "Key":
                 currentTrigger = fieldValue
+            case "Redirect":
+                currentNode.Redirect = fieldValue
             case "AddsKeyword":
                 currentNode.AddsKeywords = append(currentNode.AddsKeywords, fieldValue)
             case "Condition":
@@ -86,6 +92,8 @@ func NewDialogueFromRecords(records []recfile.Record, toPages func(height int, i
                 currentText = strings.Split(fieldValue, "\n")
             case "Effect":
                 currentNode.Effects = append(currentNode.Effects, fieldValue)
+            case "OptionName":
+                currentOption.Name = fieldValue
             case "OptionCondition":
                 currentOption.Conditionals = append(currentOption.Conditionals, fieldValue)
             case "OptionCheck":
@@ -163,8 +171,9 @@ func toSpeechPages(lines []string) []string {
     return pages
 }
 
-func EvalConditionals(speakingPartyMember *Actor, engine Engine, cond []string) bool {
+func (d *Dialogue) EvalConditionals(speakingPartyMember *Actor, engine Engine, cond []string) bool {
     flags := engine.Flags()
+    party := engine.GetParty()
     functions := map[string]govaluate.ExpressionFunction{
         "getFlag": func(args ...interface{}) (interface{}, error) {
             flagName := args[0].(string)
@@ -184,10 +193,24 @@ func EvalConditionals(speakingPartyMember *Actor, engine Engine, cond []string) 
             checkDifficulty := DifficultyLevelFromString(args[1].(string))
             return (bool)(engine.SkillCheck(speakingPartyMember, skillName, checkDifficulty)), nil
         },
+        "getAttribute": func(args ...interface{}) (interface{}, error) {
+            attributeName := args[0].(string)
+            attributes := speakingPartyMember.GetAttributes()
+            attributeValue := attributes.GetAttribute(AttributeName(attributeName))
+            return (float64)(attributeValue), nil
+        },
         "hasItem": func(args ...interface{}) (interface{}, error) {
             itemName := args[0].(string)
             itemCount := int(args[1].(float64))
             return (bool)(speakingPartyMember.HasNamedItemsWithCount(itemName, itemCount)), nil
+        },
+        "hasGold": func(args ...interface{}) (interface{}, error) {
+            amount := int(args[0].(float64))
+            return (bool)(party.HasGold(amount)), nil
+        },
+        "hasDisabledOption": func(args ...interface{}) (interface{}, error) {
+            optionName := args[0].(string)
+            return (bool)(d.HasDisabledOption(optionName)), nil
         },
     }
     if len(cond) > 0 {
@@ -205,7 +228,7 @@ func (d *Dialogue) GetOptions(partyMember *Actor, pk *PlayerKnowledge, engine En
     var options []string
     for k, _ := range pk.knowsAbout {
         if nodes, ok := d.triggers[k]; ok {
-            _, hasMatch := firstMatch(partyMember, engine, nodes)
+            _, hasMatch := d.firstMatch(partyMember, engine, nodes)
             if hasMatch {
                 options = append(options, k)
                 continue
@@ -225,7 +248,7 @@ func (d *Dialogue) GetOptions(partyMember *Actor, pk *PlayerKnowledge, engine En
 func (d *Dialogue) GetResponseAndAddKnowledge(speaker *Actor, pk *PlayerKnowledge, engine Engine, keyword string) ConversationNode {
     d.previouslyAsked[keyword] = true
     responseNodes := d.triggers[keyword]
-    response, exists := firstMatch(speaker, engine, responseNodes)
+    response, exists := d.firstMatch(speaker, engine, responseNodes)
     if exists {
         pk.AddKnowledge(response.AddsKeywords)
         d.RememberKeywords(response.AddsKeywords)
@@ -257,17 +280,26 @@ func (d *Dialogue) HasOpening() bool {
 }
 
 func (d *Dialogue) GetFirstTimeText(speaker *Actor, engine Engine) ConversationNode {
-    response, _ := firstMatch(speaker, engine, d.triggers["_first_time"])
+    response, _ := d.firstMatch(speaker, engine, d.triggers["_first_time"])
     return response
 }
 
 func (d *Dialogue) GetOpening(speaker *Actor, engine Engine) ConversationNode {
-    response, _ := firstMatch(speaker, engine, d.triggers["_opening"])
+    response, _ := d.firstMatch(speaker, engine, d.triggers["_opening"])
     return response
 }
 
 func (d *Dialogue) HasBeenUsed(keyword string) bool {
     return d.previouslyAsked[keyword]
+}
+
+func (d *Dialogue) DisableOption(optionName string) {
+    d.disabledOptions[optionName] = true
+}
+
+func (d *Dialogue) HasDisabledOption(optionName string) bool {
+    value, exists := d.disabledOptions[optionName]
+    return exists && value
 }
 
 type JournalEntry struct {

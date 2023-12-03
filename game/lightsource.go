@@ -85,7 +85,7 @@ func (b *LightSource) attachedIcon(tick uint64) int32 {
     if !b.isLit {
         return b.unlitAttachedIcon
     }
-    frameIndex := util.GetFrameFromTick(tick+b.randomOffset, 0.2, len(b.litAttachedFrames))
+    frameIndex := util.GetLoopingFrameFromTick(tick+b.randomOffset, 0.2, len(b.litAttachedFrames))
     return b.litAttachedFrames[frameIndex]
 }
 func NewCandle(isLit bool) *LightSource {

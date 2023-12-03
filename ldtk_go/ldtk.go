@@ -278,7 +278,7 @@ type BGImage struct {
 // Level represents a Level in an LDtk Project.
 type Level struct {
     Identifier    string // Name of the Level (i.e. "Level0")
-    WorldX        int    // Position of the Level in the LDtk Project / world
+    WorldX        int    // CurrentPosition of the Level in the LDtk Project / world
     WorldY        int
     Width         int         `json:"pxWid"` // Width and height of the level in pixels.
     Height        int         `json:"pxHei"`

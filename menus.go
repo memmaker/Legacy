@@ -3,12 +3,14 @@ package main
 import (
     "Legacy/game"
     "Legacy/geometry"
+    "Legacy/gocoro"
     "Legacy/ui"
     "Legacy/util"
     "fmt"
     "github.com/hajimehoshi/ebiten/v2"
     "image/color"
     "os"
+    "time"
 )
 
 func (g *GridEngine) openContextMenu(menu []util.MenuItem) {
@@ -65,12 +67,13 @@ func (g *GridEngine) openSpellMenu() {
         }
         label := fmt.Sprintf("%s (%d)", spell.Name(), spell.ManaCost())
         menuItems = append(menuItems, util.MenuItem{
-            Text: label,
+            Text:        label,
+            TooltipText: spell.GetDescription(),
             Action: func() {
                 if spell.IsTargeted() {
                     g.combatManager.PlayerStartsOffensiveSpell(g.GetAvatar(), spell)
                 } else {
-                    spell.Cast(g, g.GetAvatar())
+                    spell.Execute(g, g.GetAvatar())
                 }
             },
         })
@@ -100,9 +103,9 @@ func (g *GridEngine) openCombatSpellMenu(member *game.Actor) {
             Action: func() {
                 if spell.IsTargeted() {
                     g.CloseAllModals()
-                    g.combatManager.SelectSpellTarget(member, spell)
+                    g.combatManager.SelectActionTarget(member, spell)
                 } else {
-                    spell.Cast(g, member)
+                    spell.Execute(g, member)
                 }
             },
         })
@@ -225,6 +228,7 @@ func (g *GridEngine) openDebugMenu() {
                 g.Print("DEBUG(impulse 9)")
             },
         },
+
         {
             Text: "Toggle NoClip",
             Action: func() {
@@ -236,13 +240,39 @@ func (g *GridEngine) openDebugMenu() {
         {
             Text: "Damage to Avatar",
             Action: func() {
-                g.avatar.Damage(10)
+                g.avatar.Damage(g, 10)
             },
         },
         {
             Text: "Get All Skills",
             Action: func() {
                 g.avatar.AddAllSkills()
+            },
+        },
+        {
+            Text: "Get Buffs",
+            Action: func() {
+                g.AddStatusEffect(g.GetAvatar(), game.StatusBlessed(), 10)
+                g.AddStatusEffect(g.GetAvatar(), game.StatusHolyBonus(), 10)
+            },
+        },
+        {
+            Text: "Get Weak & Undead",
+            Action: func() {
+                g.AddStatusEffect(g.GetAvatar(), game.StatusWeak(), 1)
+                g.AddStatusEffect(g.GetAvatar(), game.StatusUndead(), 1)
+            },
+        },
+        {
+            Text: "Edit Skills",
+            Action: func() {
+                g.openSkillEditor()
+            },
+        },
+        {
+            Text: "Edit Attributes",
+            Action: func() {
+                g.openAttributeEditor()
             },
         },
         {
@@ -275,7 +305,64 @@ func (g *GridEngine) openDebugMenu() {
                 g.ShowScrollableText(g.rules.GetSkillCheckTable(), color.White, false)
             },
         },
+        {
+            Text: "Test NPC movement",
+            Action: func() {
+                g.startActorPath("tauci_front_guard", "guard_patrol")
+            },
+        },
     })
+}
+func (g *GridEngine) startActorPath(internalName, pathName string) {
+    actor := g.GetActorByInternalName(internalName)
+    waypoints := g.currentMap.GetNamedPath(pathName)
+    if waypoints == nil || len(waypoints) == 0 {
+        g.Print(fmt.Sprintf("No path %s", pathName))
+        return
+    }
+    if actor == nil {
+        g.Print(fmt.Sprintf("No actor %s", internalName))
+        return
+    }
+    err := g.RunAnimationScript(g.getNPCMovementRoutine(actor, waypoints))
+    if err != nil {
+        println(err.Error())
+    }
+}
+func (g *GridEngine) getNPCMovementRoutine(actor *game.Actor, waypoints []geometry.Point) func(exe *gocoro.Execution) {
+    return func(exe *gocoro.Execution) {
+        for _, currentWaypoint := range waypoints {
+            for actor.IsSleeping() {
+                _ = exe.YieldTime(2 * time.Second)
+            }
+            var currentPath []geometry.Point
+            moveBlockedCount := 0
+            for actor.Pos() != currentWaypoint {
+                //
+                if currentPath == nil || len(currentPath) == 0 {
+                    currentPath = g.currentMap.GetJPSPath(actor.Pos(), currentWaypoint, g.currentMap.IsCurrentlyPassable)
+                    if len(currentPath) > 0 {
+                        currentPath = currentPath[1:] // remove the first element, which is the current position
+                    }
+                }
+                for len(currentPath) > 0 {
+                    moveBlockedCount = 0
+                    nextPos := currentPath[0]
+                    currentPath = currentPath[1:]
+                    for actor.Pos() != nextPos {
+                        g.TryMoveNPCOnPath(actor, nextPos)
+                        _ = exe.YieldTime(900 * time.Millisecond)
+                        moveBlockedCount++
+                        if moveBlockedCount > 5 {
+                            currentPath = nil
+                            moveBlockedCount = 0
+                            break
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
 
 func (g *GridEngine) ChangeAppearance() {

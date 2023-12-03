@@ -31,9 +31,7 @@ func (g *GridEngine) PlayerMovement(direction geometry.Point) {
     g.advanceTimeFromMovement()
     if g.playerParty.NeedsRestAfterMovement() {
         for _, actor := range g.playerParty.GetMembers() {
-            actor.ClearBuffs()
-            g.AddBuff(actor, "Fatigued", game.BuffTypeOffense, -5)
-            g.AddBuff(actor, "Weak", game.BuffTypeDefense, -3)
+            g.AddStatusEffect(actor, game.StatusWeak(), 1)
         }
     }
 
@@ -55,7 +53,7 @@ func (g *GridEngine) onActorMovedOrTeleported(loadedMap *gridmap.GridMap[*game.A
 
 func (g *GridEngine) onNPCMovedOrTeleported(loadedMap *gridmap.GridMap[*game.Actor, game.Item, game.Object], actor *game.Actor, pos geometry.Point) {
     // calculate the zone of the actor
-    engagementZone := loadedMap.GetDijkstraMap(pos, actor.GetNPCEngagementRange())
+    engagementZone := loadedMap.GetDijkstraMapWithActorsNotBlocking(pos, actor.GetNPCEngagementRange())
     actor.SetNPCEngagementZone(engagementZone)
 }
 
@@ -192,6 +190,8 @@ func (g *GridEngine) Update() error {
         g.animationRoutine.Update()
     }
 
+    g.animator.Update()
+
     if g.movementRoutine.Running() {
         g.movementRoutine.Update()
     }
@@ -216,6 +216,7 @@ func (g *GridEngine) Draw(screen *ebiten.Image) {
         g.combatManager.Draw(screen)
     } else {
         g.drawPeaceTimeStatusBar(screen)
+        g.animator.Draw(g.gridRenderer, screen)
     }
 
     if g.conversationModal != nil {
@@ -321,6 +322,10 @@ func (g *GridEngine) TransitionToNamedLocation(targetMap, targetLocation string)
     nextMap := g.mapsInMemory[targetMap]
     location := nextMap.GetNamedLocation(targetLocation)
     g.transitionToLocation(targetMap, location)
+}
+func (g *GridEngine) isMapInMemory(targetMap string) bool {
+    _, isInMemory := g.mapsInMemory[targetMap]
+    return isInMemory
 }
 func (g *GridEngine) ensureMapInMemory(targetMap string) {
     // check if the next map is already loaded

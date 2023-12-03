@@ -40,6 +40,7 @@ type Item interface {
     SetPickupEvent(name string)
     GetPickupEvent() string
     GetTooltipLines() []string
+    GetDebugInfos() []string
 }
 
 type BaseItem struct {
@@ -50,6 +51,15 @@ type BaseItem struct {
     pickupEventName string
 }
 
+func (i *BaseItem) GetDebugInfos() []string {
+    return []string{
+        fmt.Sprintf("Name: %s", i.name),
+        fmt.Sprintf("Pos: %s", i.pos),
+        fmt.Sprintf("BaseValue: %d", i.baseValue),
+        "PickupEventName:",
+        fmt.Sprintf("  %s", i.pickupEventName),
+    }
+}
 func (i *BaseItem) SetPickupEvent(name string) {
     i.pickupEventName = name
 }

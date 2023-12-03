@@ -46,10 +46,10 @@ type Engine interface {
     ShowEquipMenu(a Equippable)
     PlayerStartsCombat(opponent *Actor)
     PlayerTriesBackstab(opponent *Actor)
-    PlayerStartsOffensiveSpell(caster *Actor, spell *Spell)
+    PlayerStartsOffensiveSpell(caster *Actor, spell *Action)
     GetAoECircle(pos geometry.Point, radius int) []geometry.Point
-    HitAnimation(pos geometry.Point, atlasName renderer.AtlasName, icon int32, tintColor color.Color, whenDone func())
-    SpellDamageAt(caster *Actor, pos geometry.Point, amount int)
+    CombatHitAnimation(pos geometry.Point, atlasName renderer.AtlasName, icon int32, tintColor color.Color, whenDone func())
+    FixedDamageAt(caster *Actor, pos geometry.Point, amount int)
     GetPartyEquipment() []Item
     GetRules() *Rules
     CanLevelUp(member *Actor) (bool, int)
@@ -72,7 +72,7 @@ type Engine interface {
     GetVisibleMap() geometry.Rect
     GetParty() *Party
     OpenMenu(actions []util.MenuItem)
-    OpenEquipmentDetails(actor *Actor)
+    OpenEquipmentDetails(partyIndex int)
     EquipItem(actor *Actor, item Equippable)
     OpenPartyInventoryOnPage(page int)
     CloseAllModals()
@@ -86,4 +86,11 @@ type Engine interface {
     HasSkill(skill SkillName) bool
     GetRelativeDifficulty(skill SkillName, difficulty DifficultyLevel) DifficultyLevel
     TransitionToNamedLocation(targetMap string, location string)
+    ResetAllLockedDoorsOnMap(mapName string)
+    GetChestByInternalName(internalName string) *Chest
+    CloseConversation()
+    UnlockDoorsByKeyName(keyName string)
+    TryMoveNPCOnPath(actor *Actor, dest geometry.Point)
+    IsSneaking() bool
+    AddStatusEffect(victim *Actor, statusEffect StatusEffect, stacks int)
 }

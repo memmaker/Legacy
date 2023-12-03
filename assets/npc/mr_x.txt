@@ -58,8 +58,8 @@ NewItem: tool(pickaxe)
 Text: "Here you go, enjoy!"
 
 Key: buffs
-Effect: giveBuff(offense, Holy Bonus, 10)
-Effect: giveBuff(defense, Blessing, 10)
+Effect: giveBuff(holy bonus, 10)
+Effect: giveBuff(blessing, 10)
 Text: "Here you go, enjoy!"
 
 Key: flag

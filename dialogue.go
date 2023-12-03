@@ -81,7 +81,10 @@ func (g *GridEngine) toMenuItems(npc *game.Actor, dialogue *game.Dialogue, optio
 func (g *GridEngine) toForcedMenuItems(npc *game.Actor, dialogue *game.Dialogue, choices []game.DialogueChoice) []util.MenuItem {
     var items []util.MenuItem
     for _, c := range choices {
-        if !game.EvalConditionals(g.GetAvatar(), g, c.Conditionals) {
+        if !dialogue.EvalConditionals(g.GetAvatar(), g, c.Conditionals) {
+            continue
+        }
+        if c.Name != "" && dialogue.HasDisabledOption(c.Name) {
             continue
         }
 
@@ -102,7 +105,7 @@ func (g *GridEngine) toForcedMenuItems(npc *game.Actor, dialogue *game.Dialogue,
                 // do the checks..
                 checksFailed := false
                 if len(choice.Checks) > 0 {
-                    checksFailed = !game.EvalConditionals(g.GetAvatar(), g, choice.Checks)
+                    checksFailed = !dialogue.EvalConditionals(g.GetAvatar(), g, choice.Checks)
                 }
                 if choice.SkillCheck != nil {
                     if choice.SkillCheck.IsVersusAntagonist {
@@ -131,7 +134,7 @@ func (g *GridEngine) toForcedMenuItems(npc *game.Actor, dialogue *game.Dialogue,
 
 func (g *GridEngine) handleDialogueChoice(dialogue *game.Dialogue, response game.ConversationNode, npc *game.Actor) {
     if response.IsEmpty() {
-        g.closeConversation()
+        g.CloseConversation()
         println("ERR: Empty response")
         return
     }
@@ -142,7 +145,7 @@ func (g *GridEngine) handleDialogueChoice(dialogue *game.Dialogue, response game
     flow := ConversationFlowContinue
     var effectCalls []func()
     for _, effect := range response.Effects {
-        effectCall, effectFlow := g.handleDialogueEffect(npc, effect)
+        effectCall, effectFlow := g.handleDialogueEffect(npc, dialogue, effect)
         if effectCall != nil {
             effectCalls = append(effectCalls, effectCall)
         }
@@ -155,13 +158,13 @@ func (g *GridEngine) handleDialogueChoice(dialogue *game.Dialogue, response game
     }
     if flow == ConversationFlowJustQuit {
         g.conversationModal.SetOnClose(func() {
-            g.closeConversation() // this MUST be the only way to close a conversation
+            g.CloseConversation() // this MUST be the only way to close a conversation
         })
     } else if flow == ConversationFlowQuitAfterText {
         g.conversationModal.SetText(response.Text)
         g.conversationModal.SetOptions(nil)
         g.conversationModal.SetOnClose(func() {
-            g.closeConversation() // this MUST be the only way to close a conversation
+            g.CloseConversation() // this MUST be the only way to close a conversation
         })
     } else if flow == ConversationFlowVendor { // what's the difference between this and ConversationFlowQuit?
         g.conversationModal.SetText(response.Text)
@@ -172,15 +175,24 @@ func (g *GridEngine) handleDialogueChoice(dialogue *game.Dialogue, response game
             callAll(effectCalls)
         })
     } else if flow == ConversationFlowContinue {
+        g.conversationModal.SetText(response.Text)
         var optionsMenuItems []util.MenuItem
         if len(response.ForcedChoice) > 0 {
             optionsMenuItems = g.toForcedMenuItems(npc, dialogue, response.ForcedChoice)
+            g.conversationModal.SetOptions(optionsMenuItems)
         } else {
-            newOptions := dialogue.GetOptions(g.GetAvatar(), g.playerKnowledge, g)
-            optionsMenuItems = g.toMenuItems(npc, dialogue, newOptions)
+            if response.Redirect != "" {
+                g.conversationModal.SetOptions(nil)
+                g.conversationModal.SetOnClose(func() {
+                    redirectedNode := dialogue.GetResponseAndAddKnowledge(g.GetAvatar(), g.playerKnowledge, g, response.Redirect)
+                    g.handleDialogueChoice(dialogue, redirectedNode, npc)
+                })
+            } else {
+                newOptions := dialogue.GetOptions(g.GetAvatar(), g.playerKnowledge, g)
+                optionsMenuItems = g.toMenuItems(npc, dialogue, newOptions)
+                g.conversationModal.SetOptions(optionsMenuItems)
+            }
         }
-        g.conversationModal.SetText(response.Text)
-        g.conversationModal.SetOptions(optionsMenuItems)
     }
     g.conversationModal.OnMouseMoved(g.lastMousePosX, g.lastMousePosY)
 }
@@ -201,7 +213,7 @@ const (
     ConversationFlowEffectAfterLastPage
 )
 
-func (g *GridEngine) handleDialogueEffect(npc *game.Actor, effect string) (func(), ConversationFlow) {
+func (g *GridEngine) handleDialogueEffect(npc *game.Actor, dialogue *game.Dialogue, effect string) (func(), ConversationFlow) {
     switch effect {
     case "quits":
         return nil, ConversationFlowQuitAfterText
@@ -231,6 +243,9 @@ func (g *GridEngine) handleDialogueEffect(npc *game.Actor, effect string) (func(
         case "removeTrigger":
             triggerName := effectPredicate.GetString(0)
             g.GetGridMap().RemoveNamedTrigger(triggerName)
+        case "disableOption":
+            option := effectPredicate.GetString(0)
+            dialogue.DisableOption(option)
         case "setFlag":
             flagName := effectPredicate.GetString(0)
             g.flags.IncrementFlag(flagName)
@@ -239,18 +254,24 @@ func (g *GridEngine) handleDialogueEffect(npc *game.Actor, effect string) (func(
             g.flags.SetFlag(flagName, effectPredicate.GetInt(1))
         case "triggerEvent":
             eventName := effectPredicate.GetString(0)
-            g.TriggerEvent(eventName)
+            return func() {
+                g.TriggerEvent(eventName)
+            }, ConversationFlowEffectAfterLastPage
         case "giveItem":
             item, hasItem := npc.GetItemByName(effectPredicate.GetString(0))
             if hasItem {
                 npc.RemoveItem(item)
                 g.AddItem(item)
             }
+        case "receiveGold":
+            amount := effectPredicate.GetInt(0)
+            g.playerParty.RemoveGold(amount)
+            npc.AddGold(amount)
+            g.Print(fmt.Sprintf("You lost %d gold.", amount))
         case "giveBuff":
-            buffType := game.BuffType(effectPredicate.GetString(0))
-            name := effectPredicate.GetString(1)
-            strength := effectPredicate.GetInt(2)
-            g.AddBuff(g.GetAvatar(), name, buffType, strength)
+            name := effectPredicate.GetString(0)
+            stacks := effectPredicate.GetInt(1)
+            g.AddStatusEffect(g.GetAvatar(), game.StatusFromName(name), stacks)
         default:
             println("Unknown effect:", effect)
         }

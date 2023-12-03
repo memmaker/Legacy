@@ -141,27 +141,25 @@ type Actor struct {
     inventory []Item
 
     // stats
-    mana             int
-    maxHealth        int
-    health           int
-    baseArmor        int
-    baseMeleeDamage  int
-    baseRangedDamage int
+    mana      int
+    maxHealth int
+    health    int
+
     experiencePoints int
-    level            int
 
-    attributes AttributeHolder
+    attributes   AttributeHolder
+    skillset     SkillSet
+    innateSkills []*Action
 
-    skillset         SkillSet
-    buffs            map[BuffType][]Buff
-    color            color.Color
-    isTinted         bool
-    combatFaction    string
-    isAggressive     bool
-    engagementRange  int
-    statusEffects    map[StatusEffect]int
-    deathIcon        int32
-    zoneOfEngagement map[geometry.Point]int
+    color                 color.Color
+    isTinted              bool
+    combatFaction         string
+    originalCombatFaction string
+    isAggressive          bool
+    engagementRange       int
+    statusEffects         map[StatusEffectName]StatusEffect
+    deathIcon             int32
+    zoneOfEngagement      map[geometry.Point]int
 }
 
 func NewActor(name string, icon int32) *Actor {
@@ -175,13 +173,10 @@ func NewActor(name string, icon int32) *Actor {
         isHuman:             true,
         inventory:           []Item{},
         skillset:            NewSkillSet(),
-        level:               1,
-        baseMeleeDamage:     5,
-        buffs:               make(map[BuffType][]Buff),
         color:               color.White,
         equippedArmor:       make(map[ArmorSlot]*Armor),
         equippedAccessories: make(map[ArmorSlot]*Armor),
-        statusEffects:       make(map[StatusEffect]int),
+        statusEffects:       make(map[StatusEffectName]StatusEffect),
         deathIcon:           24,
 
         attributes: NewAttributeHolder(),
@@ -207,13 +202,10 @@ func NewActorFromFile(file io.ReadCloser, icon int32, toPages func(height int, i
         dialogue:            conversation,
         isHuman:             true,
         skillset:            NewSkillSet(),
-        level:               1,
-        baseMeleeDamage:     5,
         attributes:          NewAttributeHolder(),
-        buffs:               make(map[BuffType][]Buff),
         equippedArmor:       make(map[ArmorSlot]*Armor),
         equippedAccessories: make(map[ArmorSlot]*Armor),
-        statusEffects:       make(map[StatusEffect]int),
+        statusEffects:       make(map[StatusEffectName]StatusEffect),
         deathIcon:           24,
     }
 
@@ -233,16 +225,37 @@ func NewActorFromFile(file io.ReadCloser, icon int32, toPages func(height int, i
         inventory := recordsForInventory[0].ToValueList()
         newActor.inventory = toInventory(newActor, itemsFromStrings(inventory))
     }
+
+    if recordForSkills, hasSkills := actorData["Skills"]; hasSkills && len(recordForSkills) > 0 {
+        skillRecord := recordForSkills[0]
+        for _, field := range skillRecord {
+            if field.Name == "ActiveSkill" {
+                newActor.AddInnateSkill(NewActiveSkillFromName(field.Value))
+            }
+        }
+    }
+
+    for _, attributeName := range GetAllAttributeNames() {
+        if value, hasAttr := coreRecord[string(attributeName)]; hasAttr {
+            newActor.attributes.SetAttribute(attributeName, recfile.StrInt(value))
+        }
+    }
+
+    for _, skillName := range GetAllSkillNames() {
+        if value, hasSkill := coreRecord[string(skillName)]; hasSkill {
+            newActor.skillset.SetSkill(skillName, recfile.StrInt(value))
+        }
+    }
+
     return newActor
 }
 
 func NewActorFromRecord(record recfile.Record) *Actor {
     a := &Actor{
-        buffs:               make(map[BuffType][]Buff),
         skillset:            NewSkillSet(), // TODO
         equippedArmor:       make(map[ArmorSlot]*Armor),
         equippedAccessories: make(map[ArmorSlot]*Armor),
-        statusEffects:       make(map[StatusEffect]int),
+        statusEffects:       make(map[StatusEffectName]StatusEffect),
         attributes:          NewAttributeHolder(),
         deathIcon:           24,
         //dialogue:        NewDialogueFromRecords(actorData["Conversation"]),
@@ -267,16 +280,8 @@ func NewActorFromRecord(record recfile.Record) *Actor {
             a.maxHealth = field.AsInt()
         case "xp":
             a.experiencePoints = field.AsInt()
-        case "level":
-            a.level = field.AsInt()
         case "mana":
             a.mana = field.AsInt()
-        case "baseArmor":
-            a.baseArmor = field.AsInt()
-        case "baseMelee":
-            a.baseMeleeDamage = field.AsInt()
-        case "baseRanged":
-            a.baseRangedDamage = field.AsInt()
         case "description":
             a.description = field.Value
         }
@@ -300,12 +305,8 @@ func (a *Actor) ToRecord() recfile.Record {
         recfile.Field{Name: "level", Value: strconv.Itoa(a.GetLevel())},
         recfile.Field{Name: "mana", Value: strconv.Itoa(a.GetMana())},
 
-        recfile.Field{Name: "baseArmor", Value: strconv.Itoa(a.GetBaseArmor())},
-        recfile.Field{Name: "baseMelee", Value: strconv.Itoa(a.GetBaseMelee())},
-        recfile.Field{Name: "baseRanged", Value: strconv.Itoa(a.GetBaseRanged())},
-
         recfile.Field{Name: "description", Value: a.description},
-        // TODO: dialogue state
+        // TODO: dialogue state, attributes & skills, equipment
 
     }
     if a.dialogue != nil {
@@ -360,8 +361,14 @@ func (a *Actor) Unequip(item Item) {
     a.party.onItemEquipStatusChanged([]Item{item})
 }
 
-func (a *Actor) SetParty(party *Party) {
+func (a *Actor) OnAddedToParty(party *Party) {
     a.party = party
+    a.SetCombatFaction("_player_party")
+}
+
+func (a *Actor) OnRemovedFromParty() {
+    a.party = nil
+    a.RestoreOriginalCombatFaction()
 }
 
 func toInventory(actor *Actor, items []Item) []Item {
@@ -369,23 +376,6 @@ func toInventory(actor *Actor, items []Item) []Item {
         item.SetHolder(actor)
     }
     return items
-}
-
-func cleanInventory(inventory []string) []string {
-    prefixToRemove := " - "
-
-    var clean []string
-    for _, itemString := range inventory {
-        if len(itemString) == 0 {
-            continue
-        }
-        if itemString[0:len(prefixToRemove)] == prefixToRemove {
-            clean = append(clean, itemString[len(prefixToRemove):])
-        } else {
-            clean = append(clean, itemString)
-        }
-    }
-    return clean
 }
 
 func itemsFromStrings(inventory []string) []Item {
@@ -415,16 +405,32 @@ func (a *Actor) Name() string {
     return a.name
 }
 
-func (a *Actor) GetDetails(engine Engine) []string {
+func (a *Actor) GetMainStats(engine Engine) []string {
     _, xpNeeded := engine.CanLevelUp(a)
     tableData := []util.TableRow{
-        {Label: "Level", Columns: []string{strconv.Itoa(a.level)}},
+        {Label: "Level", Columns: []string{strconv.Itoa(a.GetLevel())}},
         {Label: "XP", Columns: []string{strconv.Itoa(a.experiencePoints)}},
         {Label: "Next Lvl.", Columns: []string{strconv.Itoa(xpNeeded)}},
         {Label: "Health", Columns: []string{fmt.Sprintf("%d/%d", a.health, a.maxHealth)}},
         {Label: "Mana", Columns: []string{fmt.Sprintf("%d", a.mana)}},
-        {Label: "Armor", Columns: []string{fmt.Sprintf("%d", a.GetTotalArmor())}},
-        {Label: "Melee Dmg.", Columns: []string{fmt.Sprintf("%d", a.GetMeleeDamage())}},
+        {Label: "----", Columns: []string{"----"}},
+        {Label: "Strength", Columns: []string{fmt.Sprintf("%d", a.attributes.GetAttribute(Strength))}},
+        {Label: "Perception", Columns: []string{fmt.Sprintf("%d", a.attributes.GetAttribute(Perception))}},
+        {Label: "Endurance", Columns: []string{fmt.Sprintf("%d", a.attributes.GetAttribute(Endurance))}},
+        {Label: "Charisma", Columns: []string{fmt.Sprintf("%d", a.attributes.GetAttribute(Charisma))}},
+        {Label: "Intelligence", Columns: []string{fmt.Sprintf("%d", a.attributes.GetAttribute(Intelligence))}},
+        {Label: "Agility", Columns: []string{fmt.Sprintf("%d", a.attributes.GetAttribute(Agility))}},
+        {Label: "Luck", Columns: []string{fmt.Sprintf("%d", a.attributes.GetAttribute(Luck))}},
+    }
+    return util.TableLayout(tableData)
+}
+func (a *Actor) GetDerivedStats(engine Engine) []string {
+    tableData := []util.TableRow{
+        {Label: "Initiative", Columns: []string{strconv.Itoa(a.attributes.GetInitiative())}},
+        {Label: "Movement", Columns: []string{strconv.Itoa(a.attributes.GetMovementAllowance(a.GetTotalEncumbrance()))}},
+        {Label: "Base Melee Damage", Columns: []string{strconv.Itoa(a.attributes.GetBaseMeleeDamage())}},
+        {Label: "Base Ranged Damage", Columns: []string{strconv.Itoa(a.attributes.GetBaseRangedDamage())}},
+        {Label: "Base Armor", Columns: []string{strconv.Itoa(a.attributes.GetBaseArmor())}},
     }
     return util.TableLayout(tableData)
 }
@@ -531,11 +537,14 @@ func (a *Actor) GetContextActions(engine Engine) []util.MenuItem {
         }
         items = append(items, talkTo, lookAt)
         if engine.GetAvatar().IsRightNextTo(a) {
-            items = append(items, attack)
-            if engine.GetAvatar().CanBackstab(a) {
-                items = append(items, backstab)
+            if engine.IsSneaking() {
+                if engine.GetAvatar().CanBackstab(a) {
+                    items = append(items, backstab)
+                }
+                items = append(items, steal, plant)
+            } else {
+                items = append(items, attack, push)
             }
-            items = append(items, steal, plant, push)
         }
     }
     return items
@@ -765,16 +774,16 @@ func (a *Actor) IsHuman() bool {
     return a.isHuman
 }
 
-func (a *Actor) FullRest() {
+func (a *Actor) FullRest(engine Engine) {
     if a.health < a.maxHealth {
         a.health = a.maxHealth
     }
-    a.ClearBuffs()
+    a.OnRest(engine)
 }
 
-func (a *Actor) Damage(amount int) {
+func (a *Actor) Damage(engine Engine, amount int) {
     a.health -= amount
-    a.OnDamageReceived(amount)
+    a.OnDamageReceived(engine, amount)
 }
 
 func (a *Actor) GetItemsToSteal() []Item {
@@ -798,17 +807,16 @@ func (a *Actor) AddGold(amount int) {
 }
 
 func (a *Actor) GetTotalArmor() int {
+    baseArmor := a.attributes.GetBaseArmor()
     armorSum := 0
     for _, armor := range a.equippedArmor {
         armorSum += armor.GetProtection()
     }
-    buffs := a.GetDefenseBuffBonus()
-    return a.baseArmor + armorSum + buffs
+    return baseArmor + armorSum
 }
 
 func (a *Actor) GetMeleeDamage() int {
-    buffs := a.GetOffenseBuffBonus()
-    baseDamage := a.baseMeleeDamage + buffs
+    baseDamage := a.attributes.GetBaseMeleeDamage()
     if a.equippedRightHand != nil {
         if weapon, ok := a.equippedRightHand.(*Weapon); ok {
             return weapon.GetDamage(baseDamage)
@@ -823,8 +831,7 @@ func (a *Actor) GetMeleeDamage() int {
 }
 
 func (a *Actor) GetRangedDamage() int {
-    buffs := a.GetOffenseBuffBonus()
-    baseDamage := a.baseRangedDamage + buffs
+    baseDamage := a.attributes.GetBaseRangedDamage()
     if a.equippedRanged != nil {
         return a.equippedRanged.GetDamage(baseDamage)
     }
@@ -845,7 +852,7 @@ func (a *Actor) DropInventory() []Item {
 }
 
 func (a *Actor) GetMovementAllowance() int {
-    encumberance := a.GetTotalEncumberance()
+    encumberance := a.GetTotalEncumbrance()
     return a.attributes.GetMovementAllowance(encumberance)
 }
 
@@ -951,7 +958,7 @@ func (a *Actor) GetXP() int {
 }
 
 func (a *Actor) GetLevel() int {
-    return a.level
+    return a.attributes.GetAttribute(Level)
 }
 
 func (a *Actor) GetMana() int {
@@ -961,107 +968,25 @@ func (a *Actor) GetIconFrameCount() int {
     return a.iconFrameCount
 }
 
-func (a *Actor) GetBaseArmor() int {
-    return a.baseArmor
-}
-
-func (a *Actor) GetBaseMelee() int {
-    return a.baseMeleeDamage
-}
-
-func (a *Actor) GetBaseRanged() int {
-    return a.baseRangedDamage
-}
-
 func (a *Actor) GetXPForKilling() int {
-    return a.level * 25
+    return a.GetLevel() * 25
 }
 
 func (a *Actor) AddAllSkills() {
     a.skillset.AddMasteryInAllSkills()
 }
 
-func (a *Actor) AddBuff(name string, buffType BuffType, strength int) {
-    a.buffs[buffType] = append(a.buffs[buffType], Buff{
-        Name:     name,
-        Strength: strength,
-    })
-}
-
-func (a *Actor) ClearBuffs() {
-    a.buffs = make(map[BuffType][]Buff)
-}
-
-func (a *Actor) GetDefenseBuffBonus() int {
-    bonusFromBuffs := 0
-    for _, buff := range a.buffs[BuffTypeDefense] {
-        bonusFromBuffs += buff.Strength
-    }
-    return bonusFromBuffs
-}
-
-func (a *Actor) GetOffenseBuffBonus() int {
-    bonusFromBuffs := 0
-    for _, buff := range a.buffs[BuffTypeOffense] {
-        bonusFromBuffs += buff.Strength
-    }
-    return bonusFromBuffs
-}
-
-func (a *Actor) HasOffenseBuffs() bool {
-    if len(a.buffs[BuffTypeOffense]) == 0 {
-        return false
-    }
-
-    for _, buff := range a.buffs[BuffTypeOffense] {
-        if buff.Strength > 0 {
-            return true
+func (a *Actor) OnRest(engine Engine) {
+    for effectName, effect := range a.statusEffects {
+        if onRestEffect, ok := effect.(OnRestEffect); ok {
+            onRestEffect.OnRest(engine, a)
+            if effect.IsExpired() {
+                a.RemoveStatusEffect(engine, effectName)
+            }
         }
     }
-    return false
 }
 
-func (a *Actor) HasDefenseBuffs() bool {
-    if len(a.buffs[BuffTypeDefense]) == 0 {
-        return false
-    }
-
-    for _, buff := range a.buffs[BuffTypeDefense] {
-        if buff.Strength > 0 {
-            return true
-        }
-    }
-    return false
-}
-
-func (a *Actor) GetDefenseBuffsString() []string {
-    var rows []util.TableRow
-    for _, buff := range a.buffs[BuffTypeDefense] {
-        rows = append(rows, util.TableRow{
-            Label: fmt.Sprintf("+%d", buff.Strength), Columns: []string{buff.Name},
-        })
-    }
-
-    return util.TableLayout(rows)
-}
-
-func (a *Actor) GetOffenseBuffsString() []string {
-    var rows []util.TableRow
-    for _, buff := range a.buffs[BuffTypeOffense] {
-        rows = append(rows, util.TableRow{
-            Label: fmt.Sprintf("+%d", buff.Strength), Columns: []string{buff.Name},
-        })
-    }
-
-    return util.TableLayout(rows)
-}
-func (a *Actor) GetOffenseBuffs() []Buff {
-    return a.buffs[BuffTypeOffense]
-}
-
-func (a *Actor) GetDefenseBuffs() []Buff {
-    return a.buffs[BuffTypeDefense]
-}
 func (a *Actor) TintColor() color.Color {
     return a.color
 }
@@ -1078,45 +1003,6 @@ func (a *Actor) SetTinted(value bool) {
     a.isTinted = value
 }
 
-func (a *Actor) HasNegativeBuffs() bool {
-    for _, buffs := range a.buffs {
-        for _, buff := range buffs {
-            if buff.Strength < 0 {
-                return true
-            }
-        }
-    }
-    return false
-}
-
-func (a *Actor) BuffsAsStringTable() []string {
-    off := a.GetOffenseBuffs()
-    def := a.GetDefenseBuffs()
-    var rows []util.TableRow
-    if len(off) != 0 {
-        rows = append(rows, util.TableRow{Label: "Offense", Columns: []string{""}})
-        rows = append(rows, util.TableRow{Label: "-------", Columns: []string{""}})
-        for _, b := range off {
-            rows = append(rows, util.TableRow{Label: b.Name, Columns: []string{strconv.Itoa(b.Strength)}})
-        }
-
-    }
-    if len(def) != 0 {
-        if len(off) != 0 {
-            rows = append(rows, util.TableRow{Label: "", Columns: []string{""}})
-        }
-        rows = append(rows, util.TableRow{Label: "Defense", Columns: []string{""}})
-        rows = append(rows, util.TableRow{Label: "-------", Columns: []string{""}})
-        for _, b := range def {
-            rows = append(rows, util.TableRow{Label: b.Name, Columns: []string{strconv.Itoa(b.Strength)}})
-        }
-    }
-    if len(rows) == 0 {
-        return []string{"No buffs"}
-    }
-    return util.TableLayout(rows)
-}
-
 func (a *Actor) SetIcon(icon int32) {
     a.icon = icon
 }
@@ -1128,13 +1014,22 @@ func (a *Actor) SetVendorInventory(items []Item) {
     a.inventory = append(a.inventory, items...)
 }
 
-func (a *Actor) GetEquippedSpells() []*Spell {
-    var spells []*Spell
+func (a *Actor) GetEquippedSpells() []*Action {
+    var spells []*Action
     for _, scroll := range a.equippedScrolls {
         spells = append(spells, scroll.spell)
     }
     return spells
 
+}
+
+func (a *Actor) GetActiveSkills() []*Action {
+    var skills []*Action
+    // todo: add skills from items, etc.
+    for _, skill := range a.innateSkills {
+        skills = append(skills, skill)
+    }
+    return skills
 }
 
 func (a *Actor) GetRightHandItem() (Handheld, bool) {
@@ -1207,9 +1102,18 @@ func (a *Actor) chooseAccessorySlot(armor *Armor) ArmorSlot {
 
 func (a *Actor) SetCombatFaction(faction string) {
     a.combatFaction = faction
+    if a.originalCombatFaction == "" {
+        a.originalCombatFaction = faction
+    }
 }
 func (a *Actor) GetCombatFaction() string {
     return a.combatFaction
+}
+
+func (a *Actor) RestoreOriginalCombatFaction() {
+    if a.originalCombatFaction != "" {
+        a.combatFaction = a.originalCombatFaction
+    }
 }
 
 func (a *Actor) HasRangedWeaponEquipped() bool {
@@ -1266,13 +1170,16 @@ func (a *Actor) OnRangedHitPerformed(engine Engine, victim *Actor) {
     }
 }
 
-func (a *Actor) OnDamageReceived(amount int) {
+func (a *Actor) OnDamageReceived(engine Engine, amount int) {
     if amount <= 0 {
         return
     }
-    for effect, _ := range a.statusEffects {
-        if effect.IsRemovedOnDamage() {
-            a.RemoveStatusEffect(effect)
+    for _, effect := range a.statusEffects {
+        if onDamageEffect, isOnDamageEffect := effect.(OnDamageEffect); isOnDamageEffect {
+            onDamageEffect.OnDamageReceived(engine, a, amount)
+            if onDamageEffect.IsExpired() {
+                a.RemoveStatusEffect(engine, effect.Name())
+            }
         }
     }
 }
@@ -1302,16 +1209,44 @@ func (a *Actor) GetRangedWeapon() *Weapon {
     return nil
 }
 
-func (a *Actor) AddStatusEffect(statusEffect StatusEffect, turns int) {
-    a.statusEffects[statusEffect] = turns
+func (a *Actor) AddStatusEffect(engine Engine, statusEffect StatusEffect) {
+    if a.HasStatusEffectWithName(statusEffect.Name()) {
+        a.statusEffects[statusEffect.Name()].OnReapply(engine, a)
+        return
+    }
+
+    a.statusEffects[statusEffect.Name()] = statusEffect
+    statusEffect.OnApply(engine, a)
+
+    if attributeEffect, ok := statusEffect.(AttributeModifier); ok {
+        for _, modifier := range attributeEffect.GetModifiers() {
+            a.attributes.AddModifier(
+                modifier.Attribute,
+                string(statusEffect.Name()),
+                modifier.GetValue,
+                attributeEffect.IsExpired,
+            )
+        }
+    }
+    if derivedAttributeEffect, ok := statusEffect.(DerivedAttributeModifier); ok {
+        for _, modifier := range derivedAttributeEffect.GetDerivedModifiers() {
+            a.attributes.AddDerivedModifier(
+                modifier.Attribute,
+                string(statusEffect.Name()),
+                modifier.GetValue,
+                derivedAttributeEffect.IsExpired,
+            )
+        }
+    }
+
 }
 
 func (a *Actor) IsSleeping() bool {
-    return a.HasStatusEffect(StatusEffectSleeping)
+    return a.HasStatusEffectWithName(StatusEffectNameSleeping)
 }
 
-func (a *Actor) HasStatusEffect(sleeping StatusEffect) bool {
-    _, hasEffect := a.statusEffects[sleeping]
+func (a *Actor) HasStatusEffectWithName(statusEffectName StatusEffectName) bool {
+    _, hasEffect := a.statusEffects[statusEffectName]
     return hasEffect
 }
 
@@ -1332,8 +1267,11 @@ func (a *Actor) SetDeathIcon(icon int32) {
     a.deathIcon = icon
 }
 
-func (a *Actor) RemoveStatusEffect(effect StatusEffect) {
-    delete(a.statusEffects, effect)
+func (a *Actor) RemoveStatusEffect(engine Engine, effectName StatusEffectName) {
+    if existingEffect, ok := a.statusEffects[effectName]; ok {
+        existingEffect.OnRemove(engine, a)
+        delete(a.statusEffects, effectName)
+    }
 }
 
 func (a *Actor) HasNamedItemsWithCount(name string, count int) bool {
@@ -1346,7 +1284,9 @@ func (a *Actor) HasNamedItemsWithCount(name string, count int) bool {
     return itemCount >= count
 }
 
-func (a *Actor) GetTotalEncumberance() int {
+// GetTotalEncumbrance returns the total encumberance of the actor, including all equipped armor
+// Min: 1, Max: 7
+func (a *Actor) GetTotalEncumbrance() int {
     total := 0
     for _, item := range a.equippedArmor {
         total += item.GetEncumbrance()
@@ -1357,19 +1297,6 @@ func (a *Actor) GetTotalEncumberance() int {
 func (a *Actor) GetAbsoluteDifficultyByAttribute(attribute AttributeName) DifficultyLevel {
     attributeValue := a.attributes.GetAttribute(attribute)
     return DifficultyLevelFromInt(attributeValue - 5)
-}
-
-func (a *Actor) GetRelativeDifficultyBySkill(skill SkillName, otherSkillLevel SkillLevel) DifficultyLevel {
-    ourSkillLevel := a.skillset.GetLevel(skill)
-    if otherSkillLevel == ourSkillLevel {
-        return DifficultyLevelMedium // 2
-    }
-    if otherSkillLevel > ourSkillLevel {
-        diff := int(otherSkillLevel - ourSkillLevel)
-        return DifficultyLevelFromInt(2 - diff)
-    }
-    diff := int(ourSkillLevel - otherSkillLevel)
-    return DifficultyLevelFromInt(2 + diff)
 }
 
 func (a *Actor) SetNPCEngagementZone(zone map[geometry.Point]int) {
@@ -1383,4 +1310,59 @@ func (a *Actor) IsInEngagementZone(point geometry.Point) bool {
 
 func (a *Actor) GetEngagementZone() map[geometry.Point]int {
     return a.zoneOfEngagement
+}
+
+func (a *Actor) GetDebugInfos() []string {
+    infos := []string{
+        fmt.Sprintf("Name: %s", a.name),
+        fmt.Sprintf("InternalName: %s", a.internalName),
+        fmt.Sprintf("Health: %d/%d", a.health, a.maxHealth),
+        fmt.Sprintf("Mana: %d", a.mana),
+        fmt.Sprintf("XP: %d", a.experiencePoints),
+        fmt.Sprintf("Level: %d", a.GetLevel()),
+        fmt.Sprintf("Armor: %d", a.GetTotalArmor()),
+        fmt.Sprintf("Melee: %d", a.GetMeleeDamage()),
+        fmt.Sprintf("Ranged: %d", a.GetRangedDamage()),
+        fmt.Sprintf("CombatFaction: %s", a.combatFaction),
+        fmt.Sprintf("IsAggressive: %t", a.isAggressive),
+    }
+    if len(a.innateSkills) > 0 {
+        infos = append(infos, "Skills:")
+        for _, skill := range a.innateSkills {
+            infos = append(infos, fmt.Sprintf("  %s", skill.Name()))
+        }
+    }
+    return infos
+}
+
+func (a *Actor) GetAttributes() *AttributeHolder {
+    return &a.attributes
+}
+
+func (a *Actor) HasStatusEffects() bool {
+    return len(a.statusEffects) > 0
+}
+
+func (a *Actor) GetStatusEffectsTable() []string {
+    var table []string
+    var nameOrder []StatusEffectName
+    for effectName, _ := range a.statusEffects {
+        nameOrder = append(nameOrder, effectName)
+    }
+    sort.SliceStable(nameOrder, func(i, j int) bool {
+        return nameOrder[i] < nameOrder[j]
+    })
+    for index, effectName := range nameOrder {
+        effect := a.statusEffects[effectName]
+        if index != 0 {
+            table = append(table, "")
+        }
+        table = append(table, string(effect.Name()))
+        table = append(table, util.LeftPadCountMulti(effect.Description(), 1)...)
+    }
+    return table
+}
+
+func (a *Actor) AddInnateSkill(skill *Action) {
+    a.innateSkills = append(a.innateSkills, skill)
 }

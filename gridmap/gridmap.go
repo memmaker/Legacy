@@ -188,7 +188,9 @@ type GridMap[ActorType interface {
 
     namedRects   map[string]geometry.Rect
     namedTrigger map[string]Trigger
-    displayName  string
+
+    namedPaths  map[string][]geometry.Point
+    displayName string
 }
 
 func (m *GridMap[ActorType, ItemType, ObjectType]) AddZone(zone *ZoneInfo) {
@@ -298,10 +300,21 @@ func (m *GridMap[ActorType, ItemType, ObjectType]) SetActorToDowned(a ActorType)
     }
     m.Cells[a.Pos().Y*m.MapWidth+a.Pos().X] = m.Cells[a.Pos().Y*m.MapWidth+a.Pos().X].WithDownedActor(a)
 }
+
 func (m *GridMap[ActorType, ItemType, ObjectType]) SetActorToRemoved(person ActorType) {
     m.RemoveActor(person)
     m.RemoveDownedActor(person)
     m.removedActors = append(m.removedActors, person)
+}
+
+func (m *GridMap[ActorType, ItemType, ObjectType]) SetActorToNormal(person ActorType) {
+    m.RemoveDownedActor(person)
+    m.AllActors = append(m.AllActors, person)
+    if m.IsActorAt(person.Pos()) && m.ActorAt(person.Pos()) != person {
+        m.displaceActor(person)
+        return
+    }
+    m.Cells[person.Pos().Y*m.MapWidth+person.Pos().X] = m.Cells[person.Pos().Y*m.MapWidth+person.Pos().X].WithActor(person)
 }
 
 func (m *GridMap[ActorType, ItemType, ObjectType]) MoveItem(item ItemType, to geometry.Point) {
@@ -380,15 +393,6 @@ func (m *GridMap[ActorType, ItemType, ObjectType]) IsNextToTileWithSpecial(pos g
     }
     return false
 }
-func (m *GridMap[ActorType, ItemType, ObjectType]) Neighbors(point geometry.Point) []geometry.Point {
-    return m.GetFilteredCardinalNeighbors(point, func(p geometry.Point) bool {
-        return m.Contains(p) && m.IsTileWalkable(p)
-    })
-}
-
-func (m *GridMap[ActorType, ItemType, ObjectType]) Cost(point geometry.Point, point2 geometry.Point) int {
-    return geometry.DistanceManhattan(point, point2)
-}
 
 func (m *GridMap[ActorType, ItemType, ObjectType]) RemoveItem(item ItemType) {
     m.Cells[item.Pos().Y*m.MapWidth+item.Pos().X] = m.Cells[item.Pos().Y*m.MapWidth+item.Pos().X].WithItemHereRemoved(item)
@@ -414,9 +418,8 @@ func (m *GridMap[ActorType, ItemType, ObjectType]) IsSpecialAt(pos geometry.Poin
 }
 
 func (m *GridMap[ActorType, ItemType, ObjectType]) WavePropagationFrom(pos geometry.Point, size int, pressure int) map[int][]geometry.Point {
-
     soundAnimationMap := make(map[int][]geometry.Point)
-    m.pathfinder.DijkstraMap(m, []geometry.Point{pos}, size)
+    m.pathfinder.DijkstraMap(m.getDijkstraMapperWithActorsNotBlocking(), []geometry.Point{pos}, size)
     for _, v := range m.pathfinder.DijkstraIterNodes {
         cost := v.Cost
         point := v.P
@@ -427,8 +430,56 @@ func (m *GridMap[ActorType, ItemType, ObjectType]) WavePropagationFrom(pos geome
     }
     return soundAnimationMap
 }
-func (m *GridMap[ActorType, ItemType, ObjectType]) GetDijkstraMap(start geometry.Point, maxCost int) map[geometry.Point]int {
-    nodes := m.pathfinder.DijkstraMap(m, []geometry.Point{start}, maxCost)
+
+type DijkstraMapper struct {
+    neighbors func(geometry.Point) []geometry.Point
+    cost      func(geometry.Point, geometry.Point) int
+}
+
+func (d DijkstraMapper) Neighbors(point geometry.Point) []geometry.Point {
+    return d.neighbors(point)
+}
+
+func (d DijkstraMapper) Cost(point geometry.Point, point2 geometry.Point) int {
+    return d.cost(point, point2)
+}
+func (m *GridMap[ActorType, ItemType, ObjectType]) getDijkstraMapperWithActorsNotBlocking() DijkstraMapper {
+    return DijkstraMapper{
+        neighbors: func(point geometry.Point) []geometry.Point {
+            return m.GetFilteredCardinalNeighbors(point, func(p geometry.Point) bool {
+                return m.Contains(p) && m.IsTileWalkable(p)
+            })
+        },
+        cost: func(point geometry.Point, point2 geometry.Point) int {
+            return geometry.DistanceManhattan(point, point2)
+        },
+    }
+}
+func (m *GridMap[ActorType, ItemType, ObjectType]) getDijkstraMapper(passable func(pos geometry.Point) bool) DijkstraMapper {
+    return DijkstraMapper{
+        neighbors: func(point geometry.Point) []geometry.Point {
+            return m.GetFilteredCardinalNeighbors(point, func(p geometry.Point) bool {
+                return m.Contains(p) && passable(p)
+            })
+        },
+        cost: func(point geometry.Point, point2 geometry.Point) int {
+            return geometry.DistanceManhattan(point, point2)
+        },
+    }
+}
+
+func (m *GridMap[ActorType, ItemType, ObjectType]) GetDijkstraMapWithActorsNotBlocking(start geometry.Point, maxCost int) map[geometry.Point]int {
+    nodes := m.pathfinder.DijkstraMap(m.getDijkstraMapperWithActorsNotBlocking(), []geometry.Point{start}, maxCost)
+
+    dijkstraMap := make(map[geometry.Point]int)
+    for _, v := range nodes {
+        dijkstraMap[v.P] = v.Cost
+    }
+    return dijkstraMap
+}
+func (m *GridMap[ActorType, ItemType, ObjectType]) GetDijkstraMap(start geometry.Point, maxCost int, passable func(point geometry.Point) bool) map[geometry.Point]int {
+    nodes := m.pathfinder.DijkstraMap(m.getDijkstraMapper(passable), []geometry.Point{start}, maxCost)
+
     dijkstraMap := make(map[geometry.Point]int)
     for _, v := range nodes {
         dijkstraMap[v.P] = v.Cost
@@ -479,6 +530,7 @@ func NewEmptyMap[ActorType interface {
         transitionMap:   make(map[geometry.Point]Transition),
         namedRects:      make(map[string]geometry.Rect),
         namedTrigger:    make(map[string]Trigger),
+        namedPaths:      make(map[string][]geometry.Point),
     }
     m.Fill(MapCell[ActorType, ItemType, ObjectType]{
         TileType: Tile{
@@ -633,6 +685,13 @@ func (m *GridMap[ActorType, ItemType, ObjectType]) displaceDownedActor(a ActorTy
     })
     freePos := free[0]
     m.MoveDownedActor(a, freePos)
+}
+func (m *GridMap[ActorType, ItemType, ObjectType]) displaceActor(a ActorType) {
+    free := m.GetFreeCellsForDistribution(a.Pos(), 1, func(p geometry.Point) bool {
+        return !m.IsActorAt(p) && m.IsWalkable(p)
+    })
+    freePos := free[0]
+    m.MoveActor(a, freePos)
 }
 func (m *GridMap[ActorType, ItemType, ObjectType]) GetJPSPath(start geometry.Point, end geometry.Point, isWalkable func(geometry.Point) bool) []geometry.Point {
     if !isWalkable(end) {
@@ -1415,4 +1474,12 @@ func (m *GridMap[ActorType, ItemType, ObjectType]) iterateMapForActors(location 
         }
     }
     return result
+}
+
+func (m *GridMap[ActorType, ItemType, ObjectType]) AddNamedPath(name string, pathFromRootEntity []geometry.Point) {
+    m.namedPaths[name] = pathFromRootEntity
+}
+
+func (m *GridMap[ActorType, ItemType, ObjectType]) GetNamedPath(name string) []geometry.Point {
+    return m.namedPaths[name]
 }

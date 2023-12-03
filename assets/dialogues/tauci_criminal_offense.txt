@@ -1,0 +1,150 @@
+# order of option fields is important..
+# The option field itself must come last
+
+# Typical options to deal with guards
+# - Bribing - 1000 gold
+# - Intimidation -
+# - Seduction
+# - Bluffing
+# - Compliance
+# - Combat
+
+Key: _opening
+Condition: !hasFlag('tauci_offense')
+Effect: setFlagTo(tauci_offense, 1)
+Redirect: _rp_options
+Text:
++ The guards arrive!
++ They are not happy to see you.
++ However, it's your first offense, so you get the chance to explain yourself.
+
+Key: _opening
+Condition: getFlag('tauci_offense') > 0
+Effect: setFlagTo(tauci_offense, 2)
+Redirect: _rp_options
+Text:
++ The guards arrive!
++ "You again? I thought we told you to scram!
++ You better have a good reason for being here."
+
+Key: _rp_options
+Text: "So what is the meaning of this?"
+#
+OptionName: bribe_low
+OptionCondition: hasGold(500) && !hasDisabledOption('bribe_low')
+OptionSkillCheck: Bribe, Medium
+OnOptionSuccess: _bribe_low_success
+OnOptionFailure: _bribe_low_failure
+Option: I am sure we can come to an agreement. How about 500 gold?
+#
+OptionName: bribe_high
+OptionCondition: hasGold(1000) && !hasDisabledOption('bribe_high')
+OptionSkillCheck: Bribe, Easy
+OnOptionSuccess: _bribe_high_success
+OnOptionFailure: _bribe_high_failure
+Option: You guards deserve a little something for your trouble. How about 1000 gold?
+#
+OptionName: intimidation
+OptionSkillCheckVersus: Intimidation, Strength
+OptionCondition: !hasDisabledOption('intimidation')
+OnOptionSuccess: _intimidation_success
+OnOptionFailure: _intimidation_failure
+Option: I am not in the mood for this. Let us pass or else!
+#
+OptionName: seduction
+OptionSkillCheckVersus: Seduction, Charisma
+OptionCondition: !hasDisabledOption('seduction')
+OnOptionSuccess: _seduction_success
+OnOptionFailure: _seduction_failure
+Option: I am sure we can come to an agreement. How about a little fun?
+#
+OptionName: bluff
+OptionSkillCheckVersus: Bluff, Intelligence
+OptionCondition: !hasDisabledOption('bluff')
+OnOptionSuccess: _bluff_success
+OnOptionFailure: _bluff_failure
+Option:
++ Look, I am acting on the orders of the king.
++ I am sure he will be very displeased if you do not let me go.
+#
+Target: _goto_prison
+Option: Fine, we will come quietly. Put us in the dungeon.
+#
+Target: _combat
+Option: You will have to kill us first! (Combat)
+
+Key: _bribe_low_success
+Effect: receiveGold(500)
+Effect: quits
+Text:
++ "Oh, sure. Just go right
++ on through."
+
+Key: _bribe_low_failure
+Redirect: _rp_options
+Effect: disableOption(bribe_low)
+Text:
++ "I don't think so. This is not enough."
+
+Key: _bribe_high_success
+Effect: receiveGold(1000)
+Effect: quits
+Text:
++ "It's a pleasure doing business with you.
++ Go right on through."
+
+Key: _bribe_high_failure
+Redirect: _rp_options
+Effect: disableOption(bribe_high)
+Effect: disableOption(bribe_low)
+Text:
++ "I am sure you can do better than that."
+
+Key: _intimidation_success
+Effect: quits
+Text:
++ "I am not paid enough for this.
++ Go right on through."
+
+Key: _intimidation_failure
+Redirect: _rp_options
+Effect: disableOption(intimidation)
+Text:
++ "You are not scaring me, pal."
+
+Key: _seduction_success
+Effect: quits
+Text:
++ "You sure look like a fun bunch.
++ Let me just get my coat."
+
+Key: _seduction_failure
+Redirect: _rp_options
+Effect: disableOption(seduction)
+Text:
++ "Look, don't get me wrong, but I am not into that."
+
+Key: _bluff_success
+Effect: quits
+Text:
++ "The king, you say? Well, I guess
++ we can't argue with that. Go right on through."
+
+Key: _bluff_failure
+Redirect: _rp_options
+Effect: disableOption(bluff)
+Text:
++ "I don't trust your rancid face.
++ The king would never send someone like you."
+
+
+Key: _goto_prison
+Effect: triggerEvent(imprisonment_tauci)
+Text:
++ The guards escort you to the prison.
+
+Key: _combat
+Effect: moveGuardsToParty
+Effect: combat
+Text:
++ Swords are drawn!

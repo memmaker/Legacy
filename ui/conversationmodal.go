@@ -159,7 +159,7 @@ func (c *ConversationModal) OnMouseClicked(x int, y int) bool {
                 c.textWindow.nextPage()
                 return true
             }
-            return false
+            return textWindowClicked
         }
         return false
     }

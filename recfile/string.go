@@ -9,6 +9,11 @@ import (
 func IntStr(value int) string {
     return strconv.Itoa(value)
 }
+
+func StrInt(value string) int {
+    atoi, _ := strconv.Atoi(value)
+    return atoi
+}
 func Int32Str(value int32) string {
     return strconv.FormatInt(int64(value), 10)
 }

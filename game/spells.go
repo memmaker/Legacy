@@ -18,7 +18,7 @@ func GetAllSpellScrolls() []*Scroll {
         "Nom De Plume",
         "Create Food",
         "Bird's Eye",
-        "Raise as Undead",
+        "Raise as StatusUndead",
         "Fireball",
         "Icebolt",
         "Healing word of Tauci",
@@ -31,7 +31,7 @@ func GetAllSpellScrolls() []*Scroll {
     return scrolls
 }
 
-func NewSpellFromName(name string) *Spell {
+func NewSpellFromName(name string) *Action {
     switch name {
     case "Nom De Plume":
         return NewSpell(name, 0, func(engine Engine, caster *Actor) {
@@ -54,120 +54,108 @@ func NewSpellFromName(name string) *Spell {
         return NewSpell(name, 10, func(engine Engine, caster *Actor) {
             engine.GetParty().AddSpellEffect(OngoingSpellEffectBirdsEye, 5)
         })
-    case "Raise as Undead":
+    case "Raise as StatusUndead":
         targetedSpell := NewTargetedSpell(name, 10, func(engine Engine, caster *Actor, pos geometry.Point) {
             engine.RaiseAsUndeadForParty(pos)
         })
-        targetedSpell.SetSpellColor(ega.BrightBlack)
+        targetedSpell.SetActionColor(ega.BrightBlack)
+        targetedSpell.SetValidTargets(func(engine Engine, caster *Actor, usePos geometry.Point) []geometry.Point {
+            gridMap := engine.GetGridMap()
+            potentialPositions := gridMap.GetDijkstraMapWithActorsNotBlocking(usePos, 4)
+            var validPositions []geometry.Point
+            for pos, _ := range potentialPositions {
+                if geometry.Distance(caster.Pos(), pos) > 4 {
+                    continue
+                }
+                isDownedActorAt := gridMap.IsDownedActorAt(pos)
+                if isDownedActorAt {
+                    downedActorAt := gridMap.DownedActorAt(pos)
+                    if !downedActorAt.IsAlive() {
+                        validPositions = append(validPositions, pos)
+                    }
+                }
+            }
+
+            return validPositions
+        })
+        targetedSpell.SetDescription([]string{
+            "Raise a dead person as undead.",
+            "Range: 4 tiles.",
+        })
         return targetedSpell
     case "Fireball":
         fireball := NewTargetedSpell(name, 10, func(engine Engine, caster *Actor, pos geometry.Point) {
             radius := 3
             explosionIcon := int32(28)
             fireballDamagePerTile := 10 * caster.GetLevel()
-            hitPositions := engine.GetAoECircle(pos, radius)
-            for _, p := range hitPositions {
+            currentMap := engine.GetGridMap()
+            hitPositions := currentMap.GetDijkstraMapWithActorsNotBlocking(pos, radius)
+            for p, _ := range hitPositions {
                 hitPos := p
-                engine.HitAnimation(hitPos, renderer.AtlasEntitiesGrayscale, explosionIcon, ega.BrightRed, func() {
-                    engine.SpellDamageAt(caster, hitPos, fireballDamagePerTile)
+                engine.CombatHitAnimation(hitPos, renderer.AtlasEntitiesGrayscale, explosionIcon, ega.BrightRed, func() {
+                    engine.FixedDamageAt(caster, hitPos, fireballDamagePerTile)
                 })
             }
         })
-        fireball.SetSpellColor(ega.BrightRed)
+        fireball.SetActionColor(ega.BrightRed)
         return fireball
     case "Icebolt":
         icebolt := NewTargetedSpell(name, 10, func(engine Engine, caster *Actor, pos geometry.Point) {
             radius := 3
             explosionIcon := int32(28)
             iceboltDamage := 1 * caster.GetLevel()
-            hitPositions := engine.GetAoECircle(pos, radius)
-            for _, p := range hitPositions {
+            currentMap := engine.GetGridMap()
+            hitPositions := currentMap.GetDijkstraMapWithActorsNotBlocking(pos, radius)
+            for p, _ := range hitPositions {
                 hitPos := p
-                engine.HitAnimation(hitPos, renderer.AtlasEntitiesGrayscale, explosionIcon, ega.BrightBlue, func() {
-                    engine.SpellDamageAt(caster, hitPos, iceboltDamage)
+                engine.CombatHitAnimation(hitPos, renderer.AtlasEntitiesGrayscale, explosionIcon, ega.BrightBlue, func() {
+                    engine.FixedDamageAt(caster, hitPos, iceboltDamage)
                     engine.FreezeActorAt(hitPos, 3)
                 })
             }
         })
-        icebolt.SetSpellColor(ega.BrightBlue)
+        icebolt.SetActionColor(ega.BrightBlue)
         return icebolt
     }
 
     return nil
 }
 
-type Spell struct {
-    manaCost             int
-    effect               func(engine Engine, caster *Actor)
-    targetedEffect       func(engine Engine, caster *Actor, pos geometry.Point)
-    name                 string
-    color                color.Color
-    closeModalsForEffect bool
-}
-
-func (s *Spell) SetSpellColor(c color.Color) {
-    s.color = c
-}
-
-func NewSpell(name string, cost int, effect func(engine Engine, caster *Actor)) *Spell {
-    return &Spell{
-        name:     name,
-        effect:   effect,
-        manaCost: cost,
+func NewSpell(name string, cost int, effect func(engine Engine, caster *Actor)) *Action {
+    return &Action{
+        name:   name,
+        effect: effect,
+        cost:   cost,
+        canPayCost: func(engine Engine, user *Actor, costToPay int) bool {
+            if !user.HasMana(costToPay) {
+                engine.Print("Not enough mana!")
+                return false
+            }
+            return true
+        },
+        payCost: func(engine Engine, user *Actor, costToPay int) {
+            engine.ManaSpent(user, costToPay)
+        },
+        color: color.White,
     }
 }
 
-func NewTargetedSpell(name string, cost int, effect func(engine Engine, caster *Actor, pos geometry.Point)) *Spell {
-    return &Spell{
+func NewTargetedSpell(name string, cost int, effect func(engine Engine, caster *Actor, pos geometry.Point)) *Action {
+    return &Action{
         name:                 name,
         targetedEffect:       effect,
-        manaCost:             cost,
+        cost:                 cost,
         closeModalsForEffect: true,
+        canPayCost: func(engine Engine, user *Actor, costToPay int) bool {
+            if !user.HasMana(costToPay) {
+                engine.Print("Not enough mana!")
+                return false
+            }
+            return true
+        },
+        payCost: func(engine Engine, user *Actor, costToPay int) {
+            engine.ManaSpent(user, costToPay)
+        },
+        color: color.White,
     }
-}
-
-func (s *Spell) Cast(engine Engine, caster *Actor) {
-    if !caster.HasMana(s.manaCost) {
-        engine.Print("Not enough mana!")
-        return
-    }
-    engine.ManaSpent(caster, s.manaCost)
-    if s.effect != nil {
-        if s.closeModalsForEffect {
-            engine.CloseAllModals()
-        }
-        s.effect(engine, caster)
-    }
-}
-
-func (s *Spell) CastOnTarget(engine Engine, caster *Actor, pos geometry.Point) {
-    if !caster.HasMana(s.manaCost) {
-        engine.Print("Not enough mana!")
-        return
-    }
-    caster.RemoveMana(s.manaCost)
-    if s.targetedEffect != nil {
-        if s.closeModalsForEffect {
-            engine.CloseAllModals()
-        }
-        s.targetedEffect(engine, caster, pos)
-    }
-}
-func (s *Spell) IsTargeted() bool {
-    return s.targetedEffect != nil && s.effect == nil
-}
-
-func (s *Spell) ManaCost() int {
-    return s.manaCost
-}
-func (s *Spell) Name() string {
-    return s.name
-}
-
-func (s *Spell) GetValue() int {
-    return s.manaCost * 10
-}
-
-func (s *Spell) Color() color.Color {
-    return s.color
 }

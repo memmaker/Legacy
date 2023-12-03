@@ -149,31 +149,56 @@ func (r *Rules) GetPartyStartFood() int {
 }
 
 func (r *Rules) LevelUp(a *Actor) {
-    a.level++
-    healthBonus := 10
+    a.attributes.Increment(Level)
+    healthBonus := a.GetAttributes().GetAttribute(Endurance)
     a.maxHealth += healthBonus
     a.health = a.maxHealth
-    a.baseArmor += 1
-    a.baseMeleeDamage += 1
-    a.baseRangedDamage += 1
 }
 
 func (r *Rules) GetMeleeDamage(attacker *Actor, victim *Actor) int {
     baseMeleeDamage := attacker.GetMeleeDamage()
     victimArmor := victim.GetTotalArmor()
-    meleeDamage := baseMeleeDamage - victimArmor
+    meleeDamage := max(baseMeleeDamage-victimArmor, 0)
+    if meleeDamage == 0 && baseMeleeDamage > 0 {
+        meleeDamage = 1
+    }
     return meleeDamage
 }
 
 func (r *Rules) GetRangedDamage(attacker *Actor, victim *Actor) int {
     baseRangedDamage := attacker.GetRangedDamage()
     victimArmor := victim.GetTotalArmor()
-    rangedDamage := baseRangedDamage - victimArmor
+    rangedDamage := max(0, baseRangedDamage-victimArmor)
+    if rangedDamage == 0 && baseRangedDamage > 0 {
+        rangedDamage = 1
+    }
     return rangedDamage
 }
 
-func (r *Rules) CalculateMeleeHit(attacker *Actor, npc *Actor) bool {
-    return true
+func (r *Rules) DoesMeleeAttackHit(attacker *Actor, defender *Actor) bool {
+    chance := r.GetMeleeHitChance(attacker, defender)
+    return RollChance(chance)
+}
+
+func (r *Rules) DoesRangedAttackHit(attacker *Actor, defender *Actor) bool {
+    chance := r.GetRangedHitChance(attacker, defender)
+    return RollChance(chance)
+}
+
+func (r *Rules) GetMeleeHitChance(attacker *Actor, defender *Actor) float64 {
+    skillActor := attacker.GetSkills().GetSkillLevel(PhysicalSkillMeleeCombat)
+    skillAdversary := defender.GetSkills().GetSkillLevel(PhysicalSkillMeleeCombat)
+    relativeDifficulty := DifficultyLevelFromInt(max(-1, min(7, (int(skillAdversary)-int(skillActor))-1)))
+    chance := r.difficultyTable[relativeDifficulty]
+    return chance
+}
+
+func (r *Rules) GetRangedHitChance(attacker *Actor, defender *Actor) float64 {
+    skillActor := attacker.GetSkills().GetLevel(PhysicalSkillRangedCombat)
+    absoluteDiff := max(defender.GetAbsoluteDifficultyByAttribute(Agility), defender.GetAbsoluteDifficultyByAttribute(Perception))
+    relativeDiff := r.GetRelativeDifficulty(skillActor, absoluteDiff).ReducedBy(1)
+    chance := r.difficultyTable[relativeDiff]
+    return chance
 }
 
 func (r *Rules) GetMinutesPerStepInLevels() int {
@@ -191,7 +216,12 @@ func (r *Rules) GetRelativeDifficulty(skill SkillLevel, difficulty DifficultyLev
     fromInt := DifficultyLevelFromInt(relativeDifficulty)
     return fromInt
 }
-
+func (r *Rules) GetVersusDifficulty(skillActor, skillAdversary SkillLevel) DifficultyLevel {
+    //0..4 - 0..4 = -4..4 + 2 = -2..6
+    relativeDifficulty := (int(skillAdversary) - int(skillActor)) + 2
+    fromInt := DifficultyLevelFromInt(relativeDifficulty)
+    return fromInt
+}
 func (r *Rules) GetSkillCheckTable() []string {
     var rows []util.TableRow
     for i := 1; i <= 4; i++ {
@@ -217,4 +247,8 @@ func (r *Rules) GetSkillCheckTable() []string {
     }
     layout := util.TableLayout(rows)
     return layout
+}
+
+func (r *Rules) GetCriminalOffenseEvent(nameOfCurrentMap string) string {
+    return "tauci_criminal_offense"
 }

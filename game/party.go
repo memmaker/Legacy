@@ -45,7 +45,7 @@ func NewParty(leader *Actor) *Party {
         fov:                geometry.NewFOV(geometry.NewRect(-6, -6, 6, 6)),
         activeSpellEffects: make(map[OngoingSpellEffect]int),
     }
-    leader.SetParty(p)
+    leader.OnAddedToParty(p)
     return p
 }
 
@@ -181,7 +181,7 @@ func (p *Party) GetMembers() []*Actor {
 func (p *Party) AddMember(npc *Actor) {
     if len(p.members) < 4 {
         p.members = append(p.members, npc)
-        npc.SetParty(p)
+        npc.OnAddedToParty(p)
     }
 }
 
@@ -285,20 +285,20 @@ func (p *Party) RemoveGold(price int) {
     p.gold -= price
 }
 
-func (p *Party) TryRest() bool {
+func (p *Party) TryRest(engine Engine) bool {
     if p.food < len(p.members) {
         return false
     }
     p.food -= len(p.members)
     for _, member := range p.members {
-        member.FullRest()
+        member.FullRest(engine)
     }
     return true
 }
 
 func (p *Party) NeedsRest() bool {
     for _, member := range p.members {
-        if member.health < member.maxHealth || member.HasNegativeBuffs() {
+        if member.health < member.maxHealth || member.HasStatusEffects() {
             return true
         }
     }
@@ -329,8 +329,8 @@ func (p *Party) RemoveLockpicks(amount int) {
     p.lockpicks -= amount
 }
 
-func (p *Party) GetSpells() []*Spell {
-    var result []*Spell
+func (p *Party) GetSpells() []*Action {
+    var result []*Action
     for _, item := range p.partyInventory {
         if scroll, ok := item[0].(*Scroll); ok {
             if scroll.spell != nil {
@@ -376,6 +376,7 @@ func (p *Party) RemoveMember(member *Actor) {
     for i, m := range p.members {
         if m == member {
             p.members = append(p.members[:i], p.members[i+1:]...)
+            m.OnRemovedFromParty()
             return
         }
     }
@@ -448,48 +449,6 @@ func (p *Party) AddXPForEveryone(xp int) {
     for _, member := range p.members {
         member.AddXP(xp)
     }
-}
-
-func (p *Party) GetDefenseBuffs() []string {
-    var result []string
-    for _, member := range p.members {
-        if !member.HasDefenseBuffs() {
-            continue
-        }
-        result = append(result, member.Name())
-        result = append(result, member.GetDefenseBuffsString()...)
-    }
-    return result
-}
-
-func (p *Party) GetOffenseBuffs() []string {
-    var result []string
-    for _, member := range p.members {
-        if !member.HasOffenseBuffs() {
-            continue
-        }
-        result = append(result, member.Name())
-        result = append(result, member.GetOffenseBuffsString()...)
-    }
-    return result
-}
-
-func (p *Party) HasOffenseBuffs() bool {
-    for _, member := range p.members {
-        if member.HasOffenseBuffs() {
-            return true
-        }
-    }
-    return false
-}
-
-func (p *Party) HasDefenseBuffs() bool {
-    for _, member := range p.members {
-        if member.HasDefenseBuffs() {
-            return true
-        }
-    }
-    return false
 }
 
 func (p *Party) NeedsRestAfterMovement() bool {
@@ -686,6 +645,20 @@ func (p *Party) RemoveTool(toolType ToolType) {
             return
         }
     }
+}
+
+func (p *Party) RemoveAllItems() [][]Item {
+    result := p.partyInventory
+    for _, itemStack := range p.partyInventory {
+        if _, ok := itemStack[0].(Equippable); ok {
+            for _, item := range itemStack {
+                equippableItem := item.(Equippable)
+                equippableItem.Unequip()
+            }
+        }
+    }
+    p.partyInventory = [][]Item{}
+    return result
 }
 
 func moneyFormat(value int) string {

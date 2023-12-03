@@ -7,8 +7,11 @@ import (
     "Legacy/renderer"
     "Legacy/ui"
     "Legacy/util"
+    "fmt"
     "github.com/hajimehoshi/ebiten/v2"
     "image/color"
+    "math"
+    "slices"
     "time"
 )
 
@@ -23,14 +26,13 @@ type CombatState struct {
     engine               *GridEngine
     movesTakenThisTurn   map[*game.Actor]int
     hasUsedPrimaryAction map[*game.Actor]bool
-    animationRoutine     gocoro.Coroutine
-    hitAnimations        []HitAnimation
     isPlayerTurn         bool
     waitForTarget        func(targetPos geometry.Point)
     isInCombat           bool
     didAlertNearbyActors bool
     iconGenericMissile   int32
     partyAutoAttacks     bool
+    animator             *renderer.Animator
 }
 
 func (c *CombatState) OnMouseWheel(x int, y int, dy float64) bool {
@@ -58,7 +60,7 @@ func (c *CombatState) OnCommand(command ui.CommandType) bool {
     case ui.PlayerCommandCancel:
         if c.waitForTarget != nil {
             c.waitForTarget = nil
-            if len(c.opponents) == 0 && len(c.hitAnimations) == 0 && !c.animationRoutine.Running() {
+            if len(c.opponents) == 0 && c.animator.IsRunning() {
                 c.isInCombat = false
                 //c.engine.ForceJoinParty()
             }
@@ -68,34 +70,22 @@ func (c *CombatState) OnCommand(command ui.CommandType) bool {
     return true
 }
 
-type HitAnimation struct {
-    Path          []geometry.Point
-    CurrentIndex  int
-    TicksLeft     int
-    TicksForReset int
-    Icon          int32
-    UseTiles      renderer.AtlasName
-    WhenDone      func()
-    TintColor     color.Color
-}
-
-func (h HitAnimation) Position() geometry.Point {
-    return h.Path[h.CurrentIndex]
-}
-
-func (h HitAnimation) IsFinished() bool {
-    return h.TicksLeft <= 0 && h.CurrentIndex == len(h.Path)-1
-}
-
 func NewCombatState(gridEngine *GridEngine) *CombatState {
     return &CombatState{
         opponents:            make(map[*game.Actor]bool),
         movesTakenThisTurn:   make(map[*game.Actor]int),
         hasUsedPrimaryAction: make(map[*game.Actor]bool),
         engine:               gridEngine,
-        animationRoutine:     gocoro.NewCoroutine(),
-        hitAnimations:        []HitAnimation{},
         iconGenericMissile:   26,
+        animator: renderer.NewAnimator(
+            func(mapPos geometry.Point) (bool, geometry.Point) {
+                isOnScreen := gridEngine.IsMapPosOnScreen(mapPos)
+                if isOnScreen {
+                    return true, gridEngine.MapToScreenCoordinates(mapPos)
+                } else {
+                    return false, geometry.Point{}
+                }
+            }),
     }
 }
 
@@ -104,7 +94,9 @@ type AttackActionType int
 const (
     AttackActionTypeMelee AttackActionType = iota
     AttackActionTypeRanged
-    AttackActionTypeMagic
+    AttackActionTypeSpell
+    AttackActionTypeActiveSkill
+    AttackActionTypeMove
 )
 
 type AttackAction struct {
@@ -114,31 +106,9 @@ type AttackAction struct {
 }
 
 func (c *CombatState) Update() {
-    animationsRunning := false
-    // handle player input
-    if c.animationRoutine.Running() {
-        c.animationRoutine.Update()
-        animationsRunning = true
-    }
 
-    for i := len(c.hitAnimations) - 1; i >= 0; i-- {
-        hitAnim := &c.hitAnimations[i]
-        hitAnim.TicksLeft--
-        if hitAnim.TicksLeft <= 0 {
-            if hitAnim.IsFinished() {
-                c.hitAnimations = append(c.hitAnimations[:i], c.hitAnimations[i+1:]...)
-                if hitAnim.WhenDone != nil {
-                    hitAnim.WhenDone()
-                }
-            } else {
-                hitAnim.CurrentIndex++
-                hitAnim.TicksLeft = hitAnim.TicksForReset
-            }
-        }
-        animationsRunning = true
-    }
-
-    if animationsRunning {
+    c.animator.Update()
+    if c.animator.IsRunning() {
         return
     }
 
@@ -168,13 +138,8 @@ func (c *CombatState) Draw(screen *ebiten.Image) {
     // draw the combat UI
     offset := c.engine.gridRenderer.GetScaledSmallGridSize()
     offsetPoint := geometry.Point{X: offset, Y: offset}
-    for _, hitAnim := range c.hitAnimations {
-        mapPosition := hitAnim.Position()
-        if c.engine.IsMapPosOnScreen(mapPosition) {
-            screenPos := c.engine.MapToScreenCoordinates(mapPosition)
-            c.engine.gridRenderer.DrawOnBigGridWithColor(screen, screenPos, offsetPoint, hitAnim.UseTiles, hitAnim.Icon, hitAnim.TintColor)
-        }
-    }
+
+    c.animator.Draw(c.engine.gridRenderer, screen)
 
     if c.isPlayerTurn && !c.engine.IsWindowOpen() {
         avatarPos := c.engine.GetAvatar().Pos()
@@ -185,11 +150,17 @@ func (c *CombatState) Draw(screen *ebiten.Image) {
 }
 
 func (c *CombatState) IsInCombat() bool {
-    return c.isInCombat || len(c.hitAnimations) > 0 || c.animationRoutine.Running()
+    return c.isInCombat || c.animator.IsRunning()
 }
-
-func (c *CombatState) animateMeleeHit(attacker *game.Actor, npc *game.Actor) {
-    doesHit := c.engine.rules.CalculateMeleeHit(attacker, npc)
+func (c *CombatState) meleeHitOnLocation(attacker *game.Actor, pos geometry.Point) {
+    if !c.engine.currentMap.Contains(pos) || !c.engine.currentMap.IsActorAt(pos) {
+        return
+    }
+    victim := c.engine.currentMap.ActorAt(pos)
+    c.meleeHitOnActor(attacker, victim)
+}
+func (c *CombatState) meleeHitOnActor(attacker *game.Actor, npc *game.Actor) {
+    doesHit := c.engine.rules.DoesMeleeAttackHit(attacker, npc)
     hitPos := npc.Pos()
     icon := int32(194)
     useAtlas := renderer.AtlasEntities
@@ -197,11 +168,10 @@ func (c *CombatState) animateMeleeHit(attacker *game.Actor, npc *game.Actor) {
         icon = int32(104)
         useAtlas = renderer.AtlasWorld
     }
-    c.hitAnimations = append(c.hitAnimations, HitAnimation{
+    animation := &renderer.TileAnimation{
         UseTiles:  useAtlas,
-        Path:      []geometry.Point{hitPos},
-        TicksLeft: 35,
-        Icon:      icon,
+        Positions: []geometry.Point{hitPos},
+        Frames:    []int32{icon},
         TintColor: color.White,
         WhenDone: func() {
             c.hasUsedPrimaryAction[attacker] = true
@@ -209,12 +179,14 @@ func (c *CombatState) animateMeleeHit(attacker *game.Actor, npc *game.Actor) {
                 c.deliverMeleeDamage(attacker, npc)
             }
         },
-    })
+    }
+    animation.EndAfterTime(0.33)
+    c.animator.AddHitAnimation(animation)
 }
 func (c *CombatState) animateProjectile(attacker *game.Actor, target geometry.Point, icon int32, tint color.Color, onImpact func(dest geometry.Point, actor *game.Actor) func()) {
     currentMap := c.engine.currentMap
     source := attacker.Pos()
-    path := c.projectilePath(source, target)
+    path := c.projectilePath(source, target, c.getEnemyFilterForProjectile(attacker))
     finalDestination := path[len(path)-1]
 
     var actorHit *game.Actor
@@ -222,22 +194,33 @@ func (c *CombatState) animateProjectile(attacker *game.Actor, target geometry.Po
         actorHit = currentMap.ActorAt(finalDestination)
         c.addOpponent(actorHit)
     }
-    c.hitAnimations = append(c.hitAnimations, HitAnimation{
-        Path:          path,
-        TicksLeft:     12,
-        TicksForReset: 12,
-        Icon:          icon,
-        TintColor:     tint,
-        UseTiles:      renderer.AtlasEntitiesGrayscale,
-        WhenDone:      onImpact(finalDestination, actorHit),
-    })
+    animation := &renderer.TileAnimation{
+        Positions:             path,
+        Frames:                []int32{icon},
+        MoveIntervalInSeconds: 0.13,
+        TintColor:             tint,
+        UseTiles:              renderer.AtlasEntitiesGrayscale,
+        WhenDone:              onImpact(finalDestination, actorHit),
+    }
+    animation.EndAfterPathComplete()
+    c.animator.AddHitAnimation(animation)
 }
 
-func (c *CombatState) projectilePath(source geometry.Point, destination geometry.Point) []geometry.Point {
+func (c *CombatState) projectilePath(source geometry.Point, destination geometry.Point, isEnemy func(actor *game.Actor) bool) []geometry.Point {
     currentMap := c.engine.currentMap
     los := geometry.BresenhamLoS(source, destination, func(x, y int) bool {
         p := geometry.Point{X: x, Y: y}
-        return (currentMap.Contains(p) && currentMap.IsPassableForProjectile(p)) || p == source
+        if !currentMap.Contains(p) {
+            return false
+        }
+        if currentMap.IsActorAt(p) {
+            actorAt := currentMap.ActorAt(p)
+            if isEnemy(actorAt) {
+                return false
+            }
+        }
+        isWalkable := currentMap.IsWalkable(p)
+        return isWalkable || p == source
     })
     losWithoutSource := los[1:]
     return losWithoutSource
@@ -281,7 +264,7 @@ func (c *CombatState) onDirectionalInput(direction geometry.Point) bool {
 
     dest := curPos.Add(direction)
     if isThere, enemy := c.isEnemyAt(dest); isThere {
-        c.animateMeleeHit(avatar, enemy)
+        c.meleeHitOnActor(avatar, enemy)
         return true
     } else {
         c.engine.PlayerMovement(direction)
@@ -342,7 +325,7 @@ func (c *CombatState) endEnemyTurn() {
         c.switchToNextPartyMember()
     }
 }
-func (c *CombatState) combatInitByPlayer() {
+func (c *CombatState) ensureCombatInit(isPlayerTurn bool) {
     if c.isInCombat {
         return
     }
@@ -351,20 +334,10 @@ func (c *CombatState) combatInitByPlayer() {
     clear(c.opponents)
     c.partyAutoAttacks = false
     c.isInCombat = true
-    c.isPlayerTurn = true
     c.didAlertNearbyActors = false
+    c.isPlayerTurn = isPlayerTurn
 }
-func (c *CombatState) combatInitByEnemy() {
-    if c.isInCombat {
-        return
-    }
-    clear(c.movesTakenThisTurn)
-    clear(c.hasUsedPrimaryAction)
-    clear(c.opponents)
-    c.isInCombat = true
-    c.isPlayerTurn = false
-    c.didAlertNearbyActors = false
-}
+
 func (c *CombatState) canEnemyAct() bool {
     for opponent, _ := range c.opponents {
         if c.canAct(opponent) {
@@ -425,47 +398,64 @@ func (c *CombatState) isEnemyAt(dest geometry.Point) (bool, *game.Actor) {
 }
 
 type BattleAction struct {
-    Movement   []geometry.Point
-    ActionType AttackActionType
-    Target     *game.Actor
-}
-
-func (a BattleAction) IsEndTurn() bool {
-    return len(a.Movement) == 0 && a.Target == nil
+    MovementDestination  geometry.Point
+    ActionType           AttackActionType
+    ActiveAction         *game.Action // skill / spell
+    ActionTargetLocation *geometry.Point
 }
 
 func (c *CombatState) automaticBattleActionFor(ourActor *game.Actor, listOfEnemies []*game.Actor) {
-    autoAction := c.calculateBestAction(ourActor, listOfEnemies)
-    if autoAction.IsEndTurn() {
-        c.removeOpponent(ourActor)
-        c.hasUsedPrimaryAction[ourActor] = true
-    } else {
-        c.animateBattleAction(ourActor, autoAction)
-    }
+    autoAction, reachablePositions := c.calculateBestAction(ourActor, listOfEnemies)
+    c.executeBattleAction(ourActor, autoAction, reachablePositions)
 }
-func (c *CombatState) calculateBestAction(ourActor *game.Actor, listOfEnemies []*game.Actor) BattleAction {
+func (c *CombatState) calculateBestAction(ourActor *game.Actor, listOfEnemies []*game.Actor) (BattleAction, map[geometry.Point]int) {
     // let's start simple..
     // find the nearest enemy, find a free cell position next to him
     // move towards that position
     // if we can reach it this turn: attack
-    attackType := AttackActionTypeMelee
-    movement, attackTarget := c.closeIntoMeleeRange(ourActor, listOfEnemies)
-    return BattleAction{
-        Movement:   movement,
-        ActionType: attackType,
-        Target:     attackTarget,
+
+    gridmap := c.engine.GetGridMap()
+    reachablePositions := gridmap.GetDijkstraMap(ourActor.Pos(), c.getMovesLeft(ourActor), func(p geometry.Point) bool {
+        return gridmap.IsCurrentlyPassable(p)
+    })
+    reachablePositions[ourActor.Pos()] = 0
+
+    maxUtility := math.MinInt
+    bestAction := BattleAction{
+        MovementDestination: ourActor.Pos(),
     }
+    for pos, _ := range reachablePositions {
+        utility, actionAt := c.getUtilityForPosition(ourActor, pos, listOfEnemies)
+        if utility > maxUtility {
+            maxUtility = utility
+            bestAction = actionAt
+        }
+    }
+
+    if maxUtility == 0 {
+        attackType := AttackActionTypeMelee
+        moveTo, attackTarget := c.closeIntoMeleeRange(ourActor, reachablePositions, listOfEnemies)
+        bestAction = BattleAction{
+            MovementDestination:  moveTo,
+            ActionType:           attackType,
+            ActionTargetLocation: attackTarget,
+        }
+    }
+
+    return bestAction, reachablePositions
 }
 
-func (c *CombatState) closeIntoMeleeRange(ourActor *game.Actor, listOfEnemies []*game.Actor) ([]geometry.Point, *game.Actor) {
+func (c *CombatState) closeIntoMeleeRange(ourActor *game.Actor, reachablePositions map[geometry.Point]int, listOfEnemies []*game.Actor) (geometry.Point, *geometry.Point) {
     // find the nearest enemy
     var nearestEnemy *game.Actor
-    var nearestPath []geometry.Point
+    nearestPos := ourActor.Pos()
+    var attackPos *geometry.Point
     currentMap := c.engine.currentMap
     for _, enemy := range listOfEnemies {
         if enemy.IsAlive() {
             if enemy.IsRightNextTo(ourActor) {
-                return []geometry.Point{}, enemy
+                enemyPos := enemy.Pos()
+                return ourActor.Pos(), &enemyPos
             }
             freeNeighbors := currentMap.NeighborsCardinal(enemy.Pos(), func(p geometry.Point) bool {
                 return currentMap.Contains(p) && currentMap.IsWalkableFor(p, ourActor)
@@ -474,38 +464,32 @@ func (c *CombatState) closeIntoMeleeRange(ourActor *game.Actor, listOfEnemies []
                 continue
             }
             for _, freeNeighbor := range freeNeighbors {
-                currentPath := currentMap.GetJPSPath(ourActor.Pos(), freeNeighbor, func(point geometry.Point) bool {
-                    return currentMap.Contains(point) && currentMap.IsWalkableFor(point, ourActor)
-                })
-                if len(currentPath) > 0 {
-                    currentPath = currentPath[1:] // remove the first element, which is the current position
-                }
-                if nearestEnemy == nil || (len(currentPath) > 0 && ((len(currentPath) < len(nearestPath)) || len(nearestPath) == 0)) {
-                    nearestEnemy = enemy
-                    nearestPath = currentPath
+                if _, ok := reachablePositions[freeNeighbor]; ok {
+                    distance := geometry.DistanceManhattan(ourActor.Pos(), freeNeighbor)
+                    if nearestEnemy == nil || distance < geometry.DistanceManhattan(ourActor.Pos(), nearestPos) {
+                        nearestEnemy = enemy
+                        nearestPos = freeNeighbor
+                    }
                 }
             }
         }
     }
-
     if nearestEnemy != nil {
-        distance := geometry.DistanceManhattan(ourActor.Pos(), nearestEnemy.Pos())
-        if distance > 1 && len(nearestPath) == 0 {
-            return []geometry.Point{}, nil // we're stuck
-        }
+        enemyPos := nearestEnemy.Pos()
+        attackPos = &enemyPos
     }
-
-    movesLeft := c.getMovesLeft(ourActor)
-    if len(nearestPath) > movesLeft {
-        return nearestPath[:movesLeft], nil
-    }
-    // cannot reach any enemies
-    return nearestPath, nearestEnemy
+    return nearestPos, attackPos
 }
 
-func (c *CombatState) animateBattleAction(actor *game.Actor, move BattleAction) {
-    _ = c.animationRoutine.Run(func(exe *gocoro.Execution) {
-        for _, dest := range move.Movement {
+func (c *CombatState) executeBattleAction(actor *game.Actor, move BattleAction, reachablePositions map[geometry.Point]int) {
+    if !c.canAct(actor) {
+        return
+    }
+    c.hasUsedPrimaryAction[actor] = true
+    combatPathTo := c.getCombatPathTo(actor, reachablePositions, move.MovementDestination)
+
+    c.animator.RunAnimationScript(func(exe *gocoro.Execution) {
+        for _, dest := range combatPathTo {
             c.engine.moveActorInCombat(actor, dest)
             c.movesTakenThisTurn[actor]++
             if !actor.IsAlive() {
@@ -521,8 +505,18 @@ func (c *CombatState) animateBattleAction(actor *game.Actor, move BattleAction) 
             _ = exe.YieldTime(200 * time.Millisecond)
         }
 
-        if move.ActionType == AttackActionTypeMelee && move.Target != nil && actor.IsAlive() && !actor.IsSleeping() && move.Target.IsAlive() {
-            c.animateMeleeHit(actor, move.Target)
+        hasTargetAndCanAct := move.ActionTargetLocation != nil && (actor.IsAlive() && !actor.IsSleeping())
+
+        if !hasTargetAndCanAct {
+            return
+        }
+
+        if move.ActionType == AttackActionTypeMelee {
+            c.meleeHitOnLocation(actor, *move.ActionTargetLocation)
+        } else if move.ActionType == AttackActionTypeActiveSkill || move.ActionType == AttackActionTypeSpell {
+            c.UseTargetedAction(actor, move.ActiveAction, *move.ActionTargetLocation)
+        } else if move.ActionType == AttackActionTypeRanged {
+            c.RangedAttack(actor, *move.ActionTargetLocation)
         }
     })
 }
@@ -534,7 +528,6 @@ func (c *CombatState) findAlliesOfOpponent(attackedNPC *game.Actor) {
     if c.canAct(attackedNPC) {
         c.opponents[attackedNPC] = true
     }
-    combatFaction := attackedNPC.GetCombatFaction()
     radius := 25
     // TODO: better filter for guards, allies, etc.
     currentMap := c.engine.currentMap
@@ -543,7 +536,7 @@ func (c *CombatState) findAlliesOfOpponent(attackedNPC *game.Actor) {
             actor.IsAlive() &&
             !actor.IsHidden() &&
             actor != attackedNPC &&
-            actor.GetCombatFaction() == combatFaction
+            c.areAllies(attackedNPC, actor)
     })
     avatar := c.engine.GetAvatar()
     for _, nearbyNPC := range nearbyNPCs {
@@ -567,7 +560,7 @@ func (c *CombatState) removeOpponent(actor *game.Actor) {
 
 func (c *CombatState) checkForEndOfCombat() {
     c.removeDeadAndSleepingOpponents()
-    if len(c.opponents) == 0 && len(c.hitAnimations) == 0 && !c.animationRoutine.Running() {
+    if len(c.opponents) == 0 && !c.animator.IsRunning() {
         c.endCombat()
     }
 }
@@ -590,19 +583,69 @@ func (c *CombatState) OnScreenMouseClicked(screenX, screenY int) bool {
 func (c *CombatState) OnMouseMoved(screenX, screenY int) (bool, ui.Tooltip) {
     return false, ui.NoTooltip{}
 }
-func (c *CombatState) PlayerStartsMeleeAttack(attacker *game.Actor, attackedNPC *game.Actor) {
-    c.combatInitByPlayer()
-    c.findAlliesOfOpponent(attackedNPC)
-    c.animateMeleeHit(attacker, attackedNPC)
+
+func (c *CombatState) OnCombatAction(attacker *game.Actor, target *game.Actor) {
+    isAttackerPlayerControlled := c.engine.IsPlayerControlled(attacker)
+    c.ensureCombatInit(isAttackerPlayerControlled)
+
+    npc := target
+    if !isAttackerPlayerControlled {
+        npc = attacker
+    }
+    c.findAlliesOfOpponent(npc)
+}
+func (c *CombatState) MeleeAttack(attacker *game.Actor, target *game.Actor) {
+    c.OnCombatAction(attacker, target)
+    c.meleeHitOnActor(attacker, target)
 }
 
-func (c *CombatState) EnemyStartsAttack(attacker *game.Actor, attackedNPC *game.Actor) {
-    c.combatInitByEnemy()
+func (c *CombatState) RangedAttack(attacker *game.Actor, targetPos geometry.Point) {
+    if !attacker.HasRangedWeaponEquipped() {
+        return
+    }
+    c.hasUsedPrimaryAction[attacker] = true
+    c.animateProjectile(attacker, targetPos, c.iconGenericMissile, color.White, func(pos geometry.Point, actorHit *game.Actor) func() {
+        return func() {
+            if actorHit != nil {
+                c.onRangedImpact(attacker, actorHit)
+                c.OnCombatAction(attacker, actorHit)
+            }
+        }
+    })
+}
+
+func (c *CombatState) UseTargetedAction(attacker *game.Actor, action *game.Action, targetPos geometry.Point) {
+    c.hasUsedPrimaryAction[attacker] = true
+    spellIcon := int32(28)
+    spellColor := action.Color()
+    c.engine.Print(fmt.Sprintf("%s uses %s", attacker.Name(), action.Name()))
+    c.animateProjectile(attacker, targetPos, spellIcon, spellColor, func(pos geometry.Point, actorHit *game.Actor) func() {
+        return func() {
+            if actorHit != nil {
+                c.OnCombatAction(attacker, actorHit)
+            }
+            c.onActionImpact(attacker, action, pos, actorHit)
+        }
+    })
+}
+func (c *CombatState) onActionImpact(attacker *game.Actor, spell *game.Action, finalDestination geometry.Point, actorHit *game.Actor) {
+    if actorHit != nil {
+        if actorHit.IsHidden() {
+            actorHit.SetHidden(false)
+        }
+    }
+
+    if spell.IsTargeted() {
+        spell.ExecuteOnTarget(c.engine, attacker, finalDestination)
+    }
+}
+func (c *CombatState) EnemyStartsCombat(attacker *game.Actor, attackedPartyMember *game.Actor) {
+    c.ensureCombatInit(false)
     c.findAlliesOfOpponent(attacker)
-    //c.animateMeleeHit(attacker, attackedNPC)
+    //c.meleeHitOnActor(attacker, attackedNPC)
 }
 
-func (c *CombatState) PlayerStartsRangedAttack() {
+func (c *CombatState) PlayerControlledRangedAttack() {
     avatar := c.engine.GetAvatar()
 
     if !c.canAct(avatar) {
@@ -615,88 +658,56 @@ func (c *CombatState) PlayerStartsRangedAttack() {
         return
     }
 
-    c.combatInitByPlayer()
+    c.ensureCombatInit(true)
     c.selectRangedTarget(avatar)
 }
 
 func (c *CombatState) OrchestratedRangedAttack() {
     if c.engine.GetParty().HasAnyRangedWeaponsEquipped() {
-        c.combatInitByPlayer()
+        c.ensureCombatInit(true)
         c.selectOrchestratedRangedTarget()
     } else {
         c.engine.Print("No ranged weapons equipped")
     }
 }
 
-func (c *CombatState) PlayerStartsOffensiveSpell(caster *game.Actor, spellUsed *game.Spell) {
-    c.combatInitByPlayer()
-    c.SelectSpellTarget(caster, spellUsed)
+func (c *CombatState) PlayerStartsOffensiveSpell(caster *game.Actor, spellUsed *game.Action) {
+    c.ensureCombatInit(true)
+    c.SelectActionTarget(caster, spellUsed)
 }
-func (c *CombatState) SelectSpellTarget(attacker *game.Actor, spell *game.Spell) {
+func (c *CombatState) SelectActionTarget(attacker *game.Actor, action *game.Action) {
     c.engine.CloseAllModals()
-    spellIcon := int32(28)
-    spellColor := spell.Color()
     c.waitForTarget = func(targetPos geometry.Point) {
-        c.hasUsedPrimaryAction[attacker] = true
-        c.animateProjectile(attacker, targetPos, spellIcon, spellColor, func(pos geometry.Point, actorHit *game.Actor) func() {
-            return func() {
-                c.onSpellImpact(attacker, spell, pos, actorHit)
-            }
-        })
+        c.UseTargetedAction(attacker, action, targetPos)
         c.waitForTarget = nil
     }
 }
+
 func (c *CombatState) selectRangedTarget(attacker *game.Actor) {
     c.engine.CloseAllModals()
     c.waitForTarget = func(targetPos geometry.Point) {
-        c.hasUsedPrimaryAction[attacker] = true
-        c.animateProjectile(attacker, targetPos, c.iconGenericMissile, color.White, func(pos geometry.Point, actorHit *game.Actor) func() {
-            return func() {
-                c.onRangedHit(attacker, actorHit)
-            }
-        })
+        c.RangedAttack(attacker, targetPos)
         c.waitForTarget = nil
     }
 }
+
 func (c *CombatState) selectOrchestratedRangedTarget() {
     c.waitForTarget = func(targetPos geometry.Point) {
         for _, partyMember := range c.engine.GetPartyMembers() {
-            if !partyMember.HasRangedWeaponEquipped() {
-                continue
-            }
-            c.animateProjectile(partyMember, targetPos, c.iconGenericMissile, color.White, func(pos geometry.Point, actorHit *game.Actor) func() {
-                return func() {
-                    c.onRangedHit(partyMember, actorHit)
-                }
-            })
+            c.RangedAttack(partyMember, targetPos)
         }
         c.waitForTarget = nil
     }
 }
-func (c *CombatState) onSpellImpact(attacker *game.Actor, spell *game.Spell, finalDestination geometry.Point, actorHit *game.Actor) {
-    c.hasUsedPrimaryAction[attacker] = true
-    if actorHit != nil {
-        if actorHit.IsHidden() {
-            actorHit.SetHidden(false)
-        }
-        if !c.didAlertNearbyActors {
-            c.findAlliesOfOpponent(actorHit)
-        }
-    }
 
-    if spell.IsTargeted() {
-        spell.CastOnTarget(c.engine, attacker, finalDestination)
-    }
-}
-func (c *CombatState) onRangedHit(attacker, actorHit *game.Actor) {
-    c.hasUsedPrimaryAction[attacker] = true
+func (c *CombatState) onRangedImpact(attacker, actorHit *game.Actor) {
     if actorHit != nil {
         if actorHit.IsHidden() {
             actorHit.SetHidden(false)
         }
-        c.deliverRangedDamage(attacker, actorHit)
-        if !c.didAlertNearbyActors {
-            c.findAlliesOfOpponent(actorHit)
+        doesHit := c.engine.rules.DoesRangedAttackHit(attacker, actorHit)
+        if doesHit {
+            c.deliverRangedDamage(attacker, actorHit)
         }
     }
 }
@@ -711,18 +722,6 @@ func (c *CombatState) addOpponent(opponent *game.Actor) {
     if opponent.IsAlive() {
         c.opponents[opponent] = true
     }
-}
-
-func (c *CombatState) addHitAnimation(pos geometry.Point, atlas renderer.AtlasName, icon int32, tintColor color.Color, done func()) {
-    c.hitAnimations = append(c.hitAnimations, HitAnimation{
-        Path:          []geometry.Point{pos},
-        TicksLeft:     20,
-        TicksForReset: 20,
-        Icon:          icon,
-        WhenDone:      done,
-        UseTiles:      atlas,
-        TintColor:     tintColor,
-    })
 }
 
 func (c *CombatState) listOfEnemies() []*game.Actor {
@@ -743,4 +742,155 @@ func (c *CombatState) removeDeadAndSleepingOpponents() {
 
 func (c *CombatState) IsAITurn() bool {
     return !c.isPlayerTurn
+}
+
+func (c *CombatState) getEnemyFilterForProjectile(attacker *game.Actor) func(actor *game.Actor) bool {
+    if c.engine.IsPlayerControlled(attacker) {
+        return func(actor *game.Actor) bool {
+            return !c.engine.IsPlayerControlled(actor) && actor.IsAlive()
+        }
+    } else {
+        return func(actor *game.Actor) bool {
+            return (c.engine.IsPlayerControlled(actor) || actor.GetCombatFaction() != attacker.GetCombatFaction()) && actor.IsAlive()
+        }
+    }
+}
+
+func (c *CombatState) getUtilityForPosition(ourActor *game.Actor, potentialNewLocation geometry.Point, enemies []*game.Actor) (int, BattleAction) {
+    // what's our disposition? Stay near for melee, or stay far for ranged?
+    // if we can do ranged attacks, we will. If we can't, we'll try to close in.
+    // for ranged: positions were we can attack but cannot be attacked are favorable
+    gridMap := c.engine.GetGridMap()
+
+    utility := 0
+    bestAction := BattleAction{
+        MovementDestination: potentialNewLocation,
+        ActionType:          AttackActionTypeMove,
+    }
+
+    enemyPositions := make(map[geometry.Point]*game.Actor)
+    for _, enemy := range enemies {
+        enemyPositions[enemy.Pos()] = enemy
+    }
+
+    activeSkills := ourActor.GetActiveSkills()
+    spells := ourActor.GetEquippedSpells()
+
+    /*
+       canMeleeAttack := true
+       canRangedAttack := ourActor.HasRangedWeaponEquipped()
+       canUseActiveSkill := len(activeSkills) > 0
+       canUseSpell := len(spells) > 0
+
+    */
+
+    // assign utility to this position first
+    positionUtility := 0
+
+    var neighborsWithAllies, neighborsWithEnemies []geometry.Point
+    neighbors := gridMap.GetAllCardinalNeighbors(potentialNewLocation)
+    for _, neighbor := range neighbors {
+        if gridMap.IsActorAt(neighbor) {
+            actorAt := gridMap.ActorAt(neighbor)
+            if actorAt == ourActor {
+                continue
+            }
+            if actorAt.IsAlive() {
+                if c.areAllies(ourActor, actorAt) {
+                    neighborsWithAllies = append(neighborsWithAllies, neighbor)
+                } else {
+                    neighborsWithEnemies = append(neighborsWithEnemies, neighbor)
+                }
+            }
+        }
+    }
+
+    if len(neighborsWithEnemies) == 1 {
+        positionUtility += 30
+    } else if len(neighborsWithEnemies) > 1 {
+        positionUtility -= 10
+    }
+
+    if len(neighborsWithAllies) == 0 { // by, default, leave a gap
+        positionUtility += 10
+    }
+
+    distance := geometry.DistanceManhattan(ourActor.Pos(), potentialNewLocation)
+    positionUtility -= distance
+
+    maxSkillUtility := 0
+    var bestSkill *game.Action
+    var bestLocation geometry.Point
+    for _, skill := range append(activeSkills, spells...) {
+        if skill.IsTargeted() {
+            validTargetsOfSkill := skill.GetValidTargets(c.engine, ourActor, potentialNewLocation)
+            for _, target := range validTargetsOfSkill {
+                combatUtility := skill.GetCombatUtilityForTargetedUseOnLocation(target, enemyPositions)
+                if combatUtility > maxSkillUtility {
+                    maxSkillUtility = combatUtility
+                    bestSkill = skill
+                    bestLocation = target
+                }
+            }
+        } else {
+            combatUtility := skill.GetCombatUtilityForTargetedUseOnLocation(potentialNewLocation, enemyPositions)
+            if combatUtility > maxSkillUtility {
+                maxSkillUtility = combatUtility
+                bestSkill = skill
+                bestLocation = potentialNewLocation
+            }
+        }
+    }
+    if maxSkillUtility > 0 {
+        bestAction = BattleAction{
+            MovementDestination:  potentialNewLocation,
+            ActionType:           AttackActionTypeActiveSkill,
+            ActiveAction:         bestSkill,
+            ActionTargetLocation: &bestLocation,
+        }
+    }
+
+    utility = positionUtility + maxSkillUtility
+    return utility, bestAction
+}
+func (c *CombatState) getCombatPathTo(ourActor *game.Actor, dijkstraMap map[geometry.Point]int, dest geometry.Point) []geometry.Point {
+    if ourActor.Pos() == dest { // we're already there
+        return []geometry.Point{}
+    }
+    if _, ok := dijkstraMap[dest]; !ok { // we can't reach this position
+        return []geometry.Point{}
+    }
+    path := []geometry.Point{dest}
+    currentPos := dest
+    for currentPos != ourActor.Pos() {
+        currentDistInMap := dijkstraMap[currentPos] // roll down from here..
+        for _, neighbor := range c.engine.currentMap.GetAllCardinalNeighbors(currentPos) {
+            if distOfNeighbor, ok := dijkstraMap[neighbor]; ok && distOfNeighbor < currentDistInMap {
+                path = append(path, neighbor)
+                currentPos = neighbor
+                break
+            }
+        }
+    }
+    // reverse the path
+    slices.Reverse(path)
+    return path
+}
+func (c *CombatState) areAllies(one *game.Actor, two *game.Actor) bool {
+    return one.GetCombatFaction() == two.GetCombatFaction()
+}
+
+func (c *CombatState) neighbouringEnemies(actor *game.Actor) []*game.Actor {
+    var enemies []*game.Actor
+    gridMap := c.engine.GetGridMap()
+    neighbors := gridMap.GetAllCardinalNeighbors(actor.Pos())
+    for _, neighbor := range neighbors {
+        if gridMap.IsActorAt(neighbor) {
+            actorAt := gridMap.ActorAt(neighbor)
+            if !c.areAllies(actor, actorAt) {
+                enemies = append(enemies, actorAt)
+            }
+        }
+    }
+    return enemies
 }

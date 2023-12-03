@@ -23,21 +23,90 @@ func CreateGameEvent(engine Engine, name string) GameEvent {
         return NewEarlyExitEvent(engine)
     case "picked_up_nom_de_plume":
         return NewPickedUpNomDePlumeEvent(engine)
+    case "imprisonment_tauci":
+        return NewImprisonmentTauciEvent(engine)
+    case "tauci_rat_king_knocking":
+        // unlock the and show some text..
+        engine.UnlockDoorsByKeyName("rat_king")
+        engine.ShowScrollableText([]string{"Whatever screeching voices you heard before, they are gone now. The silence is short-lived, however.", "’Come on in', a high-pitched voice says. 'We have been waiting for you.'", "There is a loud cackle, as the door is unlocked."}, color.White, true)
+    case "rat_battle_start":
+        return NewTauciRatBattleStartEvent(engine)
+    case "tauci_criminal_offense":
+        neededNPCName := "tauci_front_guard"
+        neededDialogueFile := "tauci_criminal_offense"
+        //engine.GetParty().resetToPreviousPositions() // make the player bounce back from the trigger region
+        if !tryStartDialogue(engine, neededNPCName, neededDialogueFile) {
+            engine.ShowScrollableText([]string{"The people are crying out for justice.", "But the guards are nowhere to be found."}, color.White, true)
+        }
     case "wood_orc_prisoner":
         triggerRegion := name
         neededNPCName := "orc_leader"
         neededDialogueFile := "wood_orc_prisoner"
         engine.GetParty().resetToPreviousPositions() // make the player bounce back from the trigger region
-        startDialogue(engine, neededNPCName, triggerRegion, neededDialogueFile)
+        startDialogueAtLocation(engine, neededNPCName, triggerRegion, neededDialogueFile)
     }
     return nil
 }
 
-func startDialogue(engine Engine, neededNPCName string, triggerRegion string, neededDialogueFile string) {
+func NewTauciRatBattleStartEvent(engine Engine) GameEvent {
+    event := TauciRatBattleStartEvent{
+        engine: engine,
+    }
+    event.Init()
+    return &event
+}
+
+func NewImprisonmentTauciEvent(engine Engine) GameEvent {
+    // just a little stuff to do:
+    // gather all items of the party and remove them
+    // put them into a chest
+    // teleport the party to the prison
+    // repair all doors on the prison map
+    //engine.CloseConversation()
+    party := engine.GetParty()
+
+    // teleport the party to the prison
+    engine.TransitionToNamedLocation("Tauci_Prison_Level_1", "prison_spawn")
+
+    partyInventory := party.RemoveAllItems()
+    chest := engine.GetChestByInternalName("tauci_prisoner_belongings")
+    if chest == nil {
+        println("ERR: Chest not found")
+        return nil
+    }
+    chest.AddFixedLoot(flatten(partyInventory))
+    chest.ResetLock()
+
+    engine.ResetAllLockedDoorsOnMap("Tauci_Prison_Level_1")
+
+    engine.ShowScrollableText([]string{"You are now in a prison cell of the Tauci empire.", "The guards took all your belongings and threw them into a chest."}, color.White, true)
+    return nil
+}
+
+func flatten(inventory [][]Item) []Item {
+    result := make([]Item, 0)
+    for _, v := range inventory {
+        result = append(result, v...)
+    }
+    return result
+}
+func tryStartDialogue(engine Engine, neededNPCName string, neededDialogueFile string) bool {
+    neededNPC := engine.GetActorByInternalName(neededNPCName)
+    if neededNPC != nil && neededNPC.IsAlive() {
+        dialogueFromFile := engine.GetDialogueFromFile(neededDialogueFile)
+        engine.StartConversation(
+            neededNPC,
+            dialogueFromFile,
+        )
+        return true
+    }
+    return false
+}
+func startDialogueAtLocation(engine Engine, neededNPCName string, triggerRegion string, neededDialogueFile string) {
     neededNPC := engine.GetActorByInternalName(neededNPCName)
     triggerAtLoc, isInRegion := engine.GetGridMap().GetNamedTriggerAt(neededNPC.Pos())
     isAtLocationOfTrigger := isInRegion && triggerAtLoc.Name == triggerRegion
-    if neededNPC.IsAlive() && isAtLocationOfTrigger {
+    if neededNPC != nil && neededNPC.IsAlive() && isAtLocationOfTrigger {
         dialogueFromFile := engine.GetDialogueFromFile(neededDialogueFile)
         engine.StartConversation(
             neededNPC,

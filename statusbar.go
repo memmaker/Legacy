@@ -61,15 +61,15 @@ func (g *GridEngine) drawUpperStatusBar(screen *ebiten.Image) {
         g.gridRenderer.DrawOnSmallGrid(screen, xPosGold+len(goldString), yPos, goldIcon)
     }
 
-    if g.playerParty.HasDefenseBuffs() {
-        shieldIcon := int32(151)
-        g.gridRenderer.DrawOnSmallGrid(screen, g.defenseBuffsButton.X, g.defenseBuffsButton.Y, shieldIcon)
-    }
+    //if g.playerParty.HasDefenseBuffs() {
+    shieldIcon := int32(151)
+    g.gridRenderer.DrawOnSmallGrid(screen, g.defenseBuffsButton.X, g.defenseBuffsButton.Y, shieldIcon)
+    //}
 
-    if g.playerParty.HasOffenseBuffs() {
-        swordIcon := int32(152)
-        g.gridRenderer.DrawOnSmallGrid(screen, g.offenseBuffsButton.X, g.offenseBuffsButton.Y, swordIcon)
-    }
+    //if g.playerParty.HasOffenseBuffs() {
+    swordIcon := int32(152)
+    g.gridRenderer.DrawOnSmallGrid(screen, g.offenseBuffsButton.X, g.offenseBuffsButton.Y, swordIcon)
+    //}
 
     // current location
     g.drawTextOnUpperStatusbar(screen, g.currentMap.GetDisplayName())

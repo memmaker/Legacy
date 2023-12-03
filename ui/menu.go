@@ -63,10 +63,26 @@ func (g *GridMenu) OnAvatarSwitched() {
 }
 
 func (g *GridMenu) ActionLeft() {
+    if g.hasValidSelection() {
+        currentItem := g.currentItem()
+        if currentItem.ActionLeft != nil {
+            newLabel := currentItem.ActionLeft()
+            g.menuItems[g.currentSelection].Text = newLabel
+            return
+        }
+    }
     g.ActionUp()
 }
 
 func (g *GridMenu) ActionRight() {
+    if g.hasValidSelection() {
+        currentItem := g.currentItem()
+        if currentItem.ActionRight != nil {
+            newLabel := currentItem.ActionRight()
+            g.menuItems[g.currentSelection].Text = newLabel
+            return
+        }
+    }
     g.ActionDown()
 }
 
@@ -110,12 +126,15 @@ func (g *GridMenu) ActionConfirm() {
     if g.menuItems == nil || len(g.menuItems) == 0 {
         return
     }
-    action := g.menuItems[g.currentSelection].Action
-    g.lastAction = action
-    action()
     if g.autoCloseOnConfirm {
         g.shouldClose = true
     }
+    action := g.menuItems[g.currentSelection].Action
+    if action == nil {
+        return
+    }
+    g.lastAction = action
+    action()
 }
 
 func (g *GridMenu) ActionUp() {
@@ -259,6 +278,14 @@ func (g *GridMenu) PositionNearMouse(x int, y int) {
 
 func (g *GridMenu) DisableAutoClose() {
     g.autoCloseOnConfirm = false
+}
+
+func (g *GridMenu) hasValidSelection() bool {
+    return g.currentSelection >= 0 && g.currentSelection < len(g.menuItems)
+}
+
+func (g *GridMenu) currentItem() util.MenuItem {
+    return g.menuItems[g.currentSelection]
 }
 
 func maxLenOfItems(items []util.MenuItem) int {

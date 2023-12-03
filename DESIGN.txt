@@ -1,10 +1,24 @@
 # Annoyances
  - Saving / Loading a bit rough
  - It's not possible to have a conversation with your followers
- - Dialogue options will only depend on the skills of the Avatar, not the whole party
  - Dialogue missing from NPCs after loading
- - Skill checks in dialogues are a bit rough, only works for the first option, if at all
- - Someone will definitely try to type "Your Bedroom" into a mirror to get home. We should react to that.
+ - Someone will definitely try to type "Your Bedroom" or "Home" into a mirror to get home. We should react to that.
+ - Fix Well Transitions
+ - Combat is rough
+ - Selling not possible
+ - People shouldn't sell their store keys :) Healer guy sells his food and the same stuff as potion guys. Food guy sells nothing.
+ - NPC Patrol will continue even if the player starts a conversation or fight
+ - NPCs cannot use skills/spells
+
+# Design Goal
+ - A coffe break RPG sandbox with a plot
+
+# Mechanics Building Blocks
+ - Attributes (1-10) & Derived Attributes
+ - Skill for checks (1-4)
+ - Spells & Active Skills (Generic Actions)
+ - Status Effects (Generic State Modifiers)
+ - Items (Stats, OnHitProcs)
 
 
 # Next Steps
@@ -265,3 +279,11 @@ Ranged Combat Skills
 
 Word Wrap for books (34 chars): https://www.browserling.com/tools/word-wrap
 
+# UI
+Base Stats (HP, Mana, Level, XP, Attributes)
+Skills
+Status Effects
+Equipment Screen
+
+
+Inventory

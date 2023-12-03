@@ -8,6 +8,8 @@ type MenuItem struct {
     TextColor   color.Color
     CharIcon    int32
     TooltipText []string
+    ActionLeft  func() string
+    ActionRight func() string
 }
 
 func IndexToXY(index int, width int) (int, int) {

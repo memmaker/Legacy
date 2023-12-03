@@ -74,7 +74,30 @@ Text:
 
 Key: _tauci_elimination_accepted
 Effect: setFlag(tauci_elimination_accepted)
-Text: "Excellent! I'll be waiting for your return."
+AddsKeyword: let's do this
+Text: "Excellent! I have already made some plans.
++ Basically, I see two broad approaches to this problem.
++ We can either defeat the Taucis in =battle=,
++ or we go with a more =subtle= approach."
+
+Key: battle
+Text: "I'm sure you can handle yourself in a fight.
++ Nonetheless, I'd offer you some of my =royal guards= to help you out."
+
+Key: subtle
+Text: "Yes, I really like this approach.
++ The idea is to replace the Taucis with my people, one by one.
++ You will take one of my =spies= with you, and make sure a Tauci disappears.
++ I don't care how you do it, as long as it's =quiet=."
+
+Key: quiet
+Text: "You could try to threaten them, or maybe kidnap or outright kill them.
++ Some will be easier to get rid of than others. Be creative."
+
+Key: spies
+Text: "You've met them already. They are outside, waiting for you.
++ When you got rid of a Tauci, tell the spy to take their place."
+
 
 Key: _tauci_elimination_rejected
 Effect: setFlag(tauci_elimination_rejected)
@@ -83,3 +106,52 @@ Text: "Oh, well. I guess I'll have to find someone else."
 Key: bye
 Effect: quits
 Text: "We'll meet again."
+
+Key: let's do this
+Condition: hasFlag('team_tauci_elimination_accepted')
+Text: "Excellent! Are you ready to go?"
+#
+Target: _battle_start
+Option: Yes, let's go.
+#
+Target: _battle_cancel
+Option: No, not yet.
+
+Key: let's do this
+Condition: !hasFlag('team_tauci_elimination_accepted')
+Text: "Perfect, so what's our approach?"
+#
+Target: chose_team_battle
+Option: Let's fight them together.
+#
+Target: chose_solo_battle
+Option: I'll fight them alone.
+#
+Target: chose_subtle
+Option: Let's do it quietly.
+
+Key: chose_team_battle
+Effect: setFlag(team_tauci_elimination_accepted)
+Text: "Excellent! Are you ready to go?"
+#
+Target: _battle_start
+Option: Yes, let's go.
+#
+Target: _battle_cancel
+Effect: quits
+Option: No, not yet.
+
+Key: _battle_start
+Effect: triggerEvent(rat_battle_start)
+Text: "Excellent! For great justice!"
+
+Key: chose_solo_battle
+Text: "Perfect! Tell me when you're done."
+Effect: setFlag(solo_tauci_elimination_accepted)
+Effect: quits
+
+Key: chose_subtle
+Text: "Perfect! You can start right away.
++ My spies are waiting for you outside."
+Effect: setFlag(subtle_tauci_elimination_accepted)
+Effect: quits

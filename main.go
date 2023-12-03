@@ -18,7 +18,6 @@ import (
     _ "image/png"
     "log"
     "math"
-    "math/rand"
     "os"
     "path"
     "runtime/pprof"
@@ -60,6 +59,7 @@ type GridEngine struct {
     spawnPosition  geometry.Point
 
     // Animation
+    animator         *renderer.Animator
     animationRoutine gocoro.Coroutine
     movementRoutine  gocoro.Coroutine
 
@@ -112,6 +112,58 @@ type GridEngine struct {
     altIsPressed            bool
     levelHooks              game.LevelHooks
     isSneaking              bool
+    debugInfoMode           bool
+}
+
+func (g *GridEngine) MeleeAttackWithFixedDamage(attacker *game.Actor, target *game.Actor, damage int) {
+    g.combatManager.MeleeAttack(attacker, target)
+}
+
+func (g *GridEngine) IsSneaking() bool {
+    return g.isSneaking
+}
+
+func (g *GridEngine) TryMoveNPCOnPath(actor *game.Actor, dest geometry.Point) {
+    if !actor.IsSleeping() && actor.IsAlive() {
+        if g.currentMap.IsCurrentlyPassable(dest) {
+            g.currentMap.MoveActor(actor, dest)
+        }
+    }
+}
+
+func (g *GridEngine) UnlockDoorsByKeyName(keyName string) {
+    for _, o := range g.currentMap.Objects() {
+        if door, isDoor := o.(*game.Door); isDoor {
+            if door.NeedsKey() && door.GetKeyName() == keyName {
+                door.Unlock()
+            }
+        }
+    }
+}
+
+func (g *GridEngine) GetChestByInternalName(internalName string) *game.Chest {
+    for _, o := range g.currentMap.Objects() {
+        if chest, isChest := o.(*game.Chest); isChest {
+            if chest.GetInternalName() == internalName {
+                return chest
+            }
+        }
+    }
+    return nil
+}
+
+func (g *GridEngine) ResetAllLockedDoorsOnMap(mapName string) {
+    if !g.isMapInMemory(mapName) {
+        return
+    }
+    namedMap := g.mapsInMemory[mapName]
+    for _, object := range namedMap.Objects() {
+        if door, isDoor := object.(*game.Door); isDoor {
+            if door.NeedsKey() {
+                door.Reset()
+            }
+        }
+    }
 }
 
 func (g *GridEngine) HasSkill(skill game.SkillName) bool {
@@ -190,7 +242,7 @@ func (g *GridEngine) printTimePassedMessage(days int, hours int, minutes int) {
     }
 }
 
-func (g *GridEngine) PlayerStartsOffensiveSpell(caster *game.Actor, spell *game.Spell) {
+func (g *GridEngine) PlayerStartsOffensiveSpell(caster *game.Actor, spell *game.Action) {
     if !caster.HasMana(spell.ManaCost()) {
         g.Print("Not enough mana!")
         return
@@ -245,13 +297,15 @@ func (g *GridEngine) GetActorByInternalName(internalName string) *game.Actor {
 }
 
 func (g *GridEngine) RaiseAsUndeadForParty(pos geometry.Point) {
-    downedActor, exists := g.currentMap.TryGetDownedActorAt(pos)
+    undeadActor, exists := g.currentMap.TryGetDownedActorAt(pos)
     if !exists {
         return
     }
-    g.currentMap.RemoveDownedActor(downedActor)
-    undeadActor := game.NewActor("Skeletor", 109)
-    g.currentMap.AddActor(undeadActor, pos)
+    undeadActor.SetIcon(109)
+    undeadActor.SetHealth(1)
+    g.AddStatusEffect(undeadActor, game.StatusUndead(), 1)
+    g.currentMap.SetActorToNormal(undeadActor)
+    //g.currentMap.AddActor(undeadActor, pos)
     g.playerParty.AddMember(undeadActor)
 }
 
@@ -352,19 +406,21 @@ func (g *GridEngine) GetAoECircle(source geometry.Point, radius int) []geometry.
     return result
 }
 
-func (g *GridEngine) HitAnimation(pos geometry.Point, atlasName renderer.AtlasName, icon int32, tintColor color.Color, whenDone func()) {
-    g.combatManager.addHitAnimation(pos, atlasName, icon, tintColor, whenDone)
+func (g *GridEngine) CombatHitAnimation(pos geometry.Point, atlasName renderer.AtlasName, icon int32, tintColor color.Color, whenDone func()) {
+    g.combatManager.animator.AddDefaultHitAnimation(pos, atlasName, icon, tintColor, whenDone)
 }
 
-func (g *GridEngine) SpellDamageAt(caster *game.Actor, pos geometry.Point, amount int) {
+func (g *GridEngine) TileAnimation(pos geometry.Point, atlasName renderer.AtlasName, icon int32, tintColor color.Color, whenDone func()) {
+    g.animator.AddDefaultHitAnimation(pos, atlasName, icon, tintColor, whenDone)
+}
+
+func (g *GridEngine) FixedDamageAt(caster *game.Actor, pos geometry.Point, amount int) {
     if g.currentMap.IsActorAt(pos) {
         actor := g.currentMap.ActorAt(pos)
         g.DeliverSpellDamage(caster, actor, amount)
+        g.combatManager.OnCombatAction(caster, actor)
         if !actor.IsAlive() {
             g.actorDied(actor)
-            g.combatManager.findAlliesOfOpponent(actor)
-        } else if !g.IsPlayerControlled(actor) {
-            g.combatManager.addOpponent(actor)
         }
     }
 }
@@ -373,12 +429,11 @@ func (g *GridEngine) PlayerTriesBackstab(opponent *game.Actor) {
         g.Print(fmt.Sprintf("'%s' is already dead.", opponent.Name()))
         return
     }
-    chanceToBackstab := 0.5
-    if rand.Float64() < chanceToBackstab {
+    if g.SkillCheckAvatarVs(game.PhysicalSkillBackstab, opponent, game.Perception) {
         g.Kill(opponent)
     } else {
         g.Print("Your attack was noticed!")
-        g.PlayerStartsCombat(opponent)
+        g.onCriminalOffense(opponent)
     }
 }
 func (g *GridEngine) PlayerStartsCombat(opponent *game.Actor) {
@@ -386,14 +441,14 @@ func (g *GridEngine) PlayerStartsCombat(opponent *game.Actor) {
         g.Print(fmt.Sprintf("'%s' is already dead.", opponent.Name()))
         return
     }
-    g.combatManager.PlayerStartsMeleeAttack(g.GetAvatar(), opponent)
+    g.combatManager.MeleeAttack(g.GetAvatar(), opponent)
 }
 
 func (g *GridEngine) EnemyStartsCombat(opponent *game.Actor) {
     if opponent.IsSleeping() || !opponent.IsAlive() {
         return
     }
-    g.combatManager.EnemyStartsAttack(opponent, g.GetAvatar())
+    g.combatManager.EnemyStartsCombat(opponent, g.GetAvatar())
 }
 
 func main() {
@@ -437,7 +492,16 @@ func main() {
     ebiten.SetWindowSize(scaledScreenWidth, scaledScreenHeight)
     ebiten.SetScreenClearedEveryFrame(true)
 
+    gridEngine.animator = renderer.NewAnimator(func(pos geometry.Point) (bool, geometry.Point) {
+        isOnScreen := gridEngine.IsMapPosOnScreen(pos)
+        if isOnScreen {
+            return true, gridEngine.MapToScreenCoordinates(pos)
+        }
+        return false, geometry.Point{}
+    })
+
     gridEngine.Init()
+
     if err := ebiten.RunGameWithOptions(gridEngine, &ebiten.RunGameOptions{
         GraphicsLibrary: ebiten.GraphicsLibraryOpenGL,
     }); err != nil && !errors.Is(err, ebiten.Termination) {
@@ -515,18 +579,24 @@ func (g *GridEngine) OnMouseClicked(x int, y int) bool {
     oneFourth := screenSize.X / 4
 
     if x == g.offenseBuffsButton.X && y == g.offenseBuffsButton.Y {
-        offBuffs := g.playerParty.GetOffenseBuffs()
-        if len(offBuffs) > 0 {
-            g.ShowFixedFormatText(offBuffs)
-        }
+        /*
+           offBuffs := g.playerParty.GetOffenseBuffs()
+           if len(offBuffs) > 0 {
+               g.ShowFixedFormatText(offBuffs)
+           }
+
+        */
         return true
     }
 
     if x == g.defenseBuffsButton.X && y == g.defenseBuffsButton.Y {
-        defBuffs := g.playerParty.GetDefenseBuffs()
-        if len(defBuffs) > 0 {
-            g.ShowFixedFormatText(defBuffs)
-        }
+
+        /*defBuffs := g.playerParty.GetDefenseBuffs()
+
+          if len(defBuffs) > 0 {
+              g.ShowFixedFormatText(defBuffs)
+          }
+        */
         return true
     }
 
@@ -545,27 +615,27 @@ func (g *GridEngine) OnMouseClicked(x int, y int) bool {
         // each 1/4 of the screen is a different UI
         if x < oneFourth {
             if x == 0 {
-                g.openCharDetails(g.playerParty.GetMember(0))
+                g.openCharMainStats(0)
             } else {
-                g.OpenEquipmentDetails(g.playerParty.GetMember(0))
+                g.OpenEquipmentDetails(0)
             }
         } else if x < oneFourth*2 {
             if x == oneFourth {
-                g.openCharDetails(g.playerParty.GetMember(1))
+                g.openCharMainStats(1)
             } else {
-                g.OpenEquipmentDetails(g.playerParty.GetMember(1))
+                g.OpenEquipmentDetails(1)
             }
         } else if x < oneFourth*3 {
             if x == oneFourth*2 {
-                g.openCharDetails(g.playerParty.GetMember(2))
+                g.openCharMainStats(2)
             } else {
-                g.OpenEquipmentDetails(g.playerParty.GetMember(2))
+                g.OpenEquipmentDetails(2)
             }
         } else {
             if x == oneFourth*3 {
-                g.openCharDetails(g.playerParty.GetMember(3))
+                g.openCharMainStats(3)
             } else {
-                g.OpenEquipmentDetails(g.playerParty.GetMember(3))
+                g.OpenEquipmentDetails(3)
             }
         }
         return true
@@ -681,8 +751,16 @@ func (g *GridEngine) TryPickpocketItem(item game.Item, victim *game.Actor) {
         g.flags.IncrementFlag("pickpocket_successes")
     } else {
         g.Print(fmt.Sprintf("You were caught stealing \"%s\"", item.Name()))
-        // TODO: consequences, encounter depending on the attitude of the victim
-        // and the reputation of the party
+        g.onCriminalOffense(victim)
+    }
+}
+
+func (g *GridEngine) onCriminalOffense(victim *game.Actor) {
+    offenseEvent := g.rules.GetCriminalOffenseEvent(g.currentMap.GetName())
+    if offenseEvent != "" {
+        g.TriggerEvent(offenseEvent)
+    } else {
+        g.EnemyStartsCombat(victim)
     }
 }
 
@@ -694,8 +772,7 @@ func (g *GridEngine) TryPlantItem(item game.Item, victim *game.Actor) {
         g.flags.IncrementFlag("plant_successes")
     } else {
         g.Print(fmt.Sprintf("You were caught planting \"%s\"", item.Name()))
-        // TODO: consequences, encounter depending on the attitude of the victim
-        // and the reputation of the party
+        g.onCriminalOffense(victim)
     }
 }
 
@@ -769,6 +846,7 @@ func (g *GridEngine) dropActorInventory(actor *game.Actor) {
         return
     }
     chest := game.NewFixedChest(droppedItems)
+
     dest := actor.Pos()
 
     freeNeighbor := g.currentMap.GetFreeCellsForDistribution(actor.Pos(), 1, func(p geometry.Point) bool {
@@ -857,7 +935,7 @@ func (g *GridEngine) DeliverMeleeDamage(attacker *game.Actor, victim *game.Actor
     damage := g.rules.GetMeleeDamage(attacker, victim)
 
     if damage > 0 {
-        victim.Damage(damage)
+        victim.Damage(g, damage)
         g.Print(fmt.Sprintf("%d dmg. to '%s'", damage, victim.Name()))
     } else {
         g.Print(fmt.Sprintf("No dmg. to '%s'", victim.Name()))
@@ -871,7 +949,7 @@ func (g *GridEngine) DeliverRangedDamage(attacker *game.Actor, victim *game.Acto
     damage := g.rules.GetRangedDamage(attacker, victim)
 
     if damage > 0 {
-        victim.Damage(damage)
+        victim.Damage(g, damage)
         g.Print(fmt.Sprintf("%d dmg. to '%s'", damage, victim.Name()))
     } else {
         g.Print(fmt.Sprintf("No dmg. to '%s'", victim.Name()))
@@ -885,7 +963,7 @@ func (g *GridEngine) DeliverSpellDamage(attacker *game.Actor, victim *game.Actor
     victimDefense := victim.GetMagicDefense()
     damage := baseSpellDamage - victimDefense
     if damage > 0 {
-        victim.Damage(damage)
+        victim.Damage(g, damage)
         g.Print(fmt.Sprintf("%d dmg. to '%s'", damage, victim.Name()))
     } else {
         g.Print(fmt.Sprintf("No dmg. to '%s'", victim.Name()))
@@ -934,9 +1012,15 @@ func (g *GridEngine) AddSkill(avatar *game.Actor, skill string) {
     g.Print(fmt.Sprintf("'%s' learned '%s'", avatar.Name(), skill))
 }
 
-func (g *GridEngine) AddBuff(actor *game.Actor, name string, buffType game.BuffType, strength int) {
-    actor.AddBuff(name, buffType, strength)
-    g.Print(fmt.Sprintf("%s received %s", actor.Name(), name))
+func (g *GridEngine) AddStatusEffect(actor *game.Actor, effect game.StatusEffect, stacks int) {
+    for i := 0; i < stacks; i++ {
+        actor.AddStatusEffect(g, effect)
+    }
+    if stacks > 1 {
+        g.Print(fmt.Sprintf("%s received %s status x%d", actor.Name(), effect.Name(), stacks))
+    } else {
+        g.Print(fmt.Sprintf("%s received %s status", actor.Name(), effect.Name()))
+    }
 }
 
 func (g *GridEngine) AskUserForString(prompt string, maxLength int, onConfirm func(text string)) {
@@ -981,13 +1065,13 @@ func (g *GridEngine) goBackToBed() {
         {
             Text: "Stay awake",
             Action: func() {
-                g.closeConversation()
+                g.CloseConversation()
             },
         },
         {
             Text: "Go back to bed",
             Action: func() {
-                g.closeConversation()
+                g.CloseConversation()
                 g.setGameOver()
             },
         },
@@ -1021,9 +1105,17 @@ func (g *GridEngine) getTombstoneFromEntity(entity *ldtk_go.Entity) game.Object 
     return tombstone
 }
 
-func (g *GridEngine) OpenEquipmentDetails(actor *game.Actor) {
+func (g *GridEngine) OpenEquipmentDetails(charIndex int) {
+    actor := g.playerParty.GetMember(charIndex)
     g.CloseAllModals()
-    g.PushModal(ui.NewEquipmentWindow(g, actor, g.gridRenderer))
+    equipmentWindow := ui.NewEquipmentWindow(g, actor, g.gridRenderer)
+    equipmentWindow.SetActionRight(func() {
+        g.openCharMainStats(charIndex)
+    })
+    equipmentWindow.SetActionLeft(func() {
+        g.openCharStatusEffects(charIndex)
+    })
+    g.PushModal(equipmentWindow)
 }
 func (g *GridEngine) giveAllSpells() {
     allSpellScrolls := game.GetAllSpellScrolls()
@@ -1053,10 +1145,10 @@ func (g *GridEngine) giveAllArmorsAndWeapons() {
 }
 
 func (g *GridEngine) IsInConversation() bool {
-    return g.conversationModal != nil
+    return g.conversationModal != nil && !g.conversationModal.ShouldClose()
 }
 
-func (g *GridEngine) closeConversation() {
+func (g *GridEngine) CloseConversation() {
     g.conversationModal = nil
 }
 
@@ -1147,7 +1239,7 @@ func (g *GridEngine) Kill(opponent *game.Actor) {
     if !opponent.IsAlive() {
         return
     }
-    opponent.Damage(opponent.GetHealth())
+    opponent.Damage(g, opponent.GetHealth())
     g.actorDied(opponent)
 }
 
@@ -1162,6 +1254,66 @@ func (g *GridEngine) checkPlantHooks(item game.Item, owner *game.Actor) {
             }
         }
     }
+}
+
+func (g *GridEngine) openSkillEditor() {
+    var menuItems []util.MenuItem
+    for _, skill := range game.GetAllSkillNames() {
+        skillName := skill
+        currentValue := g.GetAvatar().GetSkills().GetSkillLevel(skillName)
+        menuItems = append(menuItems, util.MenuItem{
+            Text: fmt.Sprintf("%s (%d)", skillName, currentValue),
+            ActionLeft: func() string {
+                skills := g.GetAvatar().GetSkills()
+                val := skills.GetSkillLevel(skillName)
+                if val == 0 {
+                    return fmt.Sprintf("%s (0)", skillName)
+                }
+                skills.DecrementSkill(skillName)
+                return fmt.Sprintf("%s (%d)", skillName, skills.GetSkillLevel(skillName))
+            },
+            ActionRight: func() string {
+                skills := g.GetAvatar().GetSkills()
+                val := skills.GetSkillLevel(skillName)
+                if val == 4 {
+                    return fmt.Sprintf("%s (4)", skillName)
+                }
+                skills.IncrementSkill(skillName)
+                return fmt.Sprintf("%s (%d)", skillName, skills.GetSkillLevel(skillName))
+            },
+        })
+    }
+    g.OpenMenu(menuItems)
+}
+
+func (g *GridEngine) openAttributeEditor() {
+    var menuItems []util.MenuItem
+    for _, a := range game.GetAllAttributeNames() {
+        attributeName := a
+        currentValue := g.GetAvatar().GetAttributes().GetAttributeBaseValue(attributeName)
+        menuItems = append(menuItems, util.MenuItem{
+            Text: fmt.Sprintf("%s (%d)", attributeName, currentValue),
+            ActionLeft: func() string {
+                attributes := g.GetAvatar().GetAttributes()
+                val := attributes.GetAttribute(attributeName)
+                if val == 0 {
+                    return fmt.Sprintf("%s (0)", attributeName)
+                }
+                attributes.Decrement(attributeName)
+                return fmt.Sprintf("%s (%d)", attributeName, attributes.GetAttribute(attributeName))
+            },
+            ActionRight: func() string {
+                attributes := g.GetAvatar().GetAttributes()
+                val := attributes.GetAttribute(attributeName)
+                if val == 10 {
+                    return fmt.Sprintf("%s (10)", attributeName)
+                }
+                attributes.Increment(attributeName)
+                return fmt.Sprintf("%s (%d)", attributeName, attributes.GetAttribute(attributeName))
+            },
+        })
+    }
+    g.OpenMenu(menuItems)
 }
 func fromEnum(asString string) string {
     asString = strings.ToLower(asString)

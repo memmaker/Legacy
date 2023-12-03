@@ -89,14 +89,14 @@ func NewItemTooltip(gridRenderer *renderer.DualGridRenderer, item game.Item, mou
 func newTooltip(gridRenderer *renderer.DualGridRenderer, mousePos geometry.Point, height int, width int) *BasicTooltip {
     var topLeftX, topLeftY int
     // decide if above or below the mouse cursor
+    screenSize := gridRenderer.GetSmallGridScreenSize()
     if mousePos.Y < height {
         // above
-        topLeftY = mousePos.Y + 1
+        topLeftY = min(mousePos.Y+1, screenSize.Y-height)
     } else {
         // below
-        topLeftY = mousePos.Y - height
+        topLeftY = max(mousePos.Y-height, 0)
     }
-    screenSize := gridRenderer.GetSmallGridScreenSize()
     // decide if left or right of the mouse cursor
     if mousePos.X < width {
         // left

@@ -54,6 +54,9 @@ func (g *DualGridRenderer) GetScaledBigGridSize() int {
 func (g *DualGridRenderer) GetScaledSmallGridSize() int {
     return int(float64(g.smallGridSize) * g.scale)
 }
+func (g *DualGridRenderer) GetSmallGridSize() int {
+    return int(float64(g.smallGridSize))
+}
 func (g *DualGridRenderer) ScreenToSmallCell(x, y int) (int, int) {
     return x / g.GetScaledSmallGridSize(), y / g.GetScaledSmallGridSize()
 }
@@ -248,6 +251,10 @@ func (g *DualGridRenderer) AutolayoutArrayToIconPages(height int, inputText []st
 
 func (g *DualGridRenderer) SetFontIndexForBigGrid(index map[rune]uint16) {
     g.bigGridFontMap = index
+}
+
+func (g *DualGridRenderer) GetBigGridSize() int {
+    return g.bigGridSize
 }
 
 func ExtractSubImageFromAtlas(textureIndex int32, tileSizeX int, tileSizeY int, textureAtlas *ebiten.Image) *ebiten.Image {

@@ -92,13 +92,13 @@ func (m ArmorModifier) GetEncumbrance() int {
     case ArmorMaterialCloth:
         return 0
     case ArmorMaterialLeather:
-        return 1
+        return 0
     case ArmorMaterialChain:
-        return 2
-    case ArmorMaterialPlate:
-        return 3
-    case ArmorMaterialMagical:
         return 1
+    case ArmorMaterialPlate:
+        return 2
+    case ArmorMaterialMagical:
+        return 0
     }
     return 0
 }
@@ -532,11 +532,11 @@ func (a *Armor) GetEncumbrance() int {
     materialEncumbrance := a.material.GetEncumbrance()
     switch a.slot {
     case ArmorSlotHelmet:
-        return 1 + materialEncumbrance
+        return materialEncumbrance
     case ArmorSlotBreastPlate:
-        return 3 + materialEncumbrance
-    case ArmorSlotShoes:
         return 1 + materialEncumbrance
+    case ArmorSlotShoes:
+        return materialEncumbrance
     default:
         return 0
     }

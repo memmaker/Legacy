@@ -1,0 +1,15 @@
+%rec: Details
+
+Name: green slime
+Health: 10
+Description: A green slime. It looks like it's made of jelly.
+Strength: 1
+Perception: 3
+Endurance: 4
+Charisma: 1
+Intelligence: 1
+Agility: 2
+
+%rec: Skills
+
+ActiveSkill: Jelly Jab

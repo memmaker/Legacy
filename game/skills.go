@@ -76,8 +76,8 @@ type DifficultyLevel int
 func (l DifficultyLevel) ReducedBy(level int) DifficultyLevel {
     currentLevel := int(l)
     newLevel := currentLevel - level
-    if newLevel < 1 {
-        newLevel = 1
+    if newLevel < -1 {
+        newLevel = -1
     }
     return DifficultyLevel(newLevel)
 }
@@ -158,10 +158,12 @@ const (
     SkillCategoryPerception SkillCategory = "Perception"
 )
 const (
-    PhysicalSkillBackstab SkillName = "Backstab"
-    PhysicalSkillTackle   SkillName = "Tackle"
-    PhysicalSkillTools    SkillName = "Tool usage"
-    PhysicalSkillRepair   SkillName = "Repair"
+    PhysicalSkillMeleeCombat  SkillName = "Melee Combat"
+    PhysicalSkillRangedCombat SkillName = "Ranged Combat"
+    PhysicalSkillBackstab     SkillName = "Backstab"
+    PhysicalSkillTackle       SkillName = "Tackle"
+    PhysicalSkillTools        SkillName = "Tool usage"
+    PhysicalSkillRepair       SkillName = "Repair"
 
     ThievingSkillLockpicking  SkillName = "Lockpicking"
     ThievingSkillPickpocket   SkillName = "Pickpocket"
@@ -190,6 +192,8 @@ const (
     PerceptionSkillSpotHidden  SkillName = "Spot Hidden"
     PerceptionSkillDangerSense SkillName = "Danger Sense"
     PerceptionSkillAssess      SkillName = "Assess"
+
+    CombatSkillJellyJab SkillName = "Jelly Jab"
 )
 
 type SkillSet struct {
@@ -247,7 +251,7 @@ func getSkillNames(category SkillCategory) []SkillName {
     }
     return []SkillName{}
 }
-func getAllSkillNames() []SkillName {
+func GetAllSkillNames() []SkillName {
     return []SkillName{
         ThievingSkillLockpicking,  // lvl 0-10
         ThievingSkillPickpocket,   // lvl 0-10
@@ -278,7 +282,7 @@ func NewSkillSet() SkillSet {
 }
 
 func (s *SkillSet) AddMasteryInAllSkills() {
-    for _, skill := range getAllSkillNames() {
+    for _, skill := range GetAllSkillNames() {
         s.skills[skill] = SkillLevelMaster
     }
 }
@@ -325,10 +329,13 @@ func (s *SkillSet) IncrementSkill(skill SkillName) {
 
 func (s *SkillSet) AsStringTable() []string {
     var result []util.TableRow
-    names := getAllSkillNames()
+    names := GetAllSkillNames()
     for _, skillName := range names {
-        value := s.skills[skillName]
-        result = append(result, util.TableRow{Label: string(skillName), Columns: []string{string(value)}})
+        if s.GetSkillLevel(skillName) == 0 {
+            continue
+        }
+        value := s.GetLevel(skillName).ToString()
+        result = append(result, util.TableRow{Label: string(skillName), Columns: []string{value}})
     }
 
     if len(result) == 0 {
@@ -352,4 +359,26 @@ func (s *SkillSet) HasSkillAt(skill string, level int) bool {
 
 func (s *SkillSet) GetLevel(skill SkillName) SkillLevel {
     return s.skills[skill]
+}
+
+func (s *SkillSet) DecrementSkill(name SkillName) {
+    currentLevel := s.skills[name]
+    if currentLevel <= 0 {
+        return
+    }
+    newLevel := currentLevel - 1
+    if newLevel <= 0 {
+        delete(s.skills, name)
+        return
+    }
+    s.skills[name] = SkillLevel(newLevel)
+}
+
+func (s *SkillSet) SetSkill(name SkillName, value int) {
+    if value <= 0 {
+        delete(s.skills, name)
+        return
+    }
+    value = min(4, max(1, value))
+    s.skills[name] = SkillLevel(value)
 }

@@ -216,6 +216,13 @@ func toNiceName(name string) string {
     caser := cases.Title(language.English)
     return caser.String(strings.ReplaceAll(name, "_", " "))
 }
+func (g *GridEngine) entityGridPos(entity *ldtk_go.Entity) geometry.Point {
+    gridSize := g.gridRenderer.GetBigGridSize()
+    return geometry.Point{
+        X: int(entity.Position[0]) / gridSize,
+        Y: int(entity.Position[1]) / gridSize,
+    }
+}
 func (g *GridEngine) loadMap(mapName string) *gridmap.GridMap[*game.Actor, game.Item, game.Object] {
     worldTileset := g.ldtkMapProject.TilesetByIdentifier("World")
 
@@ -234,9 +241,7 @@ func (g *GridEngine) loadMap(mapName string) *gridmap.GridMap[*game.Actor, game.
     loadedMap.SetDisplayName(mapDisplayName)
 
     for _, metaEntity := range metaLayer.Entities {
-        posX, posY := metaLayer.ToGridPosition(metaEntity.Position[0], metaEntity.Position[1])
-        gridPos := geometry.Point{X: posX, Y: posY}
-
+        gridPos := g.entityGridPos(metaEntity)
         g.handleMetaEntity(loadedMap, metaEntity, gridPos)
     }
 
@@ -434,7 +439,25 @@ func (g *GridEngine) handleMetaEntity(loadedMap *gridmap.GridMap[*game.Actor, ga
         g.handleTransition(loadedMap, entity, gridPos)
     case "Secret_Door":
         loadedMap.SetSecretDoorAt(gridPos)
+    case "Waypoint":
+        nameProp := entity.PropertyByIdentifier("Name")
+        if !nameProp.IsNull() {
+            pathName := nameProp.AsString()
+            loadedMap.AddNamedPath(pathName, g.getPathFromRootEntity(entity))
+        }
     }
+}
+
+func (g *GridEngine) getPathFromRootEntity(entity *ldtk_go.Entity) []geometry.Point {
+    var result []geometry.Point
+    nextNode := entity
+    for nextNode != nil {
+        nextPos := g.entityGridPos(nextNode)
+        result = append(result, nextPos)
+        nextProp := nextNode.PropertyByIdentifier("Next")
+        nextNode = g.resolveEntityReference(nextProp)
+    }
+    return result
 }
 
 func (g *GridEngine) handleTransition(loadedMap *gridmap.GridMap[*game.Actor, game.Item, game.Object], metaEntity *ldtk_go.Entity, gridPos geometry.Point) {
@@ -451,7 +474,17 @@ func (g *GridEngine) entityToTransition(metaEntity *ldtk_go.Entity) gridmap.Tran
     targetProp := metaEntity.PropertyByIdentifier("Target")
     return g.resolveTransitionTarget(targetProp)
 }
-
+func (g *GridEngine) resolveEntityReference(referenceProp *ldtk_go.Property) *ldtk_go.Entity {
+    if referenceProp.IsNull() {
+        return nil
+    }
+    ref := referenceProp.Value.(map[string]interface{})
+    //levelId := ref["levelIid"].(string)
+    entityId := ref["entityIid"].(string)
+    //targetLevel := g.ldtkMapProject.LevelByIID(levelId)
+    refEntity := g.ldtkMapProject.EntityByIID(entityId)
+    return refEntity
+}
 func (g *GridEngine) resolveTransitionTarget(targetProp *ldtk_go.Property) gridmap.Transition {
     var mapName, destLoc string
     if targetProp.IsNull() {
@@ -543,6 +576,8 @@ func (g *GridEngine) getObjectFromEntity(entity *ldtk_go.Entity, mapDisplayName 
         return g.getShrineFromEntity(entity)
     case "Chest":
         return g.getChestFromEntity(entity, mapDisplayName)
+    case "Barbecue":
+        return g.getBarbecueFromEntity(entity)
     case "Fireplace":
         return g.getFireplaceFromEntity(entity)
     case "Mirror":
@@ -579,6 +614,10 @@ func (g *GridEngine) getLockedDoorFromEntity(entity *ldtk_go.Entity) game.Object
     if !entity.PropertyByIdentifier("OnBreakEvent").IsNull() {
         onBreakEvent = entity.PropertyByIdentifier("OnBreakEvent").AsString()
     }
+    var onKnockEvent string
+    if !entity.PropertyByIdentifier("OnKnockEvent").IsNull() {
+        onKnockEvent = entity.PropertyByIdentifier("OnKnockEvent").AsString()
+    }
     var onListenText []string
     if !entity.PropertyByIdentifier("OnListenText").IsNull() {
         onListenText = strings.Split(entity.PropertyByIdentifier("OnListenText").AsString(), "\n")
@@ -586,6 +625,7 @@ func (g *GridEngine) getLockedDoorFromEntity(entity *ldtk_go.Entity) game.Object
     door := game.NewLockedDoor(key, game.DifficultyLevelFromString(strings.ReplaceAll(lockStrength, "_", " ")))
     door.SetFrameStrength(game.DifficultyLevelFromString(strings.ReplaceAll(frameStrength, "_", " ")))
     door.SetBreakEvent(onBreakEvent)
+    door.SetKnockEvent(onKnockEvent)
     door.SetListenText(onListenText)
     return door
 }
@@ -705,8 +745,15 @@ func (g *GridEngine) getChestFromEntity(entity *ldtk_go.Entity, mapDisplayName s
         chest = game.NewChest(lootLevel, lootList)
     }
     chest.SetWalkable(entity.PropertyByIdentifier("IsWalkable").AsBool())
+
     chest.SetLockedWithKey(needsKey)
     chest.SetDiscoveryMessage(isHidden, discoveryMessage)
+
+    internalNameProp := entity.PropertyByIdentifier("InternalName")
+    if !internalNameProp.IsNull() {
+        chest.SetInternalName(internalNameProp.AsString())
+    }
+
     lockStrengthProp := entity.PropertyByIdentifier("LockStrength")
     if !lockStrengthProp.IsNull() {
         chest.SetLockStrength(game.DifficultyLevelFromString(lockStrengthProp.AsString()))
@@ -717,7 +764,12 @@ func (g *GridEngine) getChestFromEntity(entity *ldtk_go.Entity, mapDisplayName s
     return chest
 }
 
-func (g *GridEngine) getFireplaceFromEntity(entity *ldtk_go.Entity) game.Object {
+func (g *GridEngine) getBarbecueFromEntity(entity *ldtk_go.Entity) game.Object {
     foodCount := entity.PropertyByIdentifier("FoodCount").AsInt()
-    return game.NewFireplace(foodCount)
+    return game.NewBarbecue(foodCount)
+}
+
+func (g *GridEngine) getFireplaceFromEntity(entity *ldtk_go.Entity) game.Object {
+    slideDir := entity.PropertyByIdentifier("SlideDirection").AsString()
+    return game.NewFireplace(game.Direction(slideDir))
 }

@@ -38,7 +38,7 @@ func (g *GridEngine) openPartyMenu() {
         },
         {
             Text:   "Ranged",
-            Action: g.combatManager.PlayerStartsRangedAttack,
+            Action: g.combatManager.PlayerControlledRangedAttack,
         },
         {
             Text:   "Magic",
@@ -85,13 +85,36 @@ func (g *GridEngine) openPartyMenu() {
     g.OpenMenu(partyOptions)
 }
 
-func (g *GridEngine) openCharDetails(actor *game.Actor) {
+func (g *GridEngine) openCharMainStats(charIndex int) {
+    actor := g.playerParty.GetMember(charIndex)
     if actor == nil {
         return
     }
     g.CloseAllModals()
-    window := g.ShowFixedFormatText(actor.GetDetails(g))
+    window := g.ShowFixedFormatText(actor.GetMainStats(g))
     window.SetTitle(actor.Name())
+    window.SetRightAction(func() {
+        g.openCharDerivedStats(charIndex)
+    })
+    window.SetLeftAction(func() {
+        g.OpenEquipmentDetails(charIndex)
+    })
+}
+
+func (g *GridEngine) openCharDerivedStats(charIndex int) {
+    actor := g.playerParty.GetMember(charIndex)
+    if actor == nil {
+        return
+    }
+    g.CloseAllModals()
+    window := g.ShowFixedFormatText(actor.GetDerivedStats(g))
+    window.SetTitle(actor.Name())
+    window.SetRightAction(func() {
+        g.openCharSkills(charIndex)
+    })
+    window.SetLeftAction(func() {
+        g.openCharMainStats(charIndex)
+    })
 }
 func (g *GridEngine) openCharSkills(partyIndex int) {
     actor := g.playerParty.GetMember(partyIndex)
@@ -99,14 +122,30 @@ func (g *GridEngine) openCharSkills(partyIndex int) {
         skills := actor.GetSkills()
         window := g.ShowFixedFormatText(skills.AsStringTable())
         window.SetTitle(actor.Name())
+        window.SetRightAction(func() {
+            g.openCharStatusEffects(partyIndex)
+        })
+        window.SetLeftAction(func() {
+            g.openCharMainStats(partyIndex)
+        })
     }
 }
 
-func (g *GridEngine) openCharBuffs(partyIndex int) {
+func (g *GridEngine) openCharStatusEffects(partyIndex int) {
     actor := g.playerParty.GetMember(partyIndex)
     if actor != nil {
-        window := g.ShowFixedFormatText(actor.BuffsAsStringTable())
+        table := actor.GetStatusEffectsTable()
+        if len(table) == 0 {
+            table = []string{"No active status effects."}
+        }
+        window := g.ShowFixedFormatText(table)
         window.SetTitle(actor.Name())
+        window.SetLeftAction(func() {
+            g.openCharSkills(partyIndex)
+        })
+        window.SetRightAction(func() {
+            g.OpenEquipmentDetails(partyIndex)
+        })
     }
 }
 func (g *GridEngine) openExtendedInventory() {
@@ -450,7 +489,7 @@ func (g *GridEngine) TryRestParty() {
         g.Print("Your party is not tired.")
         return
     }
-    if g.playerParty.TryRest() {
+    if g.playerParty.TryRest(g) {
         g.AdvanceWorldTimeWithMessage(0, 8, 0)
         time := g.GetWorldTime()
         g.ShowFixedFormatText([]string{
@@ -476,7 +515,7 @@ func (g *GridEngine) searchForHiddenObjects() {
     neighbors = append(neighbors, source)
     for _, n := range neighbors {
         neighbor := n
-        g.HitAnimation(neighbor, renderer.AtlasEntities, 195, color.White, func() {
+        g.TileAnimation(neighbor, renderer.AtlasEntities, 195, color.White, func() {
             g.revealHiddenObjectsAt(neighbor)
         })
     }
@@ -493,10 +532,21 @@ func (g *GridEngine) revealHiddenObjectsAt(location geometry.Point) {
     } else {
         if g.currentMap.IsObjectAt(location) {
             objectAt := g.currentMap.ObjectAt(location)
-            if objectAt != nil && objectAt.IsHidden() {
-                message := objectAt.Discover()
-                foundSomething = true
-                g.flags.IncrementFlag("found_hidden_things")
+            if objectAt != nil {
+                var message []string
+                if objectAt.IsHidden() {
+                    message = objectAt.Discover()
+                    foundSomething = true
+                    g.flags.IncrementFlag("found_hidden_things")
+                } else {
+                    foundSomethingAtObject, objectSearchedMessage := objectAt.Searched()
+                    if foundSomethingAtObject {
+                        message = objectSearchedMessage
+                        foundSomething = true
+                        g.flags.IncrementFlag("found_hidden_things")
+                    }
+                }
+
                 if len(message) > 0 {
                     g.ShowText(message)
                 }
