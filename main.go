@@ -1,6 +1,7 @@
 package main
 
 import (
+    "Legacy/dungen"
     "Legacy/ega"
     "Legacy/game"
     "Legacy/geometry"
@@ -11,6 +12,7 @@ import (
     "Legacy/renderer"
     "Legacy/ui"
     "Legacy/util"
+    "bufio"
     "errors"
     "fmt"
     "github.com/hajimehoshi/ebiten/v2"
@@ -113,8 +115,86 @@ type GridEngine struct {
     levelHooks              game.LevelHooks
     isSneaking              bool
     debugInfoMode           bool
+    overlayPositions        map[geometry.Point]color.Color
 }
 
+func testDungeonGenerator() {
+    gen := dungen.NewAccretionGenerator()
+
+    // get input from keyboard
+    scanner := bufio.NewScanner(os.Stdin)
+    text := ""
+    for text != "q" {
+        dunMap := gen.Generate(32, 16)
+        dunMap.Print()
+        scanner.Scan()
+        text = scanner.Text()
+    }
+}
+func main() {
+    /*
+       testDungeonGenerator()
+       return
+
+    */
+
+    // Create a CPU profile file
+    cpuProfileFile, err := os.Create("cpu.prof")
+    if err != nil {
+        panic(err)
+    }
+    defer cpuProfileFile.Close()
+
+    // start CPU profiling
+    if err := pprof.StartCPUProfile(cpuProfileFile); err != nil {
+        panic(err)
+    }
+    defer pprof.StopCPUProfile()
+
+    gameTitle := "Legacy"
+    internalScreenWidth, internalScreenHeight := 320, 200 // fixed render Size for this project
+    tileScaleFactor := 2.0
+    deviceScale := ebiten.DeviceScaleFactor()
+    totalScale := tileScaleFactor * deviceScale
+    //scaleToFullscreen := false
+
+    scaledScreenWidth := int(math.Floor(float64(internalScreenWidth) * totalScale))
+    scaledScreenHeight := int(math.Floor(float64(internalScreenHeight) * totalScale))
+
+    gridEngine := &GridEngine{
+        tileScale:            tileScaleFactor,
+        internalWidth:        internalScreenWidth,
+        internalHeight:       internalScreenHeight,
+        worldTiles:           ebiten.NewImageFromImage(mustLoadImage("assets/world.png")),
+        entityTiles:          ebiten.NewImageFromImage(mustLoadImage("assets/entities.png")),
+        grayScaleEntityTiles: ebiten.NewImageFromImage(mustLoadImage("assets/entities_gs.png")),
+        uiTiles:              ebiten.NewImageFromImage(mustLoadImage("assets/charset.png")),
+        uiOverlay:            make(map[int]int32),
+        mapsInMemory:         make(map[string]*gridmap.GridMap[*game.Actor, game.Item, game.Object]),
+        animationRoutine:     gocoro.NewCoroutine(),
+        movementRoutine:      gocoro.NewCoroutine(),
+        overlayPositions:     make(map[geometry.Point]color.Color),
+    }
+    ebiten.SetWindowTitle(gameTitle)
+    ebiten.SetWindowSize(scaledScreenWidth, scaledScreenHeight)
+    ebiten.SetScreenClearedEveryFrame(true)
+
+    gridEngine.animator = renderer.NewAnimator(func(pos geometry.Point) (bool, geometry.Point) {
+        isOnScreen := gridEngine.IsMapPosOnScreen(pos)
+        if isOnScreen {
+            return true, gridEngine.MapToScreenCoordinates(pos)
+        }
+        return false, geometry.Point{}
+    })
+
+    gridEngine.Init()
+
+    if err := ebiten.RunGameWithOptions(gridEngine, &ebiten.RunGameOptions{
+        GraphicsLibrary: ebiten.GraphicsLibraryOpenGL,
+    }); err != nil && !errors.Is(err, ebiten.Termination) {
+        log.Fatal(err)
+    }
+}
 func (g *GridEngine) MeleeAttackWithFixedDamage(attacker *game.Actor, target *game.Actor, damage int) {
     g.combatManager.MeleeAttack(attacker, target)
 }
@@ -242,12 +322,12 @@ func (g *GridEngine) printTimePassedMessage(days int, hours int, minutes int) {
     }
 }
 
-func (g *GridEngine) PlayerStartsOffensiveSpell(caster *game.Actor, spell *game.Action) {
-    if !caster.HasMana(spell.ManaCost()) {
+func (g *GridEngine) PlayerStartsOffensiveSpell(caster *game.Actor, spell *game.Spell) {
+    if !spell.CanPayCost(g, caster) {
         g.Print("Not enough mana!")
         return
     }
-    g.combatManager.PlayerStartsOffensiveSpell(caster, spell)
+    g.combatManager.PlayerUsesActiveSkill(caster, spell)
 }
 
 func (g *GridEngine) OnCommand(command ui.CommandType) bool {
@@ -296,7 +376,7 @@ func (g *GridEngine) GetActorByInternalName(internalName string) *game.Actor {
     return nil
 }
 
-func (g *GridEngine) RaiseAsUndeadForParty(pos geometry.Point) {
+func (g *GridEngine) RaiseAsUndeadAt(caster *game.Actor, pos geometry.Point) {
     undeadActor, exists := g.currentMap.TryGetDownedActorAt(pos)
     if !exists {
         return
@@ -306,7 +386,11 @@ func (g *GridEngine) RaiseAsUndeadForParty(pos geometry.Point) {
     g.AddStatusEffect(undeadActor, game.StatusUndead(), 1)
     g.currentMap.SetActorToNormal(undeadActor)
     //g.currentMap.AddActor(undeadActor, pos)
-    g.playerParty.AddMember(undeadActor)
+    if g.IsPlayerControlled(caster) {
+        g.playerParty.AddMember(undeadActor)
+    } else {
+        undeadActor.SetCombatFaction(caster.GetCombatFaction())
+    }
 }
 
 func (g *GridEngine) GetRegion(regionName string) geometry.Rect {
@@ -449,64 +533,6 @@ func (g *GridEngine) EnemyStartsCombat(opponent *game.Actor) {
         return
     }
     g.combatManager.EnemyStartsCombat(opponent, g.GetAvatar())
-}
-
-func main() {
-    // Create a CPU profile file
-    cpuProfileFile, err := os.Create("cpu.prof")
-    if err != nil {
-        panic(err)
-    }
-    defer cpuProfileFile.Close()
-
-    // start CPU profiling
-    if err := pprof.StartCPUProfile(cpuProfileFile); err != nil {
-        panic(err)
-    }
-    defer pprof.StopCPUProfile()
-
-    gameTitle := "Legacy"
-    internalScreenWidth, internalScreenHeight := 320, 200 // fixed render Size for this project
-    tileScaleFactor := 2.0
-    deviceScale := ebiten.DeviceScaleFactor()
-    totalScale := tileScaleFactor * deviceScale
-    //scaleToFullscreen := false
-
-    scaledScreenWidth := int(math.Floor(float64(internalScreenWidth) * totalScale))
-    scaledScreenHeight := int(math.Floor(float64(internalScreenHeight) * totalScale))
-
-    gridEngine := &GridEngine{
-        tileScale:            tileScaleFactor,
-        internalWidth:        internalScreenWidth,
-        internalHeight:       internalScreenHeight,
-        worldTiles:           ebiten.NewImageFromImage(mustLoadImage("assets/world.png")),
-        entityTiles:          ebiten.NewImageFromImage(mustLoadImage("assets/entities.png")),
-        grayScaleEntityTiles: ebiten.NewImageFromImage(mustLoadImage("assets/entities_gs.png")),
-        uiTiles:              ebiten.NewImageFromImage(mustLoadImage("assets/charset.png")),
-        uiOverlay:            make(map[int]int32),
-        mapsInMemory:         make(map[string]*gridmap.GridMap[*game.Actor, game.Item, game.Object]),
-        animationRoutine:     gocoro.NewCoroutine(),
-        movementRoutine:      gocoro.NewCoroutine(),
-    }
-    ebiten.SetWindowTitle(gameTitle)
-    ebiten.SetWindowSize(scaledScreenWidth, scaledScreenHeight)
-    ebiten.SetScreenClearedEveryFrame(true)
-
-    gridEngine.animator = renderer.NewAnimator(func(pos geometry.Point) (bool, geometry.Point) {
-        isOnScreen := gridEngine.IsMapPosOnScreen(pos)
-        if isOnScreen {
-            return true, gridEngine.MapToScreenCoordinates(pos)
-        }
-        return false, geometry.Point{}
-    })
-
-    gridEngine.Init()
-
-    if err := ebiten.RunGameWithOptions(gridEngine, &ebiten.RunGameOptions{
-        GraphicsLibrary: ebiten.GraphicsLibraryOpenGL,
-    }); err != nil && !errors.Is(err, ebiten.Termination) {
-        log.Fatal(err)
-    }
 }
 
 func (g *GridEngine) Reset() {
@@ -1315,6 +1341,7 @@ func (g *GridEngine) openAttributeEditor() {
     }
     g.OpenMenu(menuItems)
 }
+
 func fromEnum(asString string) string {
     asString = strings.ToLower(asString)
     return strings.ReplaceAll(asString, "_", " ")

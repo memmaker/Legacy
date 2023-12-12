@@ -11,6 +11,8 @@ import (
     "fmt"
     "github.com/hajimehoshi/ebiten/v2"
     "github.com/hajimehoshi/ebiten/v2/inpututil"
+    "image/color"
+    "strings"
 )
 
 func (g *GridEngine) PlayerMovement(direction geometry.Point) {
@@ -84,6 +86,9 @@ func (g *GridEngine) onPartyMemberMovedOrTeleported(loadedMap *gridmap.GridMap[*
     }
     if g.IsInCombat() {
         return
+    }
+    if g.isSneaking {
+        g.updateSneakOverlays()
     }
     // check if we are near any aggressive actors, that would want to start combat
     for _, actor := range loadedMap.GetFilteredActorsInRadius(newLocation, 11, g.aggressiveActorsFilter(newLocation)) {
@@ -242,16 +247,27 @@ func (g *GridEngine) Draw(screen *ebiten.Image) {
 }
 
 func (g *GridEngine) drawMapOverlays(screen *ebiten.Image) {
-    if g.IsInCombat() || !g.isSneaking {
+    if len(g.overlayPositions) == 0 {
         return
     }
     offset := g.gridRenderer.GetScaledSmallGridSize()
     offsetPoint := geometry.Point{X: offset, Y: offset}
-    icon := int32(229)
-    color := ega.BrightRed
-    overlayPositions := make(map[geometry.Point]bool)
 
-    for _, actor := range g.currentMap.Actors() { // TODO: this is a bit expensive, maybe cache it?
+    icon := int32(229)
+    for p, drawColor := range g.overlayPositions {
+        screenPos := g.MapToScreenCoordinates(p)
+        g.gridRenderer.DrawOnBigGridWithColor(screen, screenPos, offsetPoint, renderer.AtlasEntities, icon, drawColor)
+    }
+}
+func (g *GridEngine) SetOverlay(overlayPositions map[geometry.Point]color.Color) {
+    g.overlayPositions = overlayPositions
+}
+func (g *GridEngine) ClearOverlay() {
+    clear(g.overlayPositions)
+}
+func (g *GridEngine) updateSneakOverlays() {
+    g.ClearOverlay()
+    for _, actor := range g.currentMap.Actors() {
         if !actor.IsAggressive() {
             continue
         }
@@ -262,14 +278,9 @@ func (g *GridEngine) drawMapOverlays(screen *ebiten.Image) {
         zone := actor.GetEngagementZone()
         for pos, _ := range zone {
             if g.IsMapPosOnScreen(pos) && g.playerParty.CanSee(pos) && g.currentMap.IsCurrentlyPassable(pos) {
-                overlayPositions[pos] = true
+                g.overlayPositions[pos] = ega.BrightRed
             }
         }
-    }
-
-    for p, _ := range overlayPositions {
-        screenPos := g.MapToScreenCoordinates(p)
-        g.gridRenderer.DrawOnBigGridWithColor(screen, screenPos, offsetPoint, renderer.AtlasEntities, icon, color)
     }
 }
 
@@ -331,7 +342,11 @@ func (g *GridEngine) ensureMapInMemory(targetMap string) {
     // check if the next map is already loaded
     if nextMap, isInMemory := g.mapsInMemory[targetMap]; !isInMemory {
         // if not, load it from ldtk
-        nextMap = g.loadMap(targetMap)
+        if strings.HasPrefix(targetMap, "!gen_") {
+            nextMap = g.generateMap(targetMap)
+        } else {
+            nextMap = g.loadMap(targetMap)
+        }
         g.mapsInMemory[targetMap] = nextMap
     }
 }
@@ -566,13 +581,13 @@ func (g *GridEngine) contextActionsFromInteractables(interactables Interactables
                // also: appears multiple times in the context menu
                contextActions = append(contextActions, util.MenuItem{
                    Text: "Hunt game",
-                   Action: func() {
+                   BaseAction: func() {
                        g.AddFood(1)
                    },
                })
                contextActions = append(contextActions, util.MenuItem{
                    Text: "Gather herbs",
-                   Action: func() {
+                   BaseAction: func() {
                        g.AddFood(2)
                    },
                })

@@ -46,7 +46,7 @@ type Engine interface {
     ShowEquipMenu(a Equippable)
     PlayerStartsCombat(opponent *Actor)
     PlayerTriesBackstab(opponent *Actor)
-    PlayerStartsOffensiveSpell(caster *Actor, spell *Action)
+    PlayerStartsOffensiveSpell(caster *Actor, spell *Spell)
     GetAoECircle(pos geometry.Point, radius int) []geometry.Point
     CombatHitAnimation(pos geometry.Point, atlasName renderer.AtlasName, icon int32, tintColor color.Color, whenDone func())
     FixedDamageAt(caster *Actor, pos geometry.Point, amount int)
@@ -66,7 +66,7 @@ type Engine interface {
     PlayerMovement(point geometry.Point)
     GetRegion(regionName string) geometry.Rect
     DrawCharInWorld(charToDraw rune, pos geometry.Point)
-    RaiseAsUndeadForParty(pos geometry.Point)
+    RaiseAsUndeadAt(caster *Actor, pos geometry.Point)
     GetActorByInternalName(internalName string) *Actor
     GetDialogueFromFile(conversationId string) *Dialogue
     GetVisibleMap() geometry.Rect

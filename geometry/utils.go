@@ -218,6 +218,52 @@ func addPoints(p Point, q Point) Point {
 
 type CompassDirection float64
 
+func (d CompassDirection) Opposite() CompassDirection {
+    d += 180
+    if d >= 360 {
+        d -= 360
+    }
+    return d
+}
+
+func (d CompassDirection) ToPoint() Point {
+    switch d {
+    case East:
+        return Point{X: 1, Y: 0}
+    case SouthEast:
+        return Point{X: 1, Y: 1}
+    case South:
+        return Point{X: 0, Y: 1}
+    case SouthWest:
+        return Point{X: -1, Y: 1}
+    case West:
+        return Point{X: -1, Y: 0}
+    case NorthWest:
+        return Point{X: -1, Y: -1}
+    case North:
+        return Point{X: 0, Y: -1}
+    case NorthEast:
+        return Point{X: 1, Y: -1}
+    }
+    return Point{}
+}
+
+func (d CompassDirection) TurnRightBy90() CompassDirection {
+    d += 90
+    if d >= 360 {
+        d -= 360
+    }
+    return d
+}
+
+func (d CompassDirection) TurnLeftBy90() CompassDirection {
+    d -= 90
+    if d < 0 {
+        d += 360
+    }
+    return d
+}
+
 const (
     East      CompassDirection = 0
     SouthEast CompassDirection = 45

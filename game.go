@@ -41,8 +41,16 @@ func (g *GridEngine) openPartyMenu() {
             Action: g.combatManager.PlayerControlledRangedAttack,
         },
         {
-            Text:   "Magic",
-            Action: g.openSpellMenu,
+            Text: "Magic",
+            Action: func() {
+                g.openActiveSkillsMenu(g.GetAvatar(), g.GetAvatar().GetEquippedSpells())
+            },
+        },
+        {
+            Text: "Active Skills",
+            Action: func() {
+                g.openActiveSkillsMenu(g.GetAvatar(), g.GetAvatar().GetActiveSkills())
+            },
         },
         {
             Text:   "Rest",
@@ -321,6 +329,10 @@ func (g *GridEngine) SwitchAvatarTo(actor *game.Actor) {
     }
     if !g.playerParty.IsMember(actor) {
         g.Print(fmt.Sprintf("\"%s\" is not in your party", actor.Name()))
+        return
+    }
+    if !actor.CanAct() {
+        g.Print(fmt.Sprintf("\"%s\" is unable to act.", actor.Name()))
         return
     }
     g.playerParty.SwitchControlTo(actor)

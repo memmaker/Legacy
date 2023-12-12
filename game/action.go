@@ -5,33 +5,52 @@ import (
     "image/color"
 )
 
-type Action struct {
-    cost                 int
+func (s *Spell) GetScrollTitle() string {
+    return s.scrollTitle
+}
+
+func (s *Spell) GetScrollFile() string {
+    return s.scrollFile
+}
+
+func (s *Spell) SetScrollTitle(title string) {
+    s.scrollTitle = title
+}
+
+func (s *Spell) SetScrollFile(file string) {
+    s.scrollFile = file
+}
+
+type BaseAction struct {
     effect               func(engine Engine, user *Actor)
     targetedEffect       func(engine Engine, user *Actor, pos geometry.Point)
     name                 string
     color                color.Color
     closeModalsForEffect bool
 
-    canPayCost        func(engine Engine, user *Actor, cost int) bool
-    payCost           func(engine Engine, user *Actor, cost int)
-    getValidPositions func(engine Engine, user *Actor, usePosition geometry.Point) []geometry.Point
+    canPayCost        func(engine Engine, user *Actor) bool
+    payCost           func(engine Engine, user *Actor)
+    getValidPositions func(engine Engine, user *Actor, usePosition geometry.Point) map[geometry.Point]bool
     description       []string
 
     // AI stuff
-    targetedCombatUtility func(target geometry.Point, enemyPositions map[geometry.Point]*Actor) int
-    combatUtility         func(userPosition geometry.Point, enemyPositions map[geometry.Point]*Actor) int
+    targetedCombatUtility func(engine Engine, caster *Actor, target geometry.Point, allyPositions, enemyPositions map[geometry.Point]*Actor) int
+    combatUtility         func(engine Engine, caster *Actor, userPosition geometry.Point, allyPositions, enemyPositions map[geometry.Point]*Actor) int
 }
 
-func (s *Action) SetActionColor(c color.Color) {
+func (s *BaseAction) LabelWithCost() string {
+    return s.name
+}
+
+func (s *BaseAction) SetActionColor(c color.Color) {
     s.color = c
 }
 
-func (s *Action) Execute(engine Engine, caster *Actor) {
-    if !s.canPayCost(engine, caster, s.cost) {
+func (s *BaseAction) Execute(engine Engine, caster *Actor) {
+    if !s.canPayCost(engine, caster) {
         return
     }
-    s.payCost(engine, caster, s.cost)
+    s.payCost(engine, caster)
     if s.effect != nil {
         if s.closeModalsForEffect {
             engine.CloseAllModals()
@@ -40,11 +59,11 @@ func (s *Action) Execute(engine Engine, caster *Actor) {
     }
 }
 
-func (s *Action) ExecuteOnTarget(engine Engine, caster *Actor, pos geometry.Point) {
-    if !s.canPayCost(engine, caster, s.cost) {
+func (s *BaseAction) ExecuteOnTarget(engine Engine, caster *Actor, pos geometry.Point) {
+    if !s.canPayCost(engine, caster) {
         return
     }
-    s.payCost(engine, caster, s.cost)
+    s.payCost(engine, caster)
     if s.targetedEffect != nil {
         if s.closeModalsForEffect {
             engine.CloseAllModals()
@@ -53,51 +72,76 @@ func (s *Action) ExecuteOnTarget(engine Engine, caster *Actor, pos geometry.Poin
     }
 }
 
-func (s *Action) GetValidTargets(engine Engine, caster *Actor, usePosition geometry.Point) []geometry.Point {
+func (s *BaseAction) GetValidTargets(engine Engine, caster *Actor, usePosition geometry.Point) map[geometry.Point]bool {
     return s.getValidPositions(engine, caster, usePosition)
 }
-func (s *Action) IsTargeted() bool {
+func (s *BaseAction) IsTargeted() bool {
     return s.targetedEffect != nil && s.effect == nil
 }
 
-func (s *Action) ManaCost() int {
-    return s.cost
-}
-func (s *Action) Name() string {
+func (s *BaseAction) Name() string {
     return s.name
 }
 
-func (s *Action) GetValue() int {
-    return s.cost * 10
+func (s *BaseAction) GetValue() int {
+    return 0
 }
 
-func (s *Action) Color() color.Color {
+func (s *BaseAction) GetColor() color.Color {
     return s.color
 }
 
-func (s *Action) SetValidTargets(filter func(engine Engine, user *Actor, usePosition geometry.Point) []geometry.Point) {
+func (s *BaseAction) SetValidTargets(filter func(engine Engine, user *Actor, usePosition geometry.Point) map[geometry.Point]bool) {
     s.getValidPositions = filter
 }
 
-func (s *Action) SetDescription(text []string) {
+func (s *BaseAction) SetDescription(text []string) {
     s.description = text
 }
 
-func (s *Action) GetDescription() []string {
+func (s *BaseAction) GetDescription() []string {
     return s.description
 }
 
-func (s *Action) GetCombatUtilityForTargetedUseOnLocation(target geometry.Point, enemyPositions map[geometry.Point]*Actor) int {
-    return s.targetedCombatUtility(target, enemyPositions)
+func (s *BaseAction) GetCombatUtilityForTargetedUseOnLocation(engine Engine, caster *Actor, target geometry.Point, allyPositions, enemyPositions map[geometry.Point]*Actor) int {
+    return s.targetedCombatUtility(engine, caster, target, allyPositions, enemyPositions)
 }
 
-func (s *Action) GetCombatUtilityForUseAtLocation(userPosition geometry.Point, enemyPositions map[geometry.Point]*Actor) int {
-    return s.combatUtility(userPosition, enemyPositions)
+func (s *BaseAction) GetCombatUtilityForUseAtLocation(engine Engine, caster *Actor, userPosition geometry.Point, allyPositions, enemyPositions map[geometry.Point]*Actor) int {
+    return s.combatUtility(engine, caster, userPosition, allyPositions, enemyPositions)
 }
-func (s *Action) SetCombatUtilityForTargetedUseOnLocation(utility func(target geometry.Point, enemyPositions map[geometry.Point]*Actor) int) {
+func (s *BaseAction) SetCombatUtilityForTargetedUseOnLocation(utility func(engine Engine, caster *Actor, target geometry.Point, allyPositions, enemyPositions map[geometry.Point]*Actor) int) {
     s.targetedCombatUtility = utility
 }
 
-func (s *Action) SetCombatUtilityForUseAtLocation(utility func(userPosition geometry.Point, enemyPositions map[geometry.Point]*Actor) int) {
+func (s *BaseAction) SetCombatUtilityForUseAtLocation(utility func(engine Engine, caster *Actor, userPosition geometry.Point, allyPositions, enemyPositions map[geometry.Point]*Actor) int) {
     s.combatUtility = utility
+}
+
+func (s *BaseAction) SetNoCombatUtility() {
+    s.combatUtility = func(engine Engine, caster *Actor, userPosition geometry.Point, allyPositions, enemyPositions map[geometry.Point]*Actor) int {
+        return -50
+    }
+    s.targetedCombatUtility = func(engine Engine, caster *Actor, target geometry.Point, allyPositions, enemyPositions map[geometry.Point]*Actor) int {
+        return -50
+    }
+}
+
+func (s *BaseAction) CanPayCost(engine Engine, member *Actor) bool {
+    return s.canPayCost(engine, member)
+}
+
+type Action interface {
+    Name() string
+    Execute(engine Engine, caster *Actor)
+    ExecuteOnTarget(engine Engine, caster *Actor, pos geometry.Point)
+    GetValidTargets(engine Engine, caster *Actor, usePosition geometry.Point) map[geometry.Point]bool
+    CanPayCost(engine Engine, member *Actor) bool
+    IsTargeted() bool
+    GetValue() int
+    GetColor() color.Color
+    GetDescription() []string
+    GetCombatUtilityForTargetedUseOnLocation(engine Engine, caster *Actor, target geometry.Point, allyPositions, enemyPositions map[geometry.Point]*Actor) int
+    GetCombatUtilityForUseAtLocation(engine Engine, caster *Actor, userPosition geometry.Point, allyPositions, enemyPositions map[geometry.Point]*Actor) int
+    LabelWithCost() string
 }

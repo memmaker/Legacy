@@ -178,6 +178,10 @@ func (rg Rect) Contains(position Point) bool {
     return position.X >= rg.Min.X && position.X < rg.Max.X && position.Y >= rg.Min.Y && position.Y < rg.Max.Y
 }
 
+func (rg Rect) IsOnEdge(position Point) bool {
+    return position.X == rg.Min.X || position.X == rg.Max.X-1 || position.Y == rg.Min.Y || position.Y == rg.Max.Y-1
+}
+
 func (rg Rect) ToHalfWidth() Rect {
     // the new rect will start at the 2*x position of the old rect
     // and it will have double the width
@@ -195,4 +199,45 @@ func (rg Rect) GetRandomPoint() Point {
         X: rg.Min.X + rand.Intn(rg.Max.X-rg.Min.X),
         Y: rg.Min.Y + rand.Intn(rg.Max.Y-rg.Min.Y),
     }
+}
+
+func (rg Rect) BisectAtColumn(col int) (Rect, Rect) {
+    return rg.Columns(0, col), rg.Columns(col, rg.Size().X)
+}
+
+func (rg Rect) BisectAtLine(line int) (Rect, Rect) {
+    return rg.Lines(0, line), rg.Lines(line, rg.Size().Y)
+}
+
+func (rg Rect) Center() Point {
+    return Point{
+        X: rg.Min.X + rg.Size().X/2,
+        Y: rg.Min.Y + rg.Size().Y/2,
+    }
+}
+
+func (rg Rect) GetRandomPointOnEdge(random *rand.Rand, edge CompassDirection) Point {
+    switch edge {
+    case North:
+        return Point{
+            X: rg.Min.X + random.Intn(rg.Size().X),
+            Y: rg.Min.Y,
+        }
+    case South:
+        return Point{
+            X: rg.Min.X + random.Intn(rg.Size().X),
+            Y: rg.Max.Y - 1,
+        }
+    case East:
+        return Point{
+            X: rg.Max.X - 1,
+            Y: rg.Min.Y + random.Intn(rg.Size().Y),
+        }
+    case West:
+        return Point{
+            X: rg.Min.X,
+            Y: rg.Min.Y + random.Intn(rg.Size().Y),
+        }
+    }
+    return Point{}
 }

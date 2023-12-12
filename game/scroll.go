@@ -11,7 +11,7 @@ type Scroll struct {
     BaseItem
     icon           int32
     filename       string
-    spell          *Action
+    spell          *Spell
     wearer         ItemWearer
     autoLayoutText bool
 }
@@ -101,12 +101,19 @@ func (b *Scroll) GetContextActions(engine Engine) []util.MenuItem {
     return actions
 }
 
+func (b *Scroll) GetEmbeddedActions() []Action {
+    if b.spell != nil {
+        return []Action{b.spell}
+    }
+    return []Action{}
+}
+
 func (b *Scroll) read(engine Engine) {
     text := engine.GetScrollFile(b.filename)
     engine.ShowScrollableText(text, color.White, b.autoLayoutText)
 }
 
-func (b *Scroll) SetSpell(spell *Action) {
+func (b *Scroll) SetSpell(spell *Spell) {
     b.spell = spell
 }
 
@@ -130,7 +137,7 @@ func NewScroll(title, filename string) *Scroll {
     }
 }
 
-func NewSpellScroll(title, filename string, spell *Action) *Scroll {
+func NewSpellScroll(title, filename string, spell *Spell) *Scroll {
     return &Scroll{
         BaseItem: BaseItem{
             name: title,
@@ -141,7 +148,10 @@ func NewSpellScroll(title, filename string, spell *Action) *Scroll {
         autoLayoutText: true,
     }
 }
-
+func NewSpellScrollFromSpellName(spellName string) *Scroll {
+    spell := NewSpellFromName(spellName)
+    return NewSpellScroll(spell.GetScrollTitle(), spell.GetScrollFile(), spell)
+}
 func NewScrollFromPredicate(encoded recfile.StringPredicate) *Scroll {
     // format is scroll title, filename, spell name
     return NewSpellScroll(

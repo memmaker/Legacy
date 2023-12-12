@@ -149,7 +149,7 @@ type Actor struct {
 
     attributes   AttributeHolder
     skillset     SkillSet
-    innateSkills []*Action
+    innateSkills []*BaseAction
 
     color                 color.Color
     isTinted              bool
@@ -230,7 +230,7 @@ func NewActorFromFile(file io.ReadCloser, icon int32, toPages func(height int, i
         skillRecord := recordForSkills[0]
         for _, field := range skillRecord {
             if field.Name == "ActiveSkill" {
-                newActor.AddInnateSkill(NewActiveSkillFromName(field.Value))
+                newActor.AddInnateSkill(NewActiveSkillFromName(SkillName(field.Value)))
             }
         }
     }
@@ -322,17 +322,17 @@ func (a *Actor) ToRecord() recfile.Record {
 
 func (a *Actor) Unequip(item Item) {
     switch item.(type) {
-    case *Weapon:
-        weapon := item.(*Weapon)
-        weapon.SetWearer(nil)
+    case Handheld:
+        handheldItem := item.(Handheld)
+        handheldItem.SetWearer(nil)
 
-        if a.equippedLeftHand == weapon {
+        if a.equippedLeftHand == handheldItem {
             a.equippedLeftHand = nil
         }
-        if a.equippedRightHand == weapon {
+        if a.equippedRightHand == handheldItem {
             a.equippedRightHand = nil
         }
-        if a.equippedRanged == weapon {
+        if a.equippedRanged == handheldItem {
             a.equippedRanged = nil
         }
     case *Armor:
@@ -638,7 +638,7 @@ func (a *Actor) CanEquip(item Item) bool {
         return true
     case *Scroll:
         return true
-    case *Weapon:
+    case Handheld:
         return true
     }
     return false
@@ -653,16 +653,13 @@ func (a *Actor) Equip(item Item) {
     if !a.CanEquip(item) {
         return
     }
-    switch item.(type) {
+    switch typedItem := item.(type) {
     case *Armor:
-        armor := item.(*Armor)
-        a.EquipArmor(armor, armor.GetSlot())
+        a.EquipArmor(typedItem, typedItem.GetSlot())
     case *Scroll:
-        scroll := item.(*Scroll)
-        a.EquipScroll(scroll)
-    case *Weapon:
-        weapon := item.(*Weapon)
-        a.EquipWeapon(weapon)
+        a.EquipScroll(typedItem)
+    case Handheld:
+        a.EquipRightHand(typedItem)
     }
 }
 
@@ -704,34 +701,66 @@ func (a *Actor) EquipScroll(scroll *Scroll) {
 
     a.equippedScrolls = append(a.equippedScrolls, scroll)
     scroll.SetWearer(a)
+    scroll.SetHolder(a)
     a.party.onItemEquipStatusChanged([]Item{scroll})
 }
-func (a *Actor) EquipWeapon(weapon *Weapon) {
-    if !a.CanEquip(weapon) || weapon == nil {
+
+func (a *Actor) EquipRangedWeapon(weapon *Weapon) {
+    if !a.CanEquip(weapon) || weapon == nil || !weapon.IsRanged() {
         return
     }
     weapon.Unequip()
     var oldWeapon *Weapon
-    if weapon.IsRanged() {
-        if a.equippedRanged != nil {
-            a.equippedRanged.Unequip()
-            oldWeapon = a.equippedRanged
-        }
-        a.equippedRanged = weapon
-    } else {
-        if a.equippedRightHand != nil {
-            oldWeapon = a.equippedRightHand.(*Weapon)
-            a.equippedRightHand.Unequip()
-        }
-        a.equippedRightHand = weapon
+    if a.equippedRanged != nil {
+        a.equippedRanged.Unequip()
+        oldWeapon = a.equippedRanged
     }
+    a.equippedRanged = weapon
     weapon.SetWearer(a)
+    weapon.SetHolder(a)
     if oldWeapon != nil {
         a.party.onItemEquipStatusChanged([]Item{oldWeapon, weapon})
     } else {
         a.party.onItemEquipStatusChanged([]Item{weapon})
     }
-
+}
+func (a *Actor) EquipRightHand(item Handheld) {
+    if !a.CanEquip(item) || item == nil {
+        return
+    }
+    item.Unequip()
+    var oldItem Handheld
+    if a.equippedRightHand != nil {
+        a.equippedRightHand.Unequip()
+        oldItem = a.equippedRightHand
+    }
+    a.equippedRightHand = item
+    item.SetWearer(a)
+    item.SetHolder(a)
+    if oldItem != nil {
+        a.party.onItemEquipStatusChanged([]Item{oldItem, item})
+    } else {
+        a.party.onItemEquipStatusChanged([]Item{item})
+    }
+}
+func (a *Actor) EquipLeftHand(item Handheld) {
+    if !a.CanEquip(item) || item == nil {
+        return
+    }
+    item.Unequip()
+    var oldItem Handheld
+    if a.equippedLeftHand != nil {
+        a.equippedLeftHand.Unequip()
+        oldItem = a.equippedLeftHand
+    }
+    a.equippedLeftHand = item
+    item.SetWearer(a)
+    item.SetHolder(a)
+    if oldItem != nil {
+        a.party.onItemEquipStatusChanged([]Item{oldItem, item})
+    } else {
+        a.party.onItemEquipStatusChanged([]Item{item})
+    }
 }
 
 func (a *Actor) HasDialogue() bool {
@@ -1014,8 +1043,8 @@ func (a *Actor) SetVendorInventory(items []Item) {
     a.inventory = append(a.inventory, items...)
 }
 
-func (a *Actor) GetEquippedSpells() []*Action {
-    var spells []*Action
+func (a *Actor) GetEquippedSpells() []Action {
+    var spells []Action
     for _, scroll := range a.equippedScrolls {
         spells = append(spells, scroll.spell)
     }
@@ -1023,11 +1052,19 @@ func (a *Actor) GetEquippedSpells() []*Action {
 
 }
 
-func (a *Actor) GetActiveSkills() []*Action {
-    var skills []*Action
+func (a *Actor) GetActiveSkills() []Action {
+    var skills []Action
     // todo: add skills from items, etc.
     for _, skill := range a.innateSkills {
         skills = append(skills, skill)
+    }
+    leftItem := a.equippedLeftHand
+    if leftItem != nil {
+        skills = append(skills, leftItem.GetEmbeddedActions()...)
+    }
+    rightItem := a.equippedRightHand
+    if rightItem != nil {
+        skills = append(skills, rightItem.GetEmbeddedActions()...)
     }
     return skills
 }
@@ -1185,7 +1222,17 @@ func (a *Actor) OnDamageReceived(engine Engine, amount int) {
 }
 
 func (a *Actor) HasMeleeWeaponEquipped() bool {
-    return a.equippedRightHand != nil || a.equippedLeftHand != nil
+    if a.equippedRightHand != nil {
+        if _, ok := a.equippedRightHand.(*Weapon); ok {
+            return true
+        }
+    }
+    if a.equippedLeftHand != nil {
+        if _, ok := a.equippedLeftHand.(*Weapon); ok {
+            return true
+        }
+    }
+    return false
 }
 
 func (a *Actor) GetMeleeWeapon() *Weapon {
@@ -1363,6 +1410,10 @@ func (a *Actor) GetStatusEffectsTable() []string {
     return table
 }
 
-func (a *Actor) AddInnateSkill(skill *Action) {
+func (a *Actor) AddInnateSkill(skill *BaseAction) {
     a.innateSkills = append(a.innateSkills, skill)
+}
+
+func (a *Actor) CanAct() bool {
+    return a.IsAlive() && !a.IsSleeping()
 }

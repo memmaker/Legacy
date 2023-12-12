@@ -1223,7 +1223,7 @@ func (m *GridMap[ActorType, ItemType, ObjectType]) RandomSpawnPosition() geometr
     }
 }
 
-func (m *GridMap[ActorType, ItemType, ObjectType]) SetNamedLocation(name string, point geometry.Point) {
+func (m *GridMap[ActorType, ItemType, ObjectType]) AddNamedLocation(name string, point geometry.Point) {
     m.NamedLocations[name] = point
 }
 
@@ -1303,21 +1303,33 @@ func (m *GridMap[ActorType, ItemType, ObjectType]) TryGetItemAt(pos geometry.Poi
 }
 
 func (m *GridMap[ActorType, ItemType, ObjectType]) AddActor(actor ActorType, spawnPos geometry.Point) {
+    if m.IsActorAt(spawnPos) {
+        return
+    }
     m.AllActors = append(m.AllActors, actor)
     m.MoveActor(actor, spawnPos)
 }
 
 func (m *GridMap[ActorType, ItemType, ObjectType]) AddDownedActor(actor ActorType, spawnPos geometry.Point) {
+    if m.IsDownedActorAt(spawnPos) {
+        return
+    }
     m.AllDownedActors = append(m.AllDownedActors, actor)
     m.MoveDownedActor(actor, spawnPos)
 }
 
 func (m *GridMap[ActorType, ItemType, ObjectType]) AddObject(object ObjectType, spawnPos geometry.Point) {
+    if m.IsObjectAt(spawnPos) {
+        return
+    }
     m.AllObjects = append(m.AllObjects, object)
     m.MoveObject(object, spawnPos)
 }
 
 func (m *GridMap[ActorType, ItemType, ObjectType]) AddItem(item ItemType, spawnPos geometry.Point) {
+    if m.IsItemAt(spawnPos) {
+        return
+    }
     m.AllItems = append(m.AllItems, item)
     m.MoveItem(item, spawnPos)
 }
@@ -1360,7 +1372,7 @@ func (m *GridMap[ActorType, ItemType, ObjectType]) SetName(name string) {
     m.name = name
 }
 
-func (m *GridMap[ActorType, ItemType, ObjectType]) SetTransitionAt(pos geometry.Point, transition Transition) {
+func (m *GridMap[ActorType, ItemType, ObjectType]) AddTransitionAt(pos geometry.Point, transition Transition) {
     m.transitionMap[pos] = transition
 }
 
@@ -1482,4 +1494,17 @@ func (m *GridMap[ActorType, ItemType, ObjectType]) AddNamedPath(name string, pat
 
 func (m *GridMap[ActorType, ItemType, ObjectType]) GetNamedPath(name string) []geometry.Point {
     return m.namedPaths[name]
+}
+
+func GetLocationsInRadius(origin geometry.Point, radius float64, keep func(point geometry.Point) bool) []geometry.Point {
+    result := make([]geometry.Point, 0)
+    for y := origin.Y - int(radius); y <= origin.Y+int(radius); y++ {
+        for x := origin.X - int(radius); x <= origin.X+int(radius); x++ {
+            pos := geometry.Point{X: x, Y: y}
+            if geometry.Distance(origin, pos) <= radius && keep(pos) {
+                result = append(result, pos)
+            }
+        }
+    }
+    return result
 }

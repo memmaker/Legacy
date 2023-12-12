@@ -462,11 +462,16 @@ func (g *GridEngine) getPathFromRootEntity(entity *ldtk_go.Entity) []geometry.Po
 
 func (g *GridEngine) handleTransition(loadedMap *gridmap.GridMap[*game.Actor, game.Item, game.Object], metaEntity *ldtk_go.Entity, gridPos geometry.Point) {
     nameOfLocation := metaEntity.PropertyByIdentifier("NameOfLocation").AsString()
-    loadedMap.SetNamedLocation(nameOfLocation, gridPos)
+    loadedMap.AddNamedLocation(nameOfLocation, gridPos)
     if nameOfLocation == "player_spawn" {
         g.spawnPosition = gridPos
+    } else if nameOfLocation == "dungeon_entrance" && loadedMap.GetName() == "Edge_Town" {
+        loadedMap.AddTransitionAt(gridPos, gridmap.Transition{
+            TargetMap:      "!gen_dungeon_level_1",
+            TargetLocation: "ladder_up",
+        })
     } else if transition := g.entityToTransition(metaEntity); !transition.IsEmpty() {
-        loadedMap.SetTransitionAt(gridPos, transition)
+        loadedMap.AddTransitionAt(gridPos, transition)
     }
 }
 

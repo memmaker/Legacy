@@ -39,11 +39,9 @@ func (g *GridEngine) ActionCancel() {
 }
 func (g *GridEngine) isBeingPressedRepeatedly(key ebiten.Key) bool {
     pressedForTicks := inpututil.KeyPressDuration(key)
-    ticksBetweenMovement := 30
-    if pressedForTicks > 180 {
-        ticksBetweenMovement = 10
-    } else if pressedForTicks > 60 {
-        ticksBetweenMovement = 20
+    ticksBetweenMovement := 20
+    if pressedForTicks > 30 {
+        ticksBetweenMovement = 8
     }
     isRepetitionTick := pressedForTicks > 0 && pressedForTicks%ticksBetweenMovement == 0
     return inpututil.IsKeyJustPressed(key) || (ebiten.IsKeyPressed(key) && isRepetitionTick)
@@ -269,10 +267,16 @@ func (g *GridEngine) handleShortcuts() {
     } else if inpututil.IsKeyJustPressed(ebiten.KeyL) {
         g.openPrintLog()
     } else if inpututil.IsKeyJustPressed(ebiten.KeyM) {
-        g.openSpellMenu()
+        g.openActiveSkillsMenu(g.GetAvatar(), g.GetAvatar().GetEquippedSpells())
     } else if inpututil.IsKeyJustPressed(ebiten.KeyN) {
         g.isSneaking = !g.isSneaking
-        g.Print(fmt.Sprintf("Sneaking: %t", g.isSneaking))
+        if !g.isSneaking {
+            g.ClearOverlay()
+            g.Print("You stop sneaking.")
+        } else {
+            g.updateSneakOverlays()
+            g.Print("You start sneaking.")
+        }
     } else if inpututil.IsKeyJustPressed(ebiten.KeyS) {
         g.searchForHiddenObjects()
     } else if inpututil.IsKeyJustPressed(ebiten.KeyR) {
@@ -324,10 +328,8 @@ func (g *GridEngine) handleShortcuts() {
 
     if inpututil.IsKeyJustPressed(ebiten.KeyTab) {
         if g.playerParty.HasFollowers() {
-            currentPartyMemberIndex := g.playerParty.GetMemberIndex(g.GetAvatar())
-            nextPartyMemberIndex := (currentPartyMemberIndex + 1) % len(g.playerParty.GetMembers())
-            member := g.playerParty.GetMember(nextPartyMemberIndex)
-            g.SwitchAvatarTo(member)
+            nextMember := g.playerParty.GetNextActiveMember(g.GetAvatar())
+            g.SwitchAvatarTo(nextMember)
         }
     }
 

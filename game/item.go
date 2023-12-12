@@ -26,6 +26,7 @@ type Item interface {
     SetPos(geometry.Point)
     Name() string
     GetContextActions(engine Engine) []util.MenuItem
+    GetEmbeddedActions() []Action
     SetHolder(owner ItemHolder)
     GetHolder() ItemHolder
     IsHidden() bool
@@ -65,6 +66,9 @@ func (i *BaseItem) SetPickupEvent(name string) {
 }
 func (i *BaseItem) GetPickupEvent() string {
     return i.pickupEventName
+}
+func (i *BaseItem) GetEmbeddedActions() []Action {
+    return []Action{}
 }
 func (i *BaseItem) SetName(value string) {
     i.name = value
@@ -168,12 +172,16 @@ func NewItemFromString(encoded string) Item {
         scroll := NewScrollFromPredicate(predicate)
         scroll.SetAutoLayoutText(false)
         return scroll
+    case "spellScroll":
+        return NewSpellScrollFromSpellName(predicate.GetString(0))
     case "armor":
         return NewArmorFromPredicate(predicate)
     case "noitem":
         return NewPseudoItemFromPredicate(predicate)
     case "flavor": // example flavor(a teddy, 20, a nice cozy teddy bear)
         return NewFlavorItemFromPredicate(predicate)
+    case "namedFlavor":
+        return NewNamedFlavorItem(predicate.GetString(0))
     case "weapon":
         return NewWeaponFromPredicate(predicate)
     case "namedWeapon":

@@ -329,8 +329,8 @@ func (p *Party) RemoveLockpicks(amount int) {
     p.lockpicks -= amount
 }
 
-func (p *Party) GetSpells() []*Action {
-    var result []*Action
+func (p *Party) GetSpells() []*Spell {
+    var result []*Spell
     for _, item := range p.partyInventory {
         if scroll, ok := item[0].(*Scroll); ok {
             if scroll.spell != nil {
@@ -659,6 +659,19 @@ func (p *Party) RemoveAllItems() [][]Item {
     }
     p.partyInventory = [][]Item{}
     return result
+}
+
+func (p *Party) GetNextActiveMember(currentMember *Actor) *Actor {
+    currentPartyMemberIndex := p.GetMemberIndex(currentMember)
+    nextPartyMemberIndex := (currentPartyMemberIndex + 1) % len(p.members)
+    nextMember := p.GetMember(nextPartyMemberIndex)
+
+    for nextPartyMemberIndex != currentPartyMemberIndex && !nextMember.CanAct() {
+        nextPartyMemberIndex = (nextPartyMemberIndex + 1) % len(p.members)
+        nextMember = p.GetMember(nextPartyMemberIndex)
+    }
+
+    return nextMember
 }
 
 func moneyFormat(value int) string {

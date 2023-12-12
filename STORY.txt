@@ -187,6 +187,27 @@ Questions:
 # They are spoken by the people
 # And their leaders
 
+# Plots in Tauci Castle
+ - Rats vs. Taucis
+   -> Kill all rats
+   -> Kill all Taucis
+   -> Sneakily replace Taucis with rats
+   -> Do nothing
+ - Thief trainee
+   -> Help him
+   -> Turn him in
+   -> Kill him
+   -> Ignore him
+ - The slime monsters
+   -> Bring back peacefully
+   -> Kill them
+ - The guard in love
+ - The bank account
+ - Tauci Chancellor election
+ - The rich guy who plays with black magic
+ - Exploitation at the mines
+ - Tauci ghost
+
 
 # First small but complete Quest..
  - Gain access to the Tauci Prison Level 1

@@ -10,10 +10,44 @@ import (
 type FlavorItem struct {
     BaseItem
     description []string
+    actions     []Action
+    wearer      ItemWearer
+}
+
+func (f *FlavorItem) GetWearer() ItemWearer {
+    return f.wearer
+}
+
+func (f *FlavorItem) SetWearer(wearer ItemWearer) {
+    f.wearer = wearer
+}
+
+func (f *FlavorItem) Unequip() {
+    if f.wearer != nil {
+        f.wearer.Unequip(f)
+    }
+}
+
+func (f *FlavorItem) IsEquipped() bool {
+    return f.wearer != nil
+}
+
+func (f *FlavorItem) IsBetterThan(other Handheld) bool {
+    return false
 }
 
 func (f *FlavorItem) GetTooltipLines() []string {
-    return f.description
+    baseDescription := f.description
+    if len(f.actions) == 0 {
+        return baseDescription
+    }
+    baseDescription = append(baseDescription, "")
+    baseDescription = append(baseDescription, "Actions:")
+    for _, action := range f.actions {
+        baseDescription = append(baseDescription, fmt.Sprintf("  %s", action.Name()))
+    }
+
+    return baseDescription
 }
 
 func (f *FlavorItem) InventoryIcon() int32 {
@@ -33,6 +67,21 @@ func (f *FlavorItem) GetContextActions(engine Engine) []util.MenuItem {
                 engine.ShowScrollableText(f.description, color.White, true)
             },
         })
+    }
+    if len(f.actions) > 0 && engine.IsPlayerControlled(f.GetHolder()) {
+        if f.IsEquipped() {
+            return append([]util.MenuItem{{
+                Text: "Unequip",
+                Action: func() {
+                    f.Unequip()
+                }}}, actions...)
+        } else {
+            return append([]util.MenuItem{{
+                Text: "Equip",
+                Action: func() {
+                    engine.ShowEquipMenu(f)
+                }}}, actions...)
+        }
     }
     return actions
 }
@@ -74,4 +123,31 @@ func NewFlavorItemFromPredicate(encoded recfile.StringPredicate) *FlavorItem {
 
 func (f *FlavorItem) SetDescription(description []string) {
     f.description = description
+}
+
+func (f *FlavorItem) GetEmbeddedActions() []Action {
+    return f.actions
+}
+
+func (f *FlavorItem) SetActions(actions []Action) {
+    f.actions = actions
+}
+
+func NewNamedFlavorItem(itemName string) *FlavorItem {
+    switch itemName {
+    case "slime stick":
+        item := NewFlavorItem("slime stick", 10)
+        item.SetActions([]Action{
+            NewActiveSkillFromName(CombatSkillJellyJab),
+        })
+        item.SetDescription([]string{
+            "A stick covered in slime.",
+        })
+
+        return item
+
+    }
+    println("ERR: unknown item name:", itemName)
+    return nil
+
 }

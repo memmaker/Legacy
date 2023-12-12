@@ -349,27 +349,33 @@ func (e *EquipmentWindow) onRangedHovered(mousePos geometry.Point) (bool, Toolti
 }
 func (e *EquipmentWindow) onRightHandClicked() {
     equipAction := func(item game.Item) {
-        e.actor.EquipWeapon(item.(*game.Weapon))
+        e.actor.EquipRightHand(item.(game.Handheld))
     }
     e.chooseEquipment(equipAction, func(item game.Item) bool {
+
+        _, isHandheld := item.(game.Handheld)
         weapon, isWeapon := item.(*game.Weapon)
-        return isWeapon && e.actor.CanEquip(weapon) && !weapon.IsRanged()
+
+        return isHandheld && !isWeapon || (isWeapon && e.actor.CanEquip(weapon) && !weapon.IsRanged())
     })
 }
 
 func (e *EquipmentWindow) onLeftHandClicked() {
     equipAction := func(item game.Item) {
-        e.actor.EquipWeapon(item.(*game.Weapon))
+        e.actor.EquipLeftHand(item.(game.Handheld))
     }
     e.chooseEquipment(equipAction, func(item game.Item) bool {
+
+        _, isHandheld := item.(game.Handheld)
         weapon, isWeapon := item.(*game.Weapon)
-        return isWeapon && e.actor.CanEquip(weapon) && !weapon.IsRanged()
+
+        return isHandheld && !isWeapon || (isWeapon && e.actor.CanEquip(weapon) && !weapon.IsRanged())
     })
 }
 
 func (e *EquipmentWindow) onRangedClicked() {
     equipAction := func(item game.Item) {
-        e.actor.EquipWeapon(item.(*game.Weapon))
+        e.actor.EquipRangedWeapon(item.(*game.Weapon))
     }
     e.chooseEquipment(equipAction, func(item game.Item) bool {
         weapon, isWeapon := item.(*game.Weapon)

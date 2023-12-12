@@ -10,8 +10,44 @@
  - NPC Patrol will continue even if the player starts a conversation or fight
  - NPCs cannot use skills/spells
 
+# Content..
+ - We really need lots of different in world effects
+ - And the ability to attach them to any game object or just activate them on triggers
+ - More spells
+ - Active Combat skills
+ - More interesting random loot
+ - Story & Game
+
 # Design Goal
  - A coffe break RPG sandbox with a plot
+ - Stuff from CRPGs
+   - A dense world with non-combat encounters
+   - Roleplaying options
+   - A party of followers
+   - A plot
+   - Quests
+   - Interesting Roleplaying choices
+   - Shaping the world
+
+ - Stuff from Roguelikes
+   - Quick entry with a specific character build
+   - Massive amounts of cool loot
+   - Skip the boring stuff
+   - Interesting combat choices
+   - A clear & simple goal
+   - Many ways to reach the goal
+
+
+# Angband Town Vendors
+ - Alchemy (Potions & Scrolls)
+ - Magic Tomes
+ - Magic Wands
+ - Armoury
+ - Weapon Smith
+ - General Store
+ - Black Market (Anything)
+ - Your home (Storage)
+
 
 # Mechanics Building Blocks
  - Attributes (1-10) & Derived Attributes

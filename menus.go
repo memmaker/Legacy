@@ -1,6 +1,7 @@
 package main
 
 import (
+    "Legacy/ega"
     "Legacy/game"
     "Legacy/geometry"
     "Legacy/gocoro"
@@ -53,66 +54,36 @@ func (g *GridEngine) NewTextInputAtY(yPos int, prompt string, onClose func(ended
     input.CenterHorizontallyAtY(yPos)
     return input
 }
-func (g *GridEngine) openSpellMenu() {
+func (g *GridEngine) openActiveSkillsMenu(member *game.Actor, actions []game.Action) {
     var menuItems []util.MenuItem
-    spells := g.playerParty.GetSpells()
-    if len(spells) == 0 {
-        g.ShowText([]string{"You don't have any spells."})
+    if len(actions) == 0 {
+        g.ShowText([]string{"Nothing available."})
         return
     }
-    for _, s := range spells {
-        spell := s
-        if !g.GetAvatar().HasMana(spell.ManaCost()) {
-            continue
+    for _, s := range actions {
+        activeSkill := s
+        itemColor := ega.BrightWhite
+        if !activeSkill.CanPayCost(g, member) {
+            itemColor = ega.White
         }
-        label := fmt.Sprintf("%s (%d)", spell.Name(), spell.ManaCost())
+        label := activeSkill.LabelWithCost()
         menuItems = append(menuItems, util.MenuItem{
             Text:        label,
-            TooltipText: spell.GetDescription(),
+            TextColor:   itemColor,
+            TooltipText: activeSkill.GetDescription(),
             Action: func() {
-                if spell.IsTargeted() {
-                    g.combatManager.PlayerStartsOffensiveSpell(g.GetAvatar(), spell)
-                } else {
-                    spell.Execute(g, g.GetAvatar())
+                if !activeSkill.CanPayCost(g, member) {
+                    g.Print("You can't pay the cost for this ability.")
+                    return
                 }
-            },
-        })
-    }
-    if len(menuItems) == 0 {
-        g.ShowText([]string{"You don't have enough mana to cast any spells."})
-        return
-    }
-    g.OpenMenu(menuItems)
-}
-
-func (g *GridEngine) openCombatSpellMenu(member *game.Actor) {
-    var menuItems []util.MenuItem
-    spells := member.GetEquippedSpells()
-    if len(spells) == 0 {
-        g.ShowText([]string{"You don't have any spells."})
-        return
-    }
-    for _, s := range spells {
-        spell := s
-        if !member.HasMana(spell.ManaCost()) {
-            continue
-        }
-        label := fmt.Sprintf("%s (%d)", spell.Name(), spell.ManaCost())
-        menuItems = append(menuItems, util.MenuItem{
-            Text: label,
-            Action: func() {
-                if spell.IsTargeted() {
+                if activeSkill.IsTargeted() {
                     g.CloseAllModals()
-                    g.combatManager.SelectActionTarget(member, spell)
+                    g.combatManager.PlayerUsesActiveSkill(member, activeSkill)
                 } else {
-                    spell.Execute(g, member)
+                    activeSkill.Execute(g, member)
                 }
             },
         })
-    }
-    if len(menuItems) == 0 {
-        g.ShowText([]string{"You don't have enough mana to cast any spells."})
-        return
     }
     g.OpenMenu(menuItems)
 }
@@ -210,6 +181,13 @@ func (g *GridEngine) openDebugMenu() {
         {
             Text:   "Teleport",
             Action: g.openTransportMenu,
+        },
+        {
+            Text: "Enter the Dungeon",
+            Action: func() {
+                delete(g.mapsInMemory, "!gen_dungeon_level_1")
+                g.TransitionToNamedLocation("!gen_dungeon_level_1", "ladder_up")
+            },
         },
         {
             Text: "impulse 9",

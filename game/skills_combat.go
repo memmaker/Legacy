@@ -7,35 +7,37 @@ import (
     "image/color"
 )
 
-func NewActiveSkillFromName(name string) *Action {
+func NewActiveSkillFromName(name SkillName) *BaseAction {
     switch name {
-    case "Jelly Jab":
-        return NewMeleeAttackWithFixedDamage(name, 7)
+    case CombatSkillJellyJab:
+        return NewMeleeAttackWithFixedDamage(string(name), 7)
     }
     return nil
 }
 
-func NewMeleeAttackWithFixedDamage(name string, damage int) *Action {
-    jab := NewTargetedCombatSkill(name, 0, func(engine Engine, caster *Actor, pos geometry.Point) {
+func NewMeleeAttackWithFixedDamage(name string, damage int) *BaseAction {
+    jab := NewTargetedCombatSkill(name, func(engine Engine, caster *Actor, pos geometry.Point) {
         bloodIcon := int32(104)
         engine.CombatHitAnimation(pos, renderer.AtlasWorld, bloodIcon, ega.BrightWhite, func() {
             engine.FixedDamageAt(caster, pos, damage)
         })
     })
-    jab.SetValidTargets(func(engine Engine, caster *Actor, usePosition geometry.Point) []geometry.Point {
+    jab.SetValidTargets(func(engine Engine, caster *Actor, usePosition geometry.Point) map[geometry.Point]bool {
         gridMap := engine.GetGridMap()
+        result := make(map[geometry.Point]bool)
         neighbors := gridMap.GetAllCardinalNeighbors(usePosition)
         for i := len(neighbors) - 1; i >= 0; i-- {
-            if !gridMap.IsActorAt(neighbors[i]) {
-                neighbors = append(neighbors[:i], neighbors[i+1:]...)
+            pos := neighbors[i]
+            if gridMap.IsActorAt(pos) {
+                result[pos] = true
             }
         }
-        return neighbors
+        return result
     })
     jab.SetDescription([]string{
         "Jab an adjacent enemy with your tentacle.",
     })
-    jab.SetCombatUtilityForTargetedUseOnLocation(func(target geometry.Point, enemyPositions map[geometry.Point]*Actor) int {
+    jab.SetCombatUtilityForTargetedUseOnLocation(func(engine Engine, caster *Actor, target geometry.Point, allyPositions, enemyPositions map[geometry.Point]*Actor) int {
         if _, ok := enemyPositions[target]; ok {
             return damage * 10
         } else {
@@ -45,31 +47,29 @@ func NewMeleeAttackWithFixedDamage(name string, damage int) *Action {
     jab.SetActionColor(ega.BrightGreen)
     return jab
 }
-func NewCombatSkill(name string, cost int, effect func(engine Engine, user *Actor)) *Action {
-    return &Action{
+func NewCombatSkill(name string, effect func(engine Engine, user *Actor)) *BaseAction {
+    return &BaseAction{
         name:   name,
         effect: effect,
-        cost:   cost,
-        canPayCost: func(engine Engine, user *Actor, costToPay int) bool {
+        canPayCost: func(engine Engine, user *Actor) bool {
             return true
         },
-        payCost: func(engine Engine, user *Actor, costToPay int) {
+        payCost: func(engine Engine, user *Actor) {
             //engine.ManaSpent(user, costToPay)
         },
         color: color.White,
     }
 }
 
-func NewTargetedCombatSkill(name string, cost int, effect func(engine Engine, user *Actor, pos geometry.Point)) *Action {
-    return &Action{
+func NewTargetedCombatSkill(name string, effect func(engine Engine, user *Actor, pos geometry.Point)) *BaseAction {
+    return &BaseAction{
         name:                 name,
         targetedEffect:       effect,
-        cost:                 cost,
         closeModalsForEffect: true,
-        canPayCost: func(engine Engine, user *Actor, costToPay int) bool {
+        canPayCost: func(engine Engine, user *Actor) bool {
             return true
         },
-        payCost: func(engine Engine, user *Actor, costToPay int) {
+        payCost: func(engine Engine, user *Actor) {
             //engine.ManaSpent(user, costToPay)
         },
         color: color.White,
