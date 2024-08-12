@@ -40,7 +40,7 @@ type Engine interface {
     GetMapName() string
     CurrentTick() uint64
     TicksToSeconds(ticks uint64) float64
-    ShowMultipleChoiceDialogue(icon int32, text [][]string, choices []util.MenuItem)
+    ShowMultipleChoiceDialogue(canBeClosed bool, icon int32, text [][]string, choices []util.MenuItem)
     RemoveItem(item Item)
     GetPartyMembers() []*Actor
     ShowEquipMenu(a Equippable)

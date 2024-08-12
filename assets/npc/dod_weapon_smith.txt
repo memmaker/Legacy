@@ -1,0 +1,13 @@
+%rec: Details
+
+Name: Elven Weaponsmith
+Health: 10
+Torso: armor(chainmail, torso, 4)
+Head: armor(mail coif, head, 2)
+Description: He clearly wants to sell weapons.
+
+%rec: Conversation
+
+Key: _opening
+Effect: sells
+Text: "Would you like to buy some of my fine weapons?"

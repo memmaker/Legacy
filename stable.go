@@ -213,7 +213,7 @@ func (g *GridEngine) gameOverConditionReached() bool {
 func (g *GridEngine) Draw(screen *ebiten.Image) {
     g.drawUIOverlay(screen)
 
-    g.mapRenderer.Draw(g.playerParty.GetFoV(), screen, g.CurrentTick())
+    g.mapRenderer.Draw(g.playerParty.GetFoV(), screen, g.CurrentTick(), g.currentMap.IsExplored)
     g.drawMapOverlays(screen)
 
     if g.combatManager.IsInCombat() {

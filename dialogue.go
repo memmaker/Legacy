@@ -47,7 +47,7 @@ func (g *GridEngine) StartConversation(npc *game.Actor, loadedDialogue *game.Dia
     g.handleDialogueChoice(loadedDialogue, response, npc)
 }
 
-func (g *GridEngine) ShowMultipleChoiceDialogue(icon int32, text [][]string, choices []util.MenuItem) {
+func (g *GridEngine) ShowMultipleChoiceDialogue(canBeCancelled bool, icon int32, text [][]string, choices []util.MenuItem) {
     toJournal := func(page []string) {
         g.addToJournal(g.currentMap.GetDisplayName(), page)
     }
@@ -56,6 +56,9 @@ func (g *GridEngine) ShowMultipleChoiceDialogue(icon int32, text [][]string, cho
     g.conversationModal.SetText(text)
     g.conversationModal.SetOptions(choices)
     g.conversationModal.OnMouseMoved(g.lastMousePosX, g.lastMousePosY)
+    if !canBeCancelled {
+        g.conversationModal.SetCannotBeClosed()
+    }
 }
 
 func (g *GridEngine) toMenuItems(npc *game.Actor, dialogue *game.Dialogue, options []string) []util.MenuItem {
@@ -153,7 +156,7 @@ func (g *GridEngine) handleDialogueChoice(dialogue *game.Dialogue, response game
             flow = effectFlow
         }
     }
-    if len(effectCalls) > 0 && flow != ConversationFlowEffectAfterLastPage {
+    if len(effectCalls) > 0 && (flow != ConversationFlowEffectAfterLastPage && flow != ConversationFlowEffectOnLastPage) {
         callAll(effectCalls)
     }
     if flow == ConversationFlowJustQuit {
@@ -168,12 +171,17 @@ func (g *GridEngine) handleDialogueChoice(dialogue *game.Dialogue, response game
         })
     } else if flow == ConversationFlowVendor { // what's the difference between this and ConversationFlowQuit?
         g.conversationModal.SetText(response.Text)
-    } else if flow == ConversationFlowEffectAfterLastPage {
+    } else if flow == ConversationFlowEffectOnLastPage {
+        g.conversationModal.SetOnLastPage(func() {
+            callAll(effectCalls)
+        })
         g.conversationModal.SetText(response.Text)
-        g.conversationModal.SetOptions(nil) // implies end of conversation
+    } else if flow == ConversationFlowEffectAfterLastPage {
         g.conversationModal.SetOnClose(func() {
             callAll(effectCalls)
         })
+        g.conversationModal.SetText(response.Text)
+        g.conversationModal.SetOptions(nil) // implies end of conversation
     } else if flow == ConversationFlowContinue {
         g.conversationModal.SetText(response.Text)
         var optionsMenuItems []util.MenuItem
@@ -211,6 +219,7 @@ const (
     ConversationFlowQuitAfterText
     ConversationFlowJustQuit
     ConversationFlowEffectAfterLastPage
+    ConversationFlowEffectOnLastPage
 )
 
 func (g *GridEngine) handleDialogueEffect(npc *game.Actor, dialogue *game.Dialogue, effect string) (func(), ConversationFlow) {
@@ -220,7 +229,7 @@ func (g *GridEngine) handleDialogueEffect(npc *game.Actor, dialogue *game.Dialog
     case "joins":
         return func() { g.AddToParty(npc) }, ConversationFlowEffectAfterLastPage
     case "sells":
-        return func() { g.openVendorMenu(npc) }, ConversationFlowEffectAfterLastPage
+        return func() { g.openVendorMenu(npc) }, ConversationFlowEffectOnLastPage
     case "combat":
         return func() { g.EnemyStartsCombat(npc) }, ConversationFlowEffectAfterLastPage
     }

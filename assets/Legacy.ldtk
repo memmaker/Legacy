@@ -4238,7 +4238,7 @@
 			{ "id": "Food", "tileRect": null, "color": 15389866 },
 			{ "id": "Weapon", "tileRect": null, "color": 14984818 },
 			{ "id": "Armor", "tileRect": null, "color": 7552569 },
-			{ "id": "Books", "tileRect": null, "color": 4073265 },
+			{ "id": "Scrolls", "tileRect": null, "color": 4073265 },
 			{ "id": "Lockpicks", "tileRect": null, "color": 16690740 },
 			{ "id": "Potions", "tileRect": null, "color": 16705377 }
 		], "iconTilesetUid": null, "externalRelPath": null, "externalFileChecksum": null, "tags": [] },
@@ -16818,15 +16818,21 @@
 							"defUid": 24,
 							"px": [48,64],
 							"fieldInstances": [
-								{ "__identifier": "Name", "__type": "String", "__value": "Stranger", "__tile": null, "defUid": 25, "realEditorValues": [] },
+								{ "__identifier": "Name", "__type": "String", "__value": "dod_weapon_smith", "__tile": null, "defUid": 25, "realEditorValues": [{
+									"id": "V_String",
+									"params": ["dod_weapon_smith"]
+								}] },
 								{ "__identifier": "Level", "__type": "Int", "__value": 1, "__tile": null, "defUid": 107, "realEditorValues": [] },
 								{ "__identifier": "CombatFaction", "__type": "String", "__value": null, "__tile": null, "defUid": 125, "realEditorValues": [] },
 								{ "__identifier": "Icon", "__type": "Tile", "__value": { "tilesetUid": 18, "x": 240, "y": 16, "w": 16, "h": 16 }, "__tile": { "tilesetUid": 18, "x": 240, "y": 16, "w": 16, "h": 16 }, "defUid": 26, "realEditorValues": [] },
 								{ "__identifier": "IsHidden", "__type": "Bool", "__value": false, "__tile": null, "defUid": 63, "realEditorValues": [] },
 								{ "__identifier": "IconFrames", "__type": "Int", "__value": 1, "__tile": null, "defUid": 73, "realEditorValues": [] },
 								{ "__identifier": "OnDiscovery", "__type": "String", "__value": null, "__tile": null, "defUid": 79, "realEditorValues": [] },
-								{ "__identifier": "AddVendorInventory", "__type": "LocalEnum.LootType", "__value": null, "__tile": null, "defUid": 100, "realEditorValues": [] },
-								{ "__identifier": "VendorItemLevel", "__type": "Int", "__value": null, "__tile": null, "defUid": 101, "realEditorValues": [] },
+								{ "__identifier": "AddVendorInventory", "__type": "LocalEnum.LootType", "__value": "Weapon", "__tile": null, "defUid": 100, "realEditorValues": [{
+									"id": "V_String",
+									"params": ["Weapon"]
+								}] },
+								{ "__identifier": "VendorItemLevel", "__type": "Int", "__value": 1, "__tile": null, "defUid": 101, "realEditorValues": [{ "id": "V_Int", "params": [1] }] },
 								{ "__identifier": "IsAggressive", "__type": "Bool", "__value": false, "__tile": null, "defUid": 162, "realEditorValues": [] },
 								{ "__identifier": "EngagementRange", "__type": "Int", "__value": 1, "__tile": null, "defUid": 163, "realEditorValues": [] },
 								{ "__identifier": "IsAlive", "__type": "Bool", "__value": true, "__tile": null, "defUid": 164, "realEditorValues": [] }
@@ -16847,15 +16853,21 @@
 							"defUid": 24,
 							"px": [64,208],
 							"fieldInstances": [
-								{ "__identifier": "Name", "__type": "String", "__value": "Stranger", "__tile": null, "defUid": 25, "realEditorValues": [] },
+								{ "__identifier": "Name", "__type": "String", "__value": "dod_magic_store", "__tile": null, "defUid": 25, "realEditorValues": [{
+									"id": "V_String",
+									"params": ["dod_magic_store"]
+								}] },
 								{ "__identifier": "Level", "__type": "Int", "__value": 1, "__tile": null, "defUid": 107, "realEditorValues": [] },
 								{ "__identifier": "CombatFaction", "__type": "String", "__value": null, "__tile": null, "defUid": 125, "realEditorValues": [] },
 								{ "__identifier": "Icon", "__type": "Tile", "__value": { "tilesetUid": 18, "x": 240, "y": 16, "w": 16, "h": 16 }, "__tile": { "tilesetUid": 18, "x": 240, "y": 16, "w": 16, "h": 16 }, "defUid": 26, "realEditorValues": [] },
 								{ "__identifier": "IsHidden", "__type": "Bool", "__value": false, "__tile": null, "defUid": 63, "realEditorValues": [] },
 								{ "__identifier": "IconFrames", "__type": "Int", "__value": 1, "__tile": null, "defUid": 73, "realEditorValues": [] },
 								{ "__identifier": "OnDiscovery", "__type": "String", "__value": null, "__tile": null, "defUid": 79, "realEditorValues": [] },
-								{ "__identifier": "AddVendorInventory", "__type": "LocalEnum.LootType", "__value": null, "__tile": null, "defUid": 100, "realEditorValues": [] },
-								{ "__identifier": "VendorItemLevel", "__type": "Int", "__value": null, "__tile": null, "defUid": 101, "realEditorValues": [] },
+								{ "__identifier": "AddVendorInventory", "__type": "LocalEnum.LootType", "__value": "Scrolls", "__tile": null, "defUid": 100, "realEditorValues": [{
+									"id": "V_String",
+									"params": ["Scrolls"]
+								}] },
+								{ "__identifier": "VendorItemLevel", "__type": "Int", "__value": 1, "__tile": null, "defUid": 101, "realEditorValues": [{ "id": "V_Int", "params": [1] }] },
 								{ "__identifier": "IsAggressive", "__type": "Bool", "__value": false, "__tile": null, "defUid": 162, "realEditorValues": [] },
 								{ "__identifier": "EngagementRange", "__type": "Int", "__value": 1, "__tile": null, "defUid": 163, "realEditorValues": [] },
 								{ "__identifier": "IsAlive", "__type": "Bool", "__value": true, "__tile": null, "defUid": 164, "realEditorValues": [] }
@@ -16876,15 +16888,21 @@
 							"defUid": 24,
 							"px": [128,64],
 							"fieldInstances": [
-								{ "__identifier": "Name", "__type": "String", "__value": "Stranger", "__tile": null, "defUid": 25, "realEditorValues": [] },
+								{ "__identifier": "Name", "__type": "String", "__value": "dod_armorer", "__tile": null, "defUid": 25, "realEditorValues": [{
+									"id": "V_String",
+									"params": ["dod_armorer"]
+								}] },
 								{ "__identifier": "Level", "__type": "Int", "__value": 1, "__tile": null, "defUid": 107, "realEditorValues": [] },
 								{ "__identifier": "CombatFaction", "__type": "String", "__value": null, "__tile": null, "defUid": 125, "realEditorValues": [] },
 								{ "__identifier": "Icon", "__type": "Tile", "__value": { "tilesetUid": 18, "x": 240, "y": 16, "w": 16, "h": 16 }, "__tile": { "tilesetUid": 18, "x": 240, "y": 16, "w": 16, "h": 16 }, "defUid": 26, "realEditorValues": [] },
 								{ "__identifier": "IsHidden", "__type": "Bool", "__value": false, "__tile": null, "defUid": 63, "realEditorValues": [] },
 								{ "__identifier": "IconFrames", "__type": "Int", "__value": 1, "__tile": null, "defUid": 73, "realEditorValues": [] },
 								{ "__identifier": "OnDiscovery", "__type": "String", "__value": null, "__tile": null, "defUid": 79, "realEditorValues": [] },
-								{ "__identifier": "AddVendorInventory", "__type": "LocalEnum.LootType", "__value": null, "__tile": null, "defUid": 100, "realEditorValues": [] },
-								{ "__identifier": "VendorItemLevel", "__type": "Int", "__value": null, "__tile": null, "defUid": 101, "realEditorValues": [] },
+								{ "__identifier": "AddVendorInventory", "__type": "LocalEnum.LootType", "__value": "Armor", "__tile": null, "defUid": 100, "realEditorValues": [{
+									"id": "V_String",
+									"params": ["Armor"]
+								}] },
+								{ "__identifier": "VendorItemLevel", "__type": "Int", "__value": 1, "__tile": null, "defUid": 101, "realEditorValues": [{ "id": "V_Int", "params": [1] }] },
 								{ "__identifier": "IsAggressive", "__type": "Bool", "__value": false, "__tile": null, "defUid": 162, "realEditorValues": [] },
 								{ "__identifier": "EngagementRange", "__type": "Int", "__value": 1, "__tile": null, "defUid": 163, "realEditorValues": [] },
 								{ "__identifier": "IsAlive", "__type": "Bool", "__value": true, "__tile": null, "defUid": 164, "realEditorValues": [] }
@@ -16905,15 +16923,21 @@
 							"defUid": 24,
 							"px": [160,176],
 							"fieldInstances": [
-								{ "__identifier": "Name", "__type": "String", "__value": "Stranger", "__tile": null, "defUid": 25, "realEditorValues": [] },
+								{ "__identifier": "Name", "__type": "String", "__value": "dod_general_store_owner", "__tile": null, "defUid": 25, "realEditorValues": [{
+									"id": "V_String",
+									"params": ["dod_general_store_owner"]
+								}] },
 								{ "__identifier": "Level", "__type": "Int", "__value": 1, "__tile": null, "defUid": 107, "realEditorValues": [] },
 								{ "__identifier": "CombatFaction", "__type": "String", "__value": null, "__tile": null, "defUid": 125, "realEditorValues": [] },
 								{ "__identifier": "Icon", "__type": "Tile", "__value": { "tilesetUid": 18, "x": 240, "y": 16, "w": 16, "h": 16 }, "__tile": { "tilesetUid": 18, "x": 240, "y": 16, "w": 16, "h": 16 }, "defUid": 26, "realEditorValues": [] },
 								{ "__identifier": "IsHidden", "__type": "Bool", "__value": false, "__tile": null, "defUid": 63, "realEditorValues": [] },
 								{ "__identifier": "IconFrames", "__type": "Int", "__value": 1, "__tile": null, "defUid": 73, "realEditorValues": [] },
 								{ "__identifier": "OnDiscovery", "__type": "String", "__value": null, "__tile": null, "defUid": 79, "realEditorValues": [] },
-								{ "__identifier": "AddVendorInventory", "__type": "LocalEnum.LootType", "__value": null, "__tile": null, "defUid": 100, "realEditorValues": [] },
-								{ "__identifier": "VendorItemLevel", "__type": "Int", "__value": null, "__tile": null, "defUid": 101, "realEditorValues": [] },
+								{ "__identifier": "AddVendorInventory", "__type": "LocalEnum.LootType", "__value": "Common", "__tile": null, "defUid": 100, "realEditorValues": [{
+									"id": "V_String",
+									"params": ["Common"]
+								}] },
+								{ "__identifier": "VendorItemLevel", "__type": "Int", "__value": 1, "__tile": null, "defUid": 101, "realEditorValues": [{ "id": "V_Int", "params": [1] }] },
 								{ "__identifier": "IsAggressive", "__type": "Bool", "__value": false, "__tile": null, "defUid": 162, "realEditorValues": [] },
 								{ "__identifier": "EngagementRange", "__type": "Int", "__value": 1, "__tile": null, "defUid": 163, "realEditorValues": [] },
 								{ "__identifier": "IsAlive", "__type": "Bool", "__value": true, "__tile": null, "defUid": 164, "realEditorValues": [] }
@@ -16963,15 +16987,21 @@
 							"defUid": 24,
 							"px": [320,240],
 							"fieldInstances": [
-								{ "__identifier": "Name", "__type": "String", "__value": "Stranger", "__tile": null, "defUid": 25, "realEditorValues": [] },
+								{ "__identifier": "Name", "__type": "String", "__value": "dod_potions", "__tile": null, "defUid": 25, "realEditorValues": [{
+									"id": "V_String",
+									"params": ["dod_potions"]
+								}] },
 								{ "__identifier": "Level", "__type": "Int", "__value": 1, "__tile": null, "defUid": 107, "realEditorValues": [] },
 								{ "__identifier": "CombatFaction", "__type": "String", "__value": null, "__tile": null, "defUid": 125, "realEditorValues": [] },
 								{ "__identifier": "Icon", "__type": "Tile", "__value": { "tilesetUid": 18, "x": 240, "y": 16, "w": 16, "h": 16 }, "__tile": { "tilesetUid": 18, "x": 240, "y": 16, "w": 16, "h": 16 }, "defUid": 26, "realEditorValues": [] },
 								{ "__identifier": "IsHidden", "__type": "Bool", "__value": false, "__tile": null, "defUid": 63, "realEditorValues": [] },
 								{ "__identifier": "IconFrames", "__type": "Int", "__value": 1, "__tile": null, "defUid": 73, "realEditorValues": [] },
 								{ "__identifier": "OnDiscovery", "__type": "String", "__value": null, "__tile": null, "defUid": 79, "realEditorValues": [] },
-								{ "__identifier": "AddVendorInventory", "__type": "LocalEnum.LootType", "__value": null, "__tile": null, "defUid": 100, "realEditorValues": [] },
-								{ "__identifier": "VendorItemLevel", "__type": "Int", "__value": null, "__tile": null, "defUid": 101, "realEditorValues": [] },
+								{ "__identifier": "AddVendorInventory", "__type": "LocalEnum.LootType", "__value": "Potions", "__tile": null, "defUid": 100, "realEditorValues": [{
+									"id": "V_String",
+									"params": ["Potions"]
+								}] },
+								{ "__identifier": "VendorItemLevel", "__type": "Int", "__value": 1, "__tile": null, "defUid": 101, "realEditorValues": [{ "id": "V_Int", "params": [1] }] },
 								{ "__identifier": "IsAggressive", "__type": "Bool", "__value": false, "__tile": null, "defUid": 162, "realEditorValues": [] },
 								{ "__identifier": "EngagementRange", "__type": "Int", "__value": 1, "__tile": null, "defUid": 163, "realEditorValues": [] },
 								{ "__identifier": "IsAlive", "__type": "Bool", "__value": true, "__tile": null, "defUid": 164, "realEditorValues": [] }
@@ -24593,7 +24623,7 @@
 								{ "__identifier": "OnDiscovery", "__type": "String", "__value": "You thouroughly search the grass in front of the window.\nAnd sure enough, you find a small leather case with\nlong metallic instruments inside.", "__tile": null, "defUid": 75, "realEditorValues": [{
 									"id": "V_String",
 									"params": [
-										"You thouroughly search the grass in front of the window.\nAnd sure enough, you find a small leather case with\nlong metallic instruments inside."
+										"You thouroughly search the grass in front of the window.\\nAnd sure enough, you find a small leather case with\\nlong metallic instruments inside."
 									]
 								}] },
 								{ "__identifier": "OnOpen", "__type": "String", "__value": null, "__tile": null, "defUid": 87, "realEditorValues": [] },

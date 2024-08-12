@@ -25,6 +25,7 @@ type ConversationModal struct {
     reachedLastPage bool
     shouldClose     bool
     closeOnCancel   bool
+    onLastPageFunc  func()
 }
 
 func (c *ConversationModal) OnMouseWheel(x int, y int, dy float64) bool {
@@ -35,6 +36,10 @@ func (c *ConversationModal) OnMouseWheel(x int, y int, dy float64) bool {
 }
 
 func (c *ConversationModal) OnCommand(command CommandType) bool {
+    if command == PlayerCommandCancel && c.closeOnCancel {
+        c.shouldClose = true
+        return true
+    }
     if c.isShowingResponseInput() {
         return c.responseInput.OnCommand(command)
     }
@@ -47,10 +52,14 @@ func (c *ConversationModal) OnCommand(command CommandType) bool {
 func NewConversationModal(gridRenderer *renderer.DualGridRenderer, journalFunc func(text []string)) *ConversationModal {
     c := &ConversationModal{
         gridRenderer:  gridRenderer,
-        closeOnCancel: true,
+        closeOnCancel: false,
     }
     c.openTextWindow(journalFunc)
     return c
+}
+
+func (c *ConversationModal) SetCannotBeClosed() {
+    c.closeOnCancel = false
 }
 
 func (c *ConversationModal) Draw(screen *ebiten.Image) {
@@ -78,6 +87,9 @@ func (c *ConversationModal) openTextWindow(addToJournal func(text []string)) {
 
 func (c *ConversationModal) onLastPageOfText() {
     c.reachedLastPage = true
+    if c.onLastPageFunc != nil {
+        c.onLastPageFunc()
+    }
 }
 
 func (c *ConversationModal) SetIcon(icon int32) {
@@ -121,6 +133,10 @@ func (c *ConversationModal) SetVendorOptions(items []util.MenuItem) {
 }
 func (c *ConversationModal) SetOnClose(onClassCallback func()) {
     c.onCloseFunc = onClassCallback
+}
+
+func (c *ConversationModal) SetOnLastPage(callback func()) {
+    c.onLastPageFunc = callback
 }
 
 func (c *ConversationModal) onTextWindowWantsToClose() {
@@ -170,10 +186,4 @@ func (c *ConversationModal) OnMouseClicked(x int, y int) bool {
         return c.textWindow.OnMouseClicked(x, y)
     }
     return false
-}
-
-func (c *ConversationModal) ActionCancel() {
-    if c.closeOnCancel {
-        c.shouldClose = true
-    }
 }

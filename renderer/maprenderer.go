@@ -29,7 +29,7 @@ func NewRenderer(gridRenderer *DualGridRenderer, input MapView) *MapRenderer {
     }
 }
 
-func (r *MapRenderer) Draw(fov *geometry.FOV, screen *ebiten.Image, tick uint64) {
+func (r *MapRenderer) Draw(fov *geometry.FOV, screen *ebiten.Image, tick uint64, isExplored func(pos geometry.Point) bool) {
     screenOffset := r.input.GetScreenOffset()
     tileCountX, tileCountY := r.input.GetWindowSizeInCells()
 
@@ -45,9 +45,20 @@ func (r *MapRenderer) Draw(fov *geometry.FOV, screen *ebiten.Image, tick uint64)
             if textureIndex == -1 {
                 continue
             }
-            if !fov.Visible(geometry.Point{X: mapX, Y: mapY}) && !r.disableFieldOfView() {
-                tintColor = color.Black
+            mapPos := geometry.Point{X: mapX, Y: mapY}
+            if !fov.Visible(mapPos) && !r.disableFieldOfView() {
+                if isExplored(mapPos) {
+                    tintColor = color.RGBA{
+                        R: 80,
+                        G: 80,
+                        B: 80,
+                        A: 255,
+                    }
+                } else {
+                    tintColor = color.Black
+                }
             }
+
             r.gridRenderer.DrawBigOnScreenWithAtlasAndTint(screen, float64(x), float64(y), textureAtlas, textureIndex, tintColor)
         }
     }

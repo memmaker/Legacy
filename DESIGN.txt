@@ -9,13 +9,29 @@
  - People shouldn't sell their store keys :) Healer guy sells his food and the same stuff as potion guys. Food guy sells nothing.
  - NPC Patrol will continue even if the player starts a conversation or fight
  - NPCs cannot use skills/spells
+ - Better targeting mode
+ - Quick Slots
 
 # Content..
  - We really need lots of different in world effects
+   - Random Teleportation
+   - Enchant Weapon / Armor
+   - Summon Monster
+   - Blind Actor
+   - Invisibility
+   - Fire Propagation :)
+   - Recharge Wands
+   - Cause Fear
+   - Lightning Bolt
+   - Poison Cloud
  - And the ability to attach them to any game object or just activate them on triggers
+ - Rogue Style Wands, Potions, Throwables
+ - Wands & Potions are basically consumable spells with charges
+ - Each weapon type REALLY NEEDS a unique attack pattern/effect
  - More spells
  - Active Combat skills
  - More interesting random loot
+ - Enemies that also use this stuff
  - Story & Game
 
 # Design Goal

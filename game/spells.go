@@ -7,6 +7,7 @@ import (
     "Legacy/renderer"
     "fmt"
     "image/color"
+    "math/rand"
 )
 
 type OngoingSpellEffect string
@@ -22,11 +23,25 @@ func (s *Spell) LabelWithCost() string {
     return s.labelWithCost
 }
 
+func (s *Spell) SetMonetaryValue(value int) {
+    s.monetaryValue = value
+}
+
 const (
     OngoingSpellEffectBirdsEye OngoingSpellEffect = "birds_eye"
 )
 
 func GetAllSpellScrolls() []*Scroll {
+    names := GetAllSpellNames()
+    var scrolls []*Scroll
+    for _, name := range names {
+        scrolls = append(scrolls, NewSpellScrollFromSpellName(name))
+    }
+
+    return scrolls
+}
+
+func GetAllSpellNames() []string {
     names := []string{
         "Nom De Plume",
         "Create Food",
@@ -36,12 +51,42 @@ func GetAllSpellScrolls() []*Scroll {
         "Icebolt",
         "Healing word of Tauci",
     }
-    var scrolls []*Scroll
-    for _, name := range names {
-        scrolls = append(scrolls, NewSpellScrollFromSpellName(name))
-    }
+    return names
+}
 
-    return scrolls
+func GetSpellNamesByLevel(level int) []string {
+    switch level {
+    case 1:
+        return []string{
+            "Nom De Plume",
+            "Create Food",
+        }
+    case 2:
+        return []string{
+            "Bird's Eye",
+            "Healing word of Tauci",
+        }
+    case 5:
+        return []string{
+            "Icebolt",
+        }
+    case 6:
+        return []string{
+            "Fireball",
+        }
+    case 7:
+        return []string{
+            "Raise as Undead",
+        }
+    }
+    return []string{}
+}
+
+func NewRandomScrollForVendor(level int) *Scroll {
+    spellNames := GetSpellNamesByLevel(level)
+    randomIndex := rand.Intn(len(spellNames))
+    spellName := spellNames[randomIndex]
+    return NewSpellScrollFromSpellName(spellName)
 }
 
 func NewSpellFromName(name string) *Spell {
@@ -58,6 +103,7 @@ func NewSpellFromName(name string) *Spell {
         spell.SetScrollTitle("Name of a rose")
         spell.SetScrollFile("nom_de_plume")
         spell.SetNoCombatUtility()
+        spell.SetMonetaryValue(200)
         return spell
     case "Create Food":
         spell := NewSpell(name, 10, func(engine Engine, caster *Actor) {
@@ -70,6 +116,7 @@ func NewSpellFromName(name string) *Spell {
         spell.SetScrollTitle("A poor man's feast")
         spell.SetScrollFile("create_food")
         spell.SetNoCombatUtility()
+        spell.SetMonetaryValue(3000)
         return spell
     case "Healing word of Tauci":
         spell := NewSpell(name, 10, func(engine Engine, caster *Actor) {
@@ -91,6 +138,7 @@ func NewSpellFromName(name string) *Spell {
                 return -50
             }
         })
+        spell.SetMonetaryValue(5000)
         return spell
     case "Bird's Eye":
         spell := NewSpell(name, 10, func(engine Engine, caster *Actor) {
@@ -102,6 +150,7 @@ func NewSpellFromName(name string) *Spell {
         spell.SetScrollTitle("Change of perspective")
         spell.SetScrollFile("birds_eye")
         spell.SetNoCombatUtility()
+        spell.SetMonetaryValue(7000)
         return spell
     case "Raise as Undead":
         targetedSpell := NewTargetedSpell(name, 10, func(engine Engine, caster *Actor, pos geometry.Point) {
@@ -141,6 +190,7 @@ func NewSpellFromName(name string) *Spell {
             }
             return 0
         })
+        targetedSpell.SetMonetaryValue(25000)
         return targetedSpell
     case "Fireball":
         radius := 3
@@ -187,6 +237,7 @@ func NewSpellFromName(name string) *Spell {
             }
             return totalUtility
         })
+        fireball.SetMonetaryValue(15000)
         return fireball
     case "Icebolt":
         radius := 3
@@ -231,6 +282,7 @@ func NewSpellFromName(name string) *Spell {
             }
             return totalUtility
         })
+        icebolt.SetMonetaryValue(13000)
         return icebolt
     }
 

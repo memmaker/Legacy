@@ -5,6 +5,7 @@ import (
     "Legacy/util"
     "fmt"
     "image/color"
+    "math/rand"
 )
 
 type ToolType string
@@ -97,4 +98,30 @@ func (t *Tool) Name() string {
         return string(t.kind)
     }
     return t.name
+}
+
+func (t *Tool) GetValue() int {
+    switch t.kind {
+    case ToolTypePickaxe:
+        return 300
+    case ToolTypeShovel:
+        return 250
+    case ToolTypeRope:
+        return 50
+    case ToolTypeWoodenPlanks:
+        return 30
+    }
+    return 0
+}
+
+func NewRandomGeneralItemForVendor(level int) Item {
+    allTools := []ToolType{
+        ToolTypePickaxe,
+        ToolTypeShovel,
+        ToolTypeRope,
+        ToolTypeWoodenPlanks,
+    }
+
+    randomIndex := rand.Intn(len(allTools))
+    return NewTool(allTools[randomIndex], "")
 }

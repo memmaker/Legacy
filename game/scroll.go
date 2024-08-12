@@ -60,7 +60,7 @@ func (b *Scroll) GetWearer() ItemWearer {
 
 func (b *Scroll) CanStackWith(other Item) bool {
     if otherScroll, ok := other.(*Scroll); ok {
-        return b.spell == otherScroll.spell && b.filename == otherScroll.filename && b.name == otherScroll.name && b.icon == otherScroll.icon && b.wearer == otherScroll.wearer
+        return b.spell.Name() == otherScroll.spell.Name() && b.filename == otherScroll.filename && b.name == otherScroll.name && b.icon == otherScroll.icon && b.wearer == otherScroll.wearer
     } else {
         return false
     }

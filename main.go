@@ -22,7 +22,6 @@ import (
     "math"
     "os"
     "path"
-    "runtime/pprof"
     "sort"
     "strings"
     "time"
@@ -139,17 +138,19 @@ func main() {
     */
 
     // Create a CPU profile file
-    cpuProfileFile, err := os.Create("cpu.prof")
-    if err != nil {
-        panic(err)
-    }
-    defer cpuProfileFile.Close()
+    /*
+       cpuProfileFile, err := os.Create("cpu.prof")
+       if err != nil {
+           panic(err)
+       }
+       defer cpuProfileFile.Close()
 
-    // start CPU profiling
-    if err := pprof.StartCPUProfile(cpuProfileFile); err != nil {
-        panic(err)
-    }
-    defer pprof.StopCPUProfile()
+       if err := pprof.StartCPUProfile(cpuProfileFile); err != nil {
+           panic(err)
+       }
+       defer pprof.StopCPUProfile()
+
+    */
 
     gameTitle := "Legacy"
     internalScreenWidth, internalScreenHeight := 320, 200 // fixed render Size for this project
@@ -809,7 +810,21 @@ func (g *GridEngine) createPotions(level int) []game.Item {
     }
     return potions
 }
+func (g *GridEngine) createScrollsForVendor(level, amount int) []game.Item {
+    var armor []game.Item
+    for i := 0; i < amount; i++ {
+        armor = append(armor, game.NewRandomScrollForVendor(level))
+    }
+    return armor
+}
 
+func (g *GridEngine) createItemsForGeneralStoreVendor(level int, amount int) []game.Item {
+    var items []game.Item
+    for i := 0; i < amount; i++ {
+        items = append(items, game.NewRandomGeneralItemForVendor(level))
+    }
+    return items
+}
 func (g *GridEngine) createArmorForVendor(level, amount int) []game.Item {
     var armor []game.Item
     for i := 0; i < amount; i++ {
@@ -1074,6 +1089,10 @@ func (g *GridEngine) loadPartyIcons() {
 
 func (g *GridEngine) CreateItemsForVendor(lootType game.Loot, level int) []game.Item {
     switch lootType {
+    case game.LootScrolls:
+        return g.createScrollsForVendor(level, 10)
+    case game.LootCommon:
+        return g.createItemsForGeneralStoreVendor(level, 10)
     case game.LootArmor:
         return g.createArmorForVendor(level, 10)
     case game.LootWeapon:
@@ -1087,7 +1106,7 @@ func (g *GridEngine) CreateItemsForVendor(lootType game.Loot, level int) []game.
 }
 
 func (g *GridEngine) goBackToBed() {
-    g.ShowMultipleChoiceDialogue(g.GetAvatar().Icon(0), g.gridRenderer.AutolayoutArrayToIconPages(5, []string{"You are sure your walls and the mirror will be back to normal, if you just go back to sleep"}), []util.MenuItem{
+    g.ShowMultipleChoiceDialogue(false, g.GetAvatar().Icon(0), g.gridRenderer.AutolayoutArrayToIconPages(5, []string{"You are sure your walls and the mirror will be back to normal, if you just go back to sleep"}), []util.MenuItem{
         {
             Text: "Stay awake",
             Action: func() {

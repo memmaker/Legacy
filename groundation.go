@@ -11,27 +11,31 @@ func (g *GridEngine) mapLookup(x, y int, tick uint64) (*ebiten.Image, int32, col
     if !g.currentMap.Contains(location) {
         return g.worldTiles, 0, color.Black
     }
-    if g.currentMap.IsActorAt(location) {
-        actorAt := g.currentMap.GetActor(location)
-        if !actorAt.IsHidden() {
-            if actorAt.IsTinted() {
-                return g.grayScaleEntityTiles, actorAt.Icon(tick), actorAt.TintColor()
+
+    if g.playerParty.CanSee(location) {
+        // can see this tile, so we lookup dynamic entities
+        if g.currentMap.IsActorAt(location) {
+            actorAt := g.currentMap.GetActor(location)
+            if !actorAt.IsHidden() {
+                if actorAt.IsTinted() {
+                    return g.grayScaleEntityTiles, actorAt.Icon(tick), actorAt.TintColor()
+                }
+                return g.entityTiles, actorAt.Icon(tick), color.White
             }
-            return g.entityTiles, actorAt.Icon(tick), color.White
         }
-    }
 
-    if g.currentMap.IsDownedActorAt(location) {
-        actorAt, _ := g.currentMap.TryGetDownedActorAt(location)
-        if !actorAt.IsHidden() {
-            return g.entityTiles, actorAt.Icon(tick), color.White
+        if g.currentMap.IsDownedActorAt(location) {
+            actorAt, _ := g.currentMap.TryGetDownedActorAt(location)
+            if !actorAt.IsHidden() {
+                return g.entityTiles, actorAt.Icon(tick), color.White
+            }
         }
-    }
 
-    if g.currentMap.IsItemAt(location) {
-        itemAt := g.currentMap.ItemAt(location)
-        if !itemAt.IsHidden() {
-            return g.entityTiles, itemAt.Icon(tick), itemAt.TintColor()
+        if g.currentMap.IsItemAt(location) {
+            itemAt := g.currentMap.ItemAt(location)
+            if !itemAt.IsHidden() {
+                return g.entityTiles, itemAt.Icon(tick), itemAt.TintColor()
+            }
         }
     }
 
@@ -41,8 +45,8 @@ func (g *GridEngine) mapLookup(x, y int, tick uint64) (*ebiten.Image, int32, col
             return g.entityTiles, objectAt.Icon(tick), objectAt.TintColor()
         }
     }
-
     tile := g.currentMap.GetCell(location)
+
     return g.worldTiles, tile.TileType.DefinedIcon, color.White
 }
 

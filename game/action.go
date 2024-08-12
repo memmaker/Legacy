@@ -36,6 +36,7 @@ type BaseAction struct {
     // AI stuff
     targetedCombatUtility func(engine Engine, caster *Actor, target geometry.Point, allyPositions, enemyPositions map[geometry.Point]*Actor) int
     combatUtility         func(engine Engine, caster *Actor, userPosition geometry.Point, allyPositions, enemyPositions map[geometry.Point]*Actor) int
+    monetaryValue         int
 }
 
 func (s *BaseAction) LabelWithCost() string {
@@ -84,7 +85,7 @@ func (s *BaseAction) Name() string {
 }
 
 func (s *BaseAction) GetValue() int {
-    return 0
+    return s.monetaryValue
 }
 
 func (s *BaseAction) GetColor() color.Color {
