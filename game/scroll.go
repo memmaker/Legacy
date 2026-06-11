@@ -59,11 +59,18 @@ func (b *Scroll) GetWearer() ItemWearer {
 }
 
 func (b *Scroll) CanStackWith(other Item) bool {
-    if otherScroll, ok := other.(*Scroll); ok {
-        return b.spell.Name() == otherScroll.spell.Name() && b.filename == otherScroll.filename && b.name == otherScroll.name && b.icon == otherScroll.icon && b.wearer == otherScroll.wearer
-    } else {
-        return false
-    }
+	if otherScroll, ok := other.(*Scroll); ok {
+		if b.spell == nil || otherScroll.spell == nil {
+			if b.spell != otherScroll.spell {
+				return false
+			}
+		} else if b.spell.Name() != otherScroll.spell.Name() {
+			return false
+		}
+		return b.filename == otherScroll.filename && b.name == otherScroll.name && b.icon == otherScroll.icon && b.wearer == otherScroll.wearer
+	} else {
+		return false
+	}
 }
 
 func (b *Scroll) TintColor() color.Color {
@@ -161,5 +168,9 @@ func NewScrollFromPredicate(encoded recfile.StringPredicate) *Scroll {
     )
 }
 func (b *Scroll) Encode() string {
-    return recfile.ToPredicate("scroll", b.name, b.filename, b.spell.name)
+	spellName := ""
+	if b.spell != nil {
+		spellName = b.spell.name
+	}
+	return recfile.ToPredicate("scroll", b.name, b.filename, spellName)
 }

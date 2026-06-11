@@ -205,12 +205,16 @@ func (g *GridEngine) handleDebugKeys() {
             util.Persist(posKey, g.GetMapName()+g.avatar.Pos().Encode())
             g.Print(fmt.Sprintf("Saved map position: %s", g.avatar.Pos().Encode()))
         } else { // recall
-            mapPosPred := recfile.StrPredicate(util.Get(posKey))
-            mapName := mapPosPred.Name()
-            xPos := mapPosPred.GetInt(0)
-            yPos := mapPosPred.GetInt(1)
-            g.transitionToLocation(mapName, geometry.Point{X: xPos, Y: yPos})
-        }
+			mapPosPred := recfile.StrPredicate(util.Get(posKey))
+			if mapPosPred == nil {
+				g.Print(fmt.Sprintf("No saved map position in slot %d", mapPosSlot))
+			} else {
+				mapName := mapPosPred.Name()
+				xPos := mapPosPred.GetInt(0)
+				yPos := mapPosPred.GetInt(1)
+				g.transitionToLocation(mapName, geometry.Point{X: xPos, Y: yPos})
+			}
+		}
     }
 
     if inpututil.IsKeyJustPressed(ebiten.KeyF12) {
