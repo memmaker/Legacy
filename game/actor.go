@@ -585,6 +585,9 @@ func (a *Actor) GetItemsToSell() []SalesOffer {
                 continue
             }
         }
+        if _, ok := item.(*Key); ok {
+            continue
+        }
         items = append(items, SalesOffer{
             Item:  item,
             Price: a.vendorPrice(item),
