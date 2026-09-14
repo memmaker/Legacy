@@ -3,7 +3,7 @@ package main
 import (
     "Legacy/ega"
     "Legacy/game"
-    "Legacy/recfile"
+    recfile "github.com/memmaker/rec-files"
     "Legacy/ui"
     "Legacy/util"
     "fmt"

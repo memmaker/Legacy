@@ -2,7 +2,7 @@ package main
 
 import (
     "Legacy/geometry"
-    "Legacy/recfile"
+    recfile "github.com/memmaker/rec-files"
     "Legacy/ui"
     "Legacy/util"
     "fmt"

@@ -11,6 +11,7 @@ require (
 	github.com/ebitengine/purego v0.7.1 // indirect
 	github.com/hajimehoshi/ebiten/v2 v2.7.8 // indirect
 	github.com/jezek/xgb v1.1.1 // indirect
+	github.com/memmaker/rec-files v1.0.0 // indirect
 	github.com/tidwall/match v1.1.1 // indirect
 	github.com/tidwall/pretty v1.2.0 // indirect
 	golang.org/x/exp/shiny v0.0.0-20231006140011-7918f672742d // indirect

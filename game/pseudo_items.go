@@ -1,7 +1,7 @@
 package game
 
 import (
-    "Legacy/recfile"
+    recfile "github.com/memmaker/rec-files"
     "Legacy/util"
     "fmt"
     "strconv"

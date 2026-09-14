@@ -3,7 +3,7 @@ package game
 import (
     "Legacy/geometry"
     "Legacy/gridmap"
-    "Legacy/recfile"
+    recfile "github.com/memmaker/rec-files"
     "Legacy/util"
     "image/color"
 )

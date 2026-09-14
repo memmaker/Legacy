@@ -8,7 +8,7 @@ import (
     "Legacy/gocoro"
     "Legacy/gridmap"
     "Legacy/ldtk_go"
-    "Legacy/recfile"
+    recfile "github.com/memmaker/rec-files"
     "Legacy/renderer"
     "Legacy/ui"
     "Legacy/util"

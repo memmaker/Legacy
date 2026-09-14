@@ -2,7 +2,7 @@ package game
 
 import (
     "Legacy/geometry"
-    "Legacy/recfile"
+    recfile "github.com/memmaker/rec-files"
     "Legacy/util"
     "fmt"
     "image/color"
@@ -187,7 +187,7 @@ func NewActorFromFile(file io.ReadCloser, icon int32, toPages func(height int, i
     defer file.Close()
     actorData := recfile.ReadMulti(file)
 
-    coreRecord := actorData["Details"][0].ToMap()
+    coreRecord := actorData["Details"][0].ToMap("|")
     conversation := NewDialogueFromRecords(actorData["Conversation"], toPages)
 
     health, _ := coreRecord.GetInt("Health")

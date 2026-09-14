@@ -4,7 +4,7 @@ import (
     "Legacy/game"
     "Legacy/geometry"
     "Legacy/gridmap"
-    "Legacy/recfile"
+    recfile "github.com/memmaker/rec-files"
     "fmt"
     "os"
     "path"

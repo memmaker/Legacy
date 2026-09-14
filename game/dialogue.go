@@ -1,7 +1,7 @@
 package game
 
 import (
-    "Legacy/recfile"
+    recfile "github.com/memmaker/rec-files"
     "fmt"
     "github.com/Knetic/govaluate"
     "regexp"
