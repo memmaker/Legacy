@@ -4,8 +4,8 @@ import (
     "bufio"
     "image"
     "io"
+    "io/fs"
     "log"
-    "os"
 )
 
 func mustLoadImage(filename string) image.Image {
@@ -16,11 +16,11 @@ func mustLoadImage(filename string) image.Image {
     return img
 }
 func doesFileExist(filename string) bool {
-    _, err := os.Stat(filename)
-    return !os.IsNotExist(err)
+    _, err := fs.Stat(assetFS, filename)
+    return err == nil
 }
 func mustOpen(filename string) io.ReadCloser {
-    f, err := os.Open(filename)
+    f, err := assetFS.Open(filename)
     if err != nil {
         log.Fatal(err)
     }
@@ -28,7 +28,7 @@ func mustOpen(filename string) io.ReadCloser {
 }
 
 func readLines(filename string) []string {
-    file, err := os.Open(filename)
+    file, err := assetFS.Open(filename)
     if err != nil {
         log.Fatal(err)
     }
