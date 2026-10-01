@@ -1,6 +1,7 @@
 package main
 
 import (
+	"io/fs"
 	"Legacy/bmpfonts"
 	"Legacy/game"
 	"Legacy/geometry"
@@ -42,7 +43,8 @@ func (g *GridEngine) Init() {
 	g.rules = game.NewRules()
 	g.worldTime = game.NewWorldTime()
 
-	g.ldtkMapProject, _ = ldtk_go.Open("assets/Legacy.ldtk")
+	ldtkData, _ := fs.ReadFile(assetFS, "assets/Legacy.ldtk")
+	g.ldtkMapProject, _ = ldtk_go.Read(ldtkData)
 
 	g.loadAllTransitions()
 	g.loadPartyIcons()
